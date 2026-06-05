@@ -35,8 +35,8 @@ def subscription_text(sub: asyncpg.Record | None) -> str:
         f"Осталось: <b>{time_left(sub['expires_at'])}</b>",
         f"Действует до: {fmt_dt(sub['expires_at'])}",
     ]
-    if sub["vpn_url"]:
+    if sub["subscription_url"]:
         lines.append("")
         lines.append("🔗 Ваша ссылка для подключения:")
-        lines.append(f"<code>{sub['vpn_url']}</code>")
+        lines.append(f"<code>{sub['subscription_url']}</code>")
     return "\n".join(lines)

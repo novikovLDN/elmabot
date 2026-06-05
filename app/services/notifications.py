@@ -20,7 +20,7 @@ from database import (
     mark_reminder_sent,
 )
 
-from . import access
+from . import subscription_service
 from ..keyboards import buy_keyboard
 from ..utils import safe_send
 
@@ -59,7 +59,7 @@ async def expiry_cleanup_loop(bot: Bot) -> None:
         try:
             rows = await expired_active()
             for row in rows:
-                await access.deprovision(row["vpn_uuid"])
+                await subscription_service.deprovision(row["panel_uuid"])
                 await mark_expired(row["telegram_id"])
                 await safe_send(
                     bot,

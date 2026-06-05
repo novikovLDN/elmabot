@@ -35,11 +35,20 @@ DATABASE_URL = _get_str("DATABASE_URL", "")
 # --- Remnawave VPN panel ---
 REMNAWAVE_URL = _get_str("REMNAWAVE_URL", "").rstrip("/")
 REMNAWAVE_TOKEN = _get_str("REMNAWAVE_TOKEN", "")
+# Squad (inbound group) every Elma user is placed into. Without it a created
+# panel user is attached to no inbound and the subscription does not work.
+REMNAWAVE_MAIN_SQUAD_UUID = _get_str("REMNAWAVE_MAIN_SQUAD_UUID", "")
+# Username prefix in the panel. Isolates Elma records from other bots sharing
+# the same panel (e.g. Atlas Secure uses ``tg_<id>_premium``).
+REMNAWAVE_USERNAME_PREFIX = _get_str("REMNAWAVE_USERNAME_PREFIX", "elma_")
 
 # --- Product / pricing ---
 PRICE_STARS = _get_int("PRICE_STARS", 99)
 SUBSCRIPTION_DAYS = _get_int("SUBSCRIPTION_DAYS", 30)
 TRIAL_DAYS = _get_int("TRIAL_DAYS", 2)
+# Per-user device limit and traffic cap in the panel. 0 bytes = unlimited.
+DEVICE_LIMIT = _get_int("DEVICE_LIMIT", 5)
+TRAFFIC_LIMIT_BYTES = _get_int("TRAFFIC_LIMIT_BYTES", 0)
 
 # --- Branding / onboarding ---
 # Per-platform app download links shown on the device connection screens.
@@ -66,18 +75,15 @@ APP_ANDROIDTV_URL = _get_str(
 REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)
 EXPIRY_INTERVAL_SECONDS = _get_int("EXPIRY_INTERVAL_SECONDS", 600)
 
-# --- VPN provisioning ---
-# Per-user traffic cap in gigabytes. 0 means unlimited.
-VPN_TRAFFIC_LIMIT_GB = _get_int("VPN_TRAFFIC_LIMIT_GB", 0)
-
 # --- Logging ---
 LOG_LEVEL = _get_str("LOG_LEVEL", "INFO")
 
+
 # --- Derived constants ---
-# Username format inside the panel. Lets us *recover* the DB<->panel link
-# by walking the panel by username.
-PANEL_USERNAME_PREFIX = "tg_"
+def build_username(telegram_id: int) -> str:
+    """Panel username for a Telegram user.
 
-
-def panel_username(telegram_id: int) -> str:
-    return f"{PANEL_USERNAME_PREFIX}{telegram_id}"
+    Remnawave caps usernames at 32 chars; ``elma_<id>`` fits with room to spare.
+    The prefix lets us *recover* the DB<->panel link by walking the panel.
+    """
+    return f"{REMNAWAVE_USERNAME_PREFIX}{telegram_id}"[:32]

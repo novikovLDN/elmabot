@@ -10,7 +10,7 @@ The whole user-facing journey lives here as a chain of edited messages:
                       └─ share:qr  ──▶  Screen 10 — QR-код (фото)
 
 Everything is stateless callback-data; the only state is the user's
-subscription row (whose ``vpn_url`` powers "Активировать" / share / QR).
+subscription row (whose ``subscription_url`` powers "Активировать" / share / QR).
 """
 import html
 import io
@@ -29,7 +29,7 @@ from app.keyboards import (
     share_keyboard,
     welcome_keyboard,
 )
-from app.services import access
+from app.services import subscription_service
 from app.utils import safe_edit
 from config import (
     APP_ANDROID_URL,
@@ -39,7 +39,7 @@ from config import (
     APP_WINDOWS_URL,
     TRIAL_DAYS,
 )
-from database import activate_trial, get_subscription, upsert_user
+from database import get_subscription, upsert_user
 
 logger = logging.getLogger(__name__)
 router = Router(name="onboarding")
@@ -182,8 +182,8 @@ DEVICES: dict[str, dict] = {
 async def _active_sub_url(telegram_id: int) -> str | None:
     """Return the connection URL of an active subscription, else None."""
     sub = await get_subscription(telegram_id)
-    if sub is not None and sub["status"] == "active" and sub["vpn_url"]:
-        return sub["vpn_url"]
+    if sub is not None and sub["status"] == "active" and sub["subscription_url"]:
+        return sub["subscription_url"]
     return None
 
 
@@ -230,9 +230,7 @@ async def cb_claim(call: CallbackQuery) -> None:
     await call.answer()
     user_id = call.from_user.id
     try:
-        sub = await activate_trial(
-            user_id, TRIAL_DAYS, access.trial_provision(user_id)
-        )
+        sub = await subscription_service.activate_trial(user_id, TRIAL_DAYS)
     except Exception:  # noqa: BLE001 - VPN/DB failure -> safe retry
         logger.exception("Trial activation failed for %s", user_id)
         await safe_edit(

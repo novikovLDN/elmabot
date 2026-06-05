@@ -8,7 +8,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 import config
 from app.handlers import get_routers
-from app.services import vpn
+from app.services import remnawave
 from app.services.notifications import expiry_cleanup_loop, reminder_loop
 from database import close_db, init_db
 
@@ -47,7 +47,7 @@ async def main() -> None:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        await vpn.close()
+        await remnawave.close()
         await bot.session.close()
         await close_db()
         logger.info("Shutdown complete")

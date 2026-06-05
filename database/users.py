@@ -62,3 +62,37 @@ async def trial_available(telegram_id: int) -> bool:
         "SELECT trial_used_at FROM users WHERE telegram_id = $1", telegram_id
     )
     return bool(row) and row["trial_used_at"] is None
+
+
+async def claim_trial(telegram_id: int, trial_expires_at) -> bool:
+    """Atomically reserve the one-time trial slot.
+
+    Returns True if this call won the slot (``trial_used_at`` was NULL), False
+    if the trial was already used. On a provisioning failure the caller must
+    call :func:`release_trial` to free the slot for a retry.
+    """
+    pool = get_pool()
+    row = await pool.fetchrow(
+        """
+        UPDATE users
+        SET trial_used_at = NOW(), trial_expires_at = $2
+        WHERE telegram_id = $1 AND trial_used_at IS NULL
+        RETURNING telegram_id
+        """,
+        telegram_id,
+        trial_expires_at,
+    )
+    return row is not None
+
+
+async def release_trial(telegram_id: int) -> None:
+    """Undo a trial claim when provisioning ultimately failed."""
+    pool = get_pool()
+    await pool.execute(
+        """
+        UPDATE users
+        SET trial_used_at = NULL, trial_expires_at = NULL
+        WHERE telegram_id = $1
+        """,
+        telegram_id,
+    )

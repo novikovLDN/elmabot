@@ -1,7 +1,16 @@
-# Архитектура — Telegram VPN bot (Атлас Lite)
+# Архитектура — Telegram VPN bot (ELMA)
 
 Лёгкий клон: один продукт, один сервер, один платёжный поток. Никакого
 магазина, мульти-тарифов, выбора стран, рефералов и игровых механик.
+
+> **Remnawave-провизия (ELMA).** Выдача доступа вынесена в
+> `app/services/subscription_service.create_or_renew` поверх REST-клиента
+> `app/services/remnawave.py` (httpx). Модель — «панель первой, БД второй»:
+> сначала `POST`/`PATCH` в Remnawave, на успех — `upsert_subscription` в БД.
+> Username в панели — `elma_<telegram_id>` (изоляция от Atlas). Алгоритм
+> идемпотентен: при потере `panel_uuid` запись адоптируется через
+> `GET /api/users/by-username/elma_<id>`. Один entity на юзера, MainSquad,
+> безлимит. Детали — в задании на интеграцию.
 
 ## 1. Что делает бот
 

@@ -6,12 +6,14 @@ from aiogram.types import CallbackQuery, Message, PreCheckoutQuery
 
 from app.format import subscription_text
 from app.keyboards import back_to_menu, buy_keyboard
-from app.services import access, payments
+from app.services import payments, subscription_service
 from app.utils import safe_edit, safe_send
 from config import PRICE_STARS, SUBSCRIPTION_DAYS
 from database import (
     create_pending_payment,
-    grant_days,
+    get_subscription,
+    is_payment_paid,
+    mark_payment_paid,
     mark_payment_refunded,
 )
 
@@ -56,18 +58,21 @@ async def on_paid(message: Message) -> None:
     invoice_id = sp.invoice_payload
     charge_id = sp.telegram_payment_charge_id
 
-    # Mark-paid + VPN provisioning happen in one DB transaction. If the panel
-    # is down, grant_days raises, the transaction rolls back, the payment stays
-    # 'pending' — and we refund the Stars so "paid -> served OR refunded".
+    # Idempotency: a duplicate successful_payment must not extend twice.
+    if await is_payment_paid(invoice_id):
+        logger.info("Invoice %s already processed; skipping", invoice_id)
+        return
+
+    # Provision first, journal the payment as 'paid' only on success (§10.1).
+    # If the panel is down, create_or_renew raises, the payment stays 'pending',
+    # and we refund the Stars so the rule "paid -> served OR refunded" holds.
+    current = await get_subscription(user_id)
+    new_expires = subscription_service.next_expiry(current, SUBSCRIPTION_DAYS)
     try:
-        sub = await grant_days(
-            user_id,
-            SUBSCRIPTION_DAYS,
-            source="payment",
-            provision=access.extend_provision(user_id),
-            invoice_id=invoice_id,
-            amount=sp.total_amount,
+        sub = await subscription_service.create_or_renew(
+            user_id, new_expires, source="payment"
         )
+        await mark_payment_paid(user_id, invoice_id, sp.total_amount)
     except Exception:  # noqa: BLE001
         logger.exception("Provisioning failed after payment by %s; refunding", user_id)
         try:
