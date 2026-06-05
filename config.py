@@ -39,7 +39,28 @@ REMNAWAVE_TOKEN = _get_str("REMNAWAVE_TOKEN", "")
 # --- Product / pricing ---
 PRICE_STARS = _get_int("PRICE_STARS", 99)
 SUBSCRIPTION_DAYS = _get_int("SUBSCRIPTION_DAYS", 30)
-TRIAL_DAYS = _get_int("TRIAL_DAYS", 3)
+TRIAL_DAYS = _get_int("TRIAL_DAYS", 2)
+
+# --- Branding / onboarding ---
+# Per-platform app download links shown on the device connection screens.
+# Default to the public Happ client pages; override per deployment if needed.
+APP_IOS_URL = _get_str(
+    "APP_IOS_URL", "https://apps.apple.com/app/happ-proxy-utility/id6504287215"
+)
+APP_ANDROID_URL = _get_str(
+    "APP_ANDROID_URL",
+    "https://play.google.com/store/apps/details?id=com.happproxy",
+)
+APP_MACOS_URL = _get_str(
+    "APP_MACOS_URL", "https://apps.apple.com/app/happ-proxy-utility/id6504287215"
+)
+APP_WINDOWS_URL = _get_str(
+    "APP_WINDOWS_URL", "https://github.com/Happ-proxy/happ-desktop/releases/latest"
+)
+APP_ANDROIDTV_URL = _get_str(
+    "APP_ANDROIDTV_URL",
+    "https://play.google.com/store/apps/details?id=com.happproxy",
+)
 
 # --- Scheduler tuning ---
 REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)

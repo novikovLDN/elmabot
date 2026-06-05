@@ -21,13 +21,10 @@ from database import (
 )
 
 from . import access
+from ..keyboards import buy_keyboard
 from ..utils import safe_send
 
 logger = logging.getLogger(__name__)
-
-
-def _human_left(label: str) -> str:
-    return label
 
 
 async def _send_reminders(bot: Bot, flag_column: str, headline: str) -> None:
@@ -35,10 +32,9 @@ async def _send_reminders(bot: Bot, flag_column: str, headline: str) -> None:
     for row in rows:
         text = (
             f"⏳ <b>{headline}</b>\n\n"
-            "Чтобы не остаться без VPN, продлите подписку командой /start → "
-            "«💳 Купить»."
+            "Чтобы не остаться без ELMA VPN, продли доступ 👇"
         )
-        await safe_send(bot, row["telegram_id"], text)
+        await safe_send(bot, row["telegram_id"], text, reply_markup=buy_keyboard())
         await mark_reminder_sent(row["telegram_id"], flag_column)
     if rows:
         logger.info("Sent %d '%s' reminders", len(rows), flag_column)
@@ -68,7 +64,8 @@ async def expiry_cleanup_loop(bot: Bot) -> None:
                 await safe_send(
                     bot,
                     row["telegram_id"],
-                    "🚫 Ваша VPN-подписка истекла. Продлите её: /start → «💳 Купить».",
+                    "🚫 Доступ к ELMA VPN истёк. Продли его, чтобы вернуться 👇",
+                    reply_markup=buy_keyboard(),
                 )
             if rows:
                 logger.info("Expired %d subscriptions", len(rows))

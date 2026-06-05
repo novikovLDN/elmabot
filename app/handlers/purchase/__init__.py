@@ -19,11 +19,11 @@ logger = logging.getLogger(__name__)
 router = Router(name="purchase")
 
 BUY_SCREEN = (
-    "💳 <b>Подписка на VPN</b>\n\n"
+    "💳 <b>Подписка ELMA VPN</b>\n\n"
     f"• Срок: {SUBSCRIPTION_DAYS} дней\n"
     f"• Цена: {PRICE_STARS} ⭐ (Telegram Stars)\n"
-    "• Безлимитный трафик, один сервер.\n\n"
-    "Если подписка ещё активна — дни прибавятся к текущему сроку."
+    "• Безлимитный трафик, до 5 устройств.\n\n"
+    "Если доступ ещё активен — дни прибавятся к текущему сроку."
 )
 
 

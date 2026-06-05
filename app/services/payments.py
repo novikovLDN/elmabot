@@ -32,8 +32,8 @@ def parse_payload(payload: str) -> int | None:
 async def send_subscription_invoice(bot: Bot, chat_id: int, payload: str) -> None:
     await bot.send_invoice(
         chat_id=chat_id,
-        title=f"VPN на {SUBSCRIPTION_DAYS} дней",
-        description="Атлас Lite — безлимитный трафик, один тариф, один сервер.",
+        title=f"ELMA VPN на {SUBSCRIPTION_DAYS} дней",
+        description="ELMA VPN — безлимитный трафик, до 5 устройств, zero-logs.",
         payload=payload,
         currency="XTR",  # Telegram Stars
         prices=[LabeledPrice(label="VPN", amount=PRICE_STARS)],

@@ -27,7 +27,7 @@ async def cb_trial(call: CallbackQuery) -> None:
         logger.exception("Trial activation failed for %s", user_id)
         await safe_edit(
             call.message,
-            "⚠️ Не удалось активировать триал — попробуйте ещё раз через минуту.",
+            "⚠️ Не удалось активировать доступ — попробуйте ещё раз через минуту.",
             reply_markup=back_to_menu(),
         )
         return
@@ -37,7 +37,7 @@ async def cb_trial(call: CallbackQuery) -> None:
         current = await get_subscription(user_id)
         await safe_edit(
             call.message,
-            "Триал уже был использован.\n\n" + subscription_text(current),
+            "Бесплатный доступ уже был использован.\n\n" + subscription_text(current),
             reply_markup=back_to_menu(),
         )
         return
@@ -45,6 +45,7 @@ async def cb_trial(call: CallbackQuery) -> None:
     logger.info("Trial activated for %s", user_id)
     await safe_edit(
         call.message,
-        "🎉 <b>Триал на 3 дня активирован!</b>\n\n" + subscription_text(sub),
+        f"🎉 <b>Бесплатный доступ на {TRIAL_DAYS} дня активирован!</b>\n\n"
+        + subscription_text(sub),
         reply_markup=back_to_menu(),
     )

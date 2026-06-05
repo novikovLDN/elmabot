@@ -1,13 +1,15 @@
-# Атлас Lite — Telegram VPN bot
+# ELMA — Telegram VPN bot
 
-Лёгкий бот, продающий **одну** VPN-подписку: триал на 3 дня → оплата
+Лёгкий бот, продающий **одну** VPN-подписку: бесплатные 2 дня → оплата
 звёздами Telegram → автопродление, напоминания и админка. Один продукт,
 один сервер, один платёжный поток.
 
 ## Возможности
 
-- `/start` → онбординг и главное меню.
-- 🆓 Одноразовый триал на 3 дня (атомарная транзакция).
+- `/start` → онбординг ELMA: welcome → «Забрать доступ» → выбор устройства.
+- 🆓 Одноразовый бесплатный доступ на 2 дня (атомарная транзакция).
+- 📱 Пошаговые экраны подключения: iOS, Android, MacOS, Windows, Android TV,
+  Apple TV; «Поделиться» (ссылка) и QR-код для второго устройства.
 - 💳 Покупка/продление через **Telegram Stars** (без вебхуков).
 - 🔗 Выдача VLESS-ссылки через панель **Remnawave**.
 - ⏳ Напоминания за 24ч/3ч и авто-очистка истёкших подписок.
@@ -25,7 +27,7 @@ main.py                  запуск: pool + bot + scheduler
 config.py                все env-vars и константы
 database/                core (pool/init/helpers), users, subscriptions
 app/
-  handlers/              common · trial · purchase · admin
+  handlers/              onboarding · common · trial · purchase · admin
   services/              vpn (Remnawave) · payments (Stars) · access · notifications
   utils/telegram_safe.py safe_send / safe_edit / convert_tg_emoji
   keyboards.py, format.py
@@ -52,7 +54,8 @@ python main.py
 | `REMNAWAVE_URL` / `REMNAWAVE_TOKEN` | панель VPN и API-токен |
 | `PRICE_STARS` | цена подписки в звёздах (default 99) |
 | `SUBSCRIPTION_DAYS` | длительность подписки (default 30) |
-| `TRIAL_DAYS` | длительность триала (default 3) |
+| `TRIAL_DAYS` | длительность бесплатного доступа (default 2) |
+| `APP_IOS_URL` / `APP_ANDROID_URL` / `APP_MACOS_URL` / `APP_WINDOWS_URL` / `APP_ANDROIDTV_URL` | ссылки на скачивание клиента на экранах подключения (по умолчанию — публичный Happ) |
 
 ## Деплой
 
