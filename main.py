@@ -7,9 +7,15 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.memory import MemoryStorage
 
 import config
+from aiogram.types import BotCommand
+
 from app.handlers import get_routers
 from app.services import remnawave
-from app.services.notifications import expiry_cleanup_loop, reminder_loop
+from app.services.notifications import (
+    expiry_cleanup_loop,
+    offer_loop,
+    reminder_loop,
+)
 from database import close_db, init_db
 
 
@@ -34,10 +40,20 @@ async def main() -> None:
     for router in get_routers():
         dp.include_router(router)
 
+    await bot.set_my_commands(
+        [
+            BotCommand(command="start", description="Запустить ELMA"),
+            BotCommand(command="buy", description="Тарифы и оплата"),
+            BotCommand(command="invite", description="Пригласить друзей"),
+            BotCommand(command="help", description="Помощь"),
+        ]
+    )
+
     # Background scheduler loops.
     tasks = [
         asyncio.create_task(reminder_loop(bot), name="reminder_loop"),
         asyncio.create_task(expiry_cleanup_loop(bot), name="expiry_cleanup_loop"),
+        asyncio.create_task(offer_loop(bot), name="offer_loop"),
     ]
 
     logger.info("Bot starting (polling)…")

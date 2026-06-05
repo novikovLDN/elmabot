@@ -10,9 +10,15 @@
 - 🆓 Одноразовый бесплатный доступ на 2 дня (атомарная транзакция).
 - 📱 Пошаговые экраны подключения: iOS, Android, MacOS, Windows, Android TV,
   Apple TV; «Поделиться» (ссылка) и QR-код для второго устройства.
-- 💳 Покупка/продление через **Telegram Stars** (без вебхуков).
-- 🔗 Выдача VLESS-ссылки через панель **Remnawave**.
-- ⏳ Напоминания за 24ч/3ч и авто-очистка истёкших подписок.
+- 💳 Тарифы 1 / 3 / 6 / 12 мес (`/buy`). **Приём платежей ещё не подключён** —
+  экран выбора тарифа работает, кнопка «Оплатить» — заглушка; точка
+  подключения провайдера: `purchase.cb_pay` + `billing.complete_purchase`.
+- 👥 Реферальная программа (`/invite`): +7 дней за друга, который **купил**
+  подписку (не триал).
+- 🎁 Персональные скидки: −10% после триала (1 день), −20% в день окончания,
+  −20% реактивация через 3 дня.
+- 🔗 Выдача подписки через панель **Remnawave** (`subscription_service`).
+- ⏳ Напоминания 24ч/3ч, авто-очистка истёкших, рассылка офферов.
 - 🛠 Админка: статистика, выдать/отозвать доступ, рассылка по сегментам.
 
 ## Стек
@@ -23,13 +29,14 @@ Python 3.11+. Один процесс, фоновые `asyncio`-таски — �
 ## Структура
 
 ```
-main.py                  запуск: pool + bot + scheduler
+main.py                  запуск: pool + bot + scheduler (3 loop'а)
 config.py                все env-vars и константы
+app/tariffs.py           каталог тарифов (1/3/6/12 мес)
 database/                core (pool/init/helpers), users, subscriptions
 app/
-  handlers/              onboarding · common · trial · purchase · admin
+  handlers/              onboarding · referral · common · trial · purchase · admin
   services/              remnawave (REST) · subscription_service (provisioning)
-                         payments (Stars) · notifications
+                         billing (покупка+рефералка) · discounts · payments · notifications
   utils/telegram_safe.py safe_send / safe_edit / convert_tg_emoji
   keyboards.py, format.py
 docs/ARCHITECTURE.md
@@ -43,7 +50,8 @@ pip install -r requirements.txt
 python main.py
 ```
 
-`init_db()` создаёт три таблицы и индексы при старте.
+`init_db()` создаёт таблицы (`users`, `subscriptions`, `payments`,
+`referrals`) и индексы при старте.
 
 ### Переменные окружения
 
@@ -60,6 +68,9 @@ python main.py
 | `TRIAL_DAYS` | длительность бесплатного доступа (default 2) |
 | `DEVICE_LIMIT` | лимит устройств на пользователя (default 5) |
 | `TRAFFIC_LIMIT_BYTES` | лимит трафика в байтах, `0` = безлимит (default 0) |
+| `REFERRAL_BONUS_DAYS` | бонус инвайтеру за купившего друга (default 7) |
+| `DISCOUNT_TRIAL_END_PCT` / `DISCOUNT_SUB_END_PCT` / `DISCOUNT_REACTIVATION_PCT` | скидки в % (default 10/20/20) |
+| `REACTIVATION_AFTER_DAYS` | через сколько дней после истечения слать оффер реактивации (default 3) |
 | `APP_IOS_URL` / `APP_ANDROID_URL` / `APP_MACOS_URL` / `APP_WINDOWS_URL` / `APP_ANDROIDTV_URL` | ссылки на скачивание клиента на экранах подключения (по умолчанию — публичный Happ) |
 
 ## Деплой

@@ -29,8 +29,27 @@ CREATE TABLE IF NOT EXISTS users (
     created_at       TIMESTAMPTZ DEFAULT NOW(),
     trial_used_at    TIMESTAMPTZ,
     trial_expires_at TIMESTAMPTZ,
-    is_reachable     BOOLEAN DEFAULT TRUE
+    is_reachable     BOOLEAN DEFAULT TRUE,
+    referred_by      BIGINT,
+    trial_offer_sent BOOLEAN DEFAULT FALSE,
+    offer_code       TEXT,
+    offer_pct        INTEGER,
+    offer_expires_at TIMESTAMPTZ
 );
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by      BIGINT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_offer_sent BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_code       TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_pct        INTEGER;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_expires_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS referrals (
+    referred_id BIGINT PRIMARY KEY REFERENCES users(telegram_id),
+    referrer_id BIGINT NOT NULL REFERENCES users(telegram_id),
+    status      TEXT NOT NULL DEFAULT 'pending',  -- pending | credited
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    credited_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
 
 CREATE TABLE IF NOT EXISTS subscriptions (
     telegram_id       BIGINT PRIMARY KEY REFERENCES users(telegram_id),
@@ -42,6 +61,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     source            TEXT NOT NULL,        -- 'trial' | 'payment' | 'admin'
     reminder_24h_sent BOOLEAN DEFAULT FALSE,
     reminder_3h_sent  BOOLEAN DEFAULT FALSE,
+    react_offer_sent  BOOLEAN DEFAULT FALSE,
     created_at        TIMESTAMPTZ DEFAULT NOW(),
     activated_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -66,6 +86,7 @@ ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS panel_uuid       TEXT;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS vless_uuid       TEXT;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS subscription_url TEXT;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS created_at       TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS react_offer_sent BOOLEAN DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS payments (
     id             BIGSERIAL PRIMARY KEY,

@@ -17,7 +17,7 @@ import io
 import logging
 
 from aiogram import F, Router
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandObject, CommandStart
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from app.keyboards import (
@@ -39,7 +39,7 @@ from config import (
     APP_WINDOWS_URL,
     TRIAL_DAYS,
 )
-from database import get_subscription, upsert_user
+from database import get_subscription, set_referral, upsert_user
 
 logger = logging.getLogger(__name__)
 router = Router(name="onboarding")
@@ -202,12 +202,26 @@ def _make_qr_png(data: str) -> bytes | None:
 
 # --- Welcome / Screen 1 ---------------------------------------------------
 
+def _parse_ref(args: str | None) -> int | None:
+    """Extract a referrer id from a ``ref_<id>`` deep-link payload."""
+    if not args or not args.startswith("ref_"):
+        return None
+    try:
+        return int(args[4:])
+    except ValueError:
+        return None
+
+
 @router.message(CommandStart())
-async def cmd_start(message: Message) -> None:
+async def cmd_start(message: Message, command: CommandObject) -> None:
     user = message.from_user
     is_new = await upsert_user(user.id, user.username, user.language_code or "ru")
     if is_new:
         logger.info("New user onboarded: %s (@%s)", user.id, user.username)
+        referrer_id = _parse_ref(command.args)
+        if referrer_id and referrer_id != user.id:
+            if await set_referral(user.id, referrer_id):
+                logger.info("User %s referred by %s", user.id, referrer_id)
     await message.answer(WELCOME, reply_markup=welcome_keyboard())
 
 

@@ -50,6 +50,21 @@ TRIAL_DAYS = _get_int("TRIAL_DAYS", 2)
 DEVICE_LIMIT = _get_int("DEVICE_LIMIT", 5)
 TRAFFIC_LIMIT_BYTES = _get_int("TRAFFIC_LIMIT_BYTES", 0)
 
+# --- Referral ---
+# Days added to the referrer when an invited friend makes their first *paid*
+# purchase (a trial does not count).
+REFERRAL_BONUS_DAYS = _get_int("REFERRAL_BONUS_DAYS", 7)
+
+# --- Discounts (percent off) ---
+# −10% on the first purchase right after the trial ends (valid 1 day).
+DISCOUNT_TRIAL_END_PCT = _get_int("DISCOUNT_TRIAL_END_PCT", 10)
+# −20% to renew on the day a subscription ends.
+DISCOUNT_SUB_END_PCT = _get_int("DISCOUNT_SUB_END_PCT", 20)
+# −20% to reactivate 3 days after a subscription was disconnected.
+DISCOUNT_REACTIVATION_PCT = _get_int("DISCOUNT_REACTIVATION_PCT", 20)
+# How many days after expiry the reactivation offer fires.
+REACTIVATION_AFTER_DAYS = _get_int("REACTIVATION_AFTER_DAYS", 3)
+
 # --- Branding / onboarding ---
 # Per-platform app download links shown on the device connection screens.
 # Default to the public Happ client pages; override per deployment if needed.

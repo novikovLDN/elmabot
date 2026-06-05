@@ -39,7 +39,9 @@ def devices_keyboard() -> InlineKeyboardMarkup:
     kb.button(text="📺 Android TV", callback_data="dev:androidtv")
     kb.button(text="🍎 Apple TV", callback_data="dev:appletv")
     kb.button(text="➕ Добавить устройство", callback_data="share:open")
-    kb.adjust(2, 2, 2, 1)
+    kb.button(text="💳 Тарифы", callback_data="menu:buy")
+    kb.button(text="👥 Друзья", callback_data="menu:referral")
+    kb.adjust(2, 2, 2, 1, 2)
     return kb.as_markup()
 
 
@@ -89,8 +91,36 @@ def qr_close_keyboard() -> InlineKeyboardMarkup:
 
 
 def buy_keyboard() -> InlineKeyboardMarkup:
+    """Compact entry point to the tariff list (used by reminders / trial-end)."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="⭐ Оплатить", callback_data="buy:invoice")
+    kb.button(text="💳 Выбрать тариф", callback_data="menu:buy")
+    kb.button(text="⬅️ В меню", callback_data="menu:home")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def tariffs_keyboard(rows: list[tuple[str, str]]) -> InlineKeyboardMarkup:
+    """Tariff list. ``rows`` is ``[(callback_data, label), ...]`` so the handler
+    can bake the (optionally discounted) price into each label."""
+    kb = InlineKeyboardBuilder()
+    for data, label in rows:
+        kb.button(text=label, callback_data=data)
+    kb.button(text="⬅️ В меню", callback_data="menu:home")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def tariff_detail_keyboard(code: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="💳 Оплатить", callback_data=f"buy:pay:{code}")
+    kb.button(text="🔙 К тарифам", callback_data="menu:buy")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def referral_keyboard(share_url: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📤 Поделиться", url=share_url)
     kb.button(text="⬅️ В меню", callback_data="menu:home")
     kb.adjust(1)
     return kb.as_markup()

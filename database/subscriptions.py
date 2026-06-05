@@ -100,6 +100,17 @@ async def is_payment_paid(invoice_id: str) -> bool:
     return row is not None
 
 
+async def has_paid_payment(telegram_id: int) -> bool:
+    """True if the user has ever completed a paid purchase (for first-purchase
+    discounts and referral crediting)."""
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "SELECT 1 FROM payments WHERE telegram_id = $1 AND status = 'paid' LIMIT 1",
+        telegram_id,
+    )
+    return row is not None
+
+
 async def mark_payment_paid(
     telegram_id: int, invoice_id: str, amount: int | None = None
 ) -> None:
@@ -156,7 +167,7 @@ async def due_reminders(flag_column: str) -> list[asyncpg.Record]:
     pool = get_pool()
     return await pool.fetch(
         f"""
-        SELECT telegram_id, expires_at
+        SELECT telegram_id, expires_at, source
         FROM subscriptions
         WHERE status = 'active'
           AND expires_at BETWEEN NOW() AND NOW() + INTERVAL '{window}'
@@ -190,6 +201,58 @@ async def mark_expired(telegram_id: int) -> None:
     pool = get_pool()
     await pool.execute(
         "UPDATE subscriptions SET status = 'expired' WHERE telegram_id = $1",
+        telegram_id,
+    )
+
+
+# --- Discount-offer scheduler ---------------------------------------------
+
+async def due_trial_end_offers() -> list[asyncpg.Record]:
+    """Users whose trial has ended, never bought, with no active subscription —
+    candidates for the one-day −10% first-purchase offer."""
+    pool = get_pool()
+    return await pool.fetch(
+        """
+        SELECT u.telegram_id
+        FROM users u
+        LEFT JOIN subscriptions s ON s.telegram_id = u.telegram_id
+        WHERE u.trial_used_at IS NOT NULL
+          AND u.trial_expires_at IS NOT NULL
+          AND u.trial_expires_at < NOW()
+          AND NOT u.trial_offer_sent
+          AND u.is_reachable
+          AND (s.telegram_id IS NULL OR s.status <> 'active')
+          AND NOT EXISTS (
+              SELECT 1 FROM payments p
+              WHERE p.telegram_id = u.telegram_id AND p.status = 'paid'
+          )
+        """
+    )
+
+
+async def due_reactivation_offers(after_days: int) -> list[asyncpg.Record]:
+    """Subscriptions that expired ~``after_days`` ago (a one-day window so old
+    backlog is not spammed) — candidates for the −20% reactivation offer."""
+    days = int(after_days)
+    pool = get_pool()
+    return await pool.fetch(
+        f"""
+        SELECT s.telegram_id
+        FROM subscriptions s
+        JOIN users u ON u.telegram_id = s.telegram_id
+        WHERE s.status = 'expired'
+          AND NOT s.react_offer_sent
+          AND u.is_reachable
+          AND s.expires_at <  NOW() - INTERVAL '{days} days'
+          AND s.expires_at >= NOW() - INTERVAL '{days + 1} days'
+        """
+    )
+
+
+async def mark_react_offer_sent(telegram_id: int) -> None:
+    pool = get_pool()
+    await pool.execute(
+        "UPDATE subscriptions SET react_offer_sent = TRUE WHERE telegram_id = $1",
         telegram_id,
     )
 
