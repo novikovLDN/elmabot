@@ -29,20 +29,64 @@ CREATE TABLE IF NOT EXISTS users (
     created_at       TIMESTAMPTZ DEFAULT NOW(),
     trial_used_at    TIMESTAMPTZ,
     trial_expires_at TIMESTAMPTZ,
-    is_reachable     BOOLEAN DEFAULT TRUE
+    is_reachable     BOOLEAN DEFAULT TRUE,
+    referred_by      BIGINT,
+    trial_offer_sent BOOLEAN DEFAULT FALSE,
+    offer_code       TEXT,
+    offer_pct        INTEGER,
+    offer_expires_at TIMESTAMPTZ
 );
+ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by      BIGINT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_offer_sent BOOLEAN DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_code       TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_pct        INTEGER;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_expires_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS referrals (
+    referred_id BIGINT PRIMARY KEY REFERENCES users(telegram_id),
+    referrer_id BIGINT NOT NULL REFERENCES users(telegram_id),
+    status      TEXT NOT NULL DEFAULT 'pending',  -- pending | credited
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    credited_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
 
 CREATE TABLE IF NOT EXISTS subscriptions (
     telegram_id       BIGINT PRIMARY KEY REFERENCES users(telegram_id),
-    vpn_uuid          TEXT,
-    vpn_url           TEXT,
+    panel_uuid        TEXT,                 -- internal Remnawave uuid (PATCH/DELETE)
+    vless_uuid        TEXT,                 -- uuid the client sees in VLESS strings
+    subscription_url  TEXT,                 -- ready-made link handed to the user
     expires_at        TIMESTAMPTZ NOT NULL,
-    status            TEXT NOT NULL,
-    source            TEXT NOT NULL,
+    status            TEXT NOT NULL,        -- 'active' | 'expired' | 'pending'
+    source            TEXT NOT NULL,        -- 'trial' | 'payment' | 'admin'
     reminder_24h_sent BOOLEAN DEFAULT FALSE,
     reminder_3h_sent  BOOLEAN DEFAULT FALSE,
+    react_offer_sent  BOOLEAN DEFAULT FALSE,
+    created_at        TIMESTAMPTZ DEFAULT NOW(),
     activated_at      TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration from the previous (Атлас Lite) column names, if present.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'subscriptions' AND column_name = 'vpn_uuid')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'subscriptions' AND column_name = 'panel_uuid') THEN
+        ALTER TABLE subscriptions RENAME COLUMN vpn_uuid TO panel_uuid;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'subscriptions' AND column_name = 'vpn_url')
+       AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_name = 'subscriptions' AND column_name = 'subscription_url') THEN
+        ALTER TABLE subscriptions RENAME COLUMN vpn_url TO subscription_url;
+    END IF;
+END $$;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS panel_uuid       TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS vless_uuid       TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS subscription_url TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS created_at       TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS react_offer_sent BOOLEAN DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS payments (
     id             BIGSERIAL PRIMARY KEY,

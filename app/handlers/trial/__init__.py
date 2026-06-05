@@ -6,10 +6,10 @@ from aiogram.types import CallbackQuery
 
 from app.format import subscription_text
 from app.keyboards import back_to_menu
-from app.services import access
+from app.services import subscription_service
 from app.utils import safe_edit
 from config import TRIAL_DAYS
-from database import activate_trial, get_subscription
+from database import get_subscription
 
 logger = logging.getLogger(__name__)
 router = Router(name="trial")
@@ -20,14 +20,12 @@ async def cb_trial(call: CallbackQuery) -> None:
     await call.answer()
     user_id = call.from_user.id
     try:
-        sub = await activate_trial(
-            user_id, TRIAL_DAYS, access.trial_provision(user_id)
-        )
+        sub = await subscription_service.activate_trial(user_id, TRIAL_DAYS)
     except Exception:  # noqa: BLE001 - VPN/DB failure -> safe retry
         logger.exception("Trial activation failed for %s", user_id)
         await safe_edit(
             call.message,
-            "⚠️ Не удалось активировать триал — попробуйте ещё раз через минуту.",
+            "⚠️ Не удалось активировать доступ — попробуйте ещё раз через минуту.",
             reply_markup=back_to_menu(),
         )
         return
@@ -37,7 +35,7 @@ async def cb_trial(call: CallbackQuery) -> None:
         current = await get_subscription(user_id)
         await safe_edit(
             call.message,
-            "Триал уже был использован.\n\n" + subscription_text(current),
+            "Бесплатный доступ уже был использован.\n\n" + subscription_text(current),
             reply_markup=back_to_menu(),
         )
         return
@@ -45,6 +43,7 @@ async def cb_trial(call: CallbackQuery) -> None:
     logger.info("Trial activated for %s", user_id)
     await safe_edit(
         call.message,
-        "🎉 <b>Триал на 3 дня активирован!</b>\n\n" + subscription_text(sub),
+        f"🎉 <b>Бесплатный доступ на {TRIAL_DAYS} дня активирован!</b>\n\n"
+        + subscription_text(sub),
         reply_markup=back_to_menu(),
     )

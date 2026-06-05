@@ -35,28 +35,70 @@ DATABASE_URL = _get_str("DATABASE_URL", "")
 # --- Remnawave VPN panel ---
 REMNAWAVE_URL = _get_str("REMNAWAVE_URL", "").rstrip("/")
 REMNAWAVE_TOKEN = _get_str("REMNAWAVE_TOKEN", "")
+# Squad (inbound group) every Elma user is placed into. Without it a created
+# panel user is attached to no inbound and the subscription does not work.
+REMNAWAVE_MAIN_SQUAD_UUID = _get_str("REMNAWAVE_MAIN_SQUAD_UUID", "")
+# Username prefix in the panel. Isolates Elma records from other bots sharing
+# the same panel (e.g. Atlas Secure uses ``tg_<id>_premium``).
+REMNAWAVE_USERNAME_PREFIX = _get_str("REMNAWAVE_USERNAME_PREFIX", "elma_")
 
 # --- Product / pricing ---
 PRICE_STARS = _get_int("PRICE_STARS", 99)
 SUBSCRIPTION_DAYS = _get_int("SUBSCRIPTION_DAYS", 30)
-TRIAL_DAYS = _get_int("TRIAL_DAYS", 3)
+TRIAL_DAYS = _get_int("TRIAL_DAYS", 2)
+# Per-user device limit and traffic cap in the panel. 0 bytes = unlimited.
+DEVICE_LIMIT = _get_int("DEVICE_LIMIT", 5)
+TRAFFIC_LIMIT_BYTES = _get_int("TRAFFIC_LIMIT_BYTES", 0)
+
+# --- Referral ---
+# Days added to the referrer when an invited friend makes their first *paid*
+# purchase (a trial does not count).
+REFERRAL_BONUS_DAYS = _get_int("REFERRAL_BONUS_DAYS", 7)
+
+# --- Discounts (percent off) ---
+# −10% on the first purchase right after the trial ends (valid 1 day).
+DISCOUNT_TRIAL_END_PCT = _get_int("DISCOUNT_TRIAL_END_PCT", 10)
+# −20% to renew on the day a subscription ends.
+DISCOUNT_SUB_END_PCT = _get_int("DISCOUNT_SUB_END_PCT", 20)
+# −20% to reactivate 3 days after a subscription was disconnected.
+DISCOUNT_REACTIVATION_PCT = _get_int("DISCOUNT_REACTIVATION_PCT", 20)
+# How many days after expiry the reactivation offer fires.
+REACTIVATION_AFTER_DAYS = _get_int("REACTIVATION_AFTER_DAYS", 3)
+
+# --- Branding / onboarding ---
+# Per-platform app download links shown on the device connection screens.
+# Default to the public Happ client pages; override per deployment if needed.
+APP_IOS_URL = _get_str(
+    "APP_IOS_URL", "https://apps.apple.com/app/happ-proxy-utility/id6504287215"
+)
+APP_ANDROID_URL = _get_str(
+    "APP_ANDROID_URL",
+    "https://play.google.com/store/apps/details?id=com.happproxy",
+)
+APP_MACOS_URL = _get_str(
+    "APP_MACOS_URL", "https://apps.apple.com/app/happ-proxy-utility/id6504287215"
+)
+APP_WINDOWS_URL = _get_str(
+    "APP_WINDOWS_URL", "https://github.com/Happ-proxy/happ-desktop/releases/latest"
+)
+APP_ANDROIDTV_URL = _get_str(
+    "APP_ANDROIDTV_URL",
+    "https://play.google.com/store/apps/details?id=com.happproxy",
+)
 
 # --- Scheduler tuning ---
 REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)
 EXPIRY_INTERVAL_SECONDS = _get_int("EXPIRY_INTERVAL_SECONDS", 600)
 
-# --- VPN provisioning ---
-# Per-user traffic cap in gigabytes. 0 means unlimited.
-VPN_TRAFFIC_LIMIT_GB = _get_int("VPN_TRAFFIC_LIMIT_GB", 0)
-
 # --- Logging ---
 LOG_LEVEL = _get_str("LOG_LEVEL", "INFO")
 
+
 # --- Derived constants ---
-# Username format inside the panel. Lets us *recover* the DB<->panel link
-# by walking the panel by username.
-PANEL_USERNAME_PREFIX = "tg_"
+def build_username(telegram_id: int) -> str:
+    """Panel username for a Telegram user.
 
-
-def panel_username(telegram_id: int) -> str:
-    return f"{PANEL_USERNAME_PREFIX}{telegram_id}"
+    Remnawave caps usernames at 32 chars; ``elma_<id>`` fits with room to spare.
+    The prefix lets us *recover* the DB<->panel link by walking the panel.
+    """
+    return f"{REMNAWAVE_USERNAME_PREFIX}{telegram_id}"[:32]

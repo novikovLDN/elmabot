@@ -20,14 +20,13 @@ from app.keyboards import (
     admin_menu,
     admin_user_actions,
 )
-from app.services import access
+from app.services import subscription_service
 from app.utils import safe_send
 from config import ADMIN_TELEGRAM_ID, PRICE_STARS
 from database import (
     find_user_by_username,
     get_subscription,
     get_user,
-    grant_days,
     mark_unreachable,
     payment_history,
     recipients,
@@ -141,11 +140,10 @@ async def _show_user_card(message: Message, telegram_id: int) -> None:
 async def cb_grant(call: CallbackQuery) -> None:
     target = int(call.data.split(":")[2])
     try:
-        await grant_days(
-            target,
-            ADMIN_GRANT_DAYS,
-            source="admin_grant",
-            provision=access.extend_provision(target),
+        current = await get_subscription(target)
+        new_expires = subscription_service.next_expiry(current, ADMIN_GRANT_DAYS)
+        await subscription_service.create_or_renew(
+            target, new_expires, source="admin"
         )
     except Exception:  # noqa: BLE001
         logger.exception("Admin grant failed for %s", target)
@@ -163,7 +161,7 @@ async def cb_revoke(call: CallbackQuery) -> None:
     target = int(call.data.split(":")[2])
     sub = await revoke_subscription(target)
     if sub is not None:
-        await access.deprovision(sub["vpn_uuid"])
+        await subscription_service.deprovision(sub["panel_uuid"])
     await call.answer("Доступ отозван")
     await _show_user_card(call.message, target)
 

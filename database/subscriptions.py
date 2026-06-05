@@ -1,36 +1,30 @@
-"""Subscriptions, payments and the trial — the transactional heart.
+"""Subscriptions and payments — the persistence layer.
 
-The provisioning HTTP call is executed *inside* the DB transaction via a
-callback so that "record the access" and "provision the VPN" either both
-succeed or both roll back (docs/ARCHITECTURE.md §10.2). If the VPN API does
-not answer, the ``await`` raises, the transaction rolls back, and nothing is
-half-written.
+Provisioning is orchestrated by ``app.services.subscription_service``: it calls
+the Remnawave panel *first* and then writes the result here via
+``upsert_subscription``. The panel is the source of truth for the VPN entity;
+the DB mirrors it. If a panel call fails the service raises and nothing is
+written, so a half-finished run is recoverable (find-by-username adopts the
+panel record on the next attempt — docs/ARCHITECTURE.md §10.2).
 """
 import logging
-from datetime import datetime, timedelta
-from typing import Awaitable, Callable
+from datetime import datetime
 
 import asyncpg
 
-from .core import get_pool, to_db_utc, utcnow
+from .core import get_pool
 
 logger = logging.getLogger(__name__)
 
-# provision(expires_at) -> (vpn_uuid, vpn_url)
-TrialProvision = Callable[[datetime], Awaitable[tuple[str, str]]]
-# provision(existing_sub | None, new_expires) -> (vpn_uuid, vpn_url)
-ExtendProvision = Callable[
-    [asyncpg.Record | None, datetime], Awaitable[tuple[str, str]]
-]
-
 _UPSERT_SUB = """
 INSERT INTO subscriptions (
-    telegram_id, vpn_uuid, vpn_url, expires_at, status, source,
-    reminder_24h_sent, reminder_3h_sent, activated_at
-) VALUES ($1, $2, $3, $4, 'active', $5, FALSE, FALSE, NOW())
+    telegram_id, panel_uuid, vless_uuid, subscription_url, expires_at,
+    status, source, reminder_24h_sent, reminder_3h_sent, activated_at
+) VALUES ($1, $2, $3, $4, $5, 'active', $6, FALSE, FALSE, NOW())
 ON CONFLICT (telegram_id) DO UPDATE SET
-    vpn_uuid          = EXCLUDED.vpn_uuid,
-    vpn_url           = EXCLUDED.vpn_url,
+    panel_uuid        = EXCLUDED.panel_uuid,
+    vless_uuid        = EXCLUDED.vless_uuid,
+    subscription_url  = EXCLUDED.subscription_url,
     expires_at        = EXCLUDED.expires_at,
     status            = 'active',
     source            = EXCLUDED.source,
@@ -48,113 +42,38 @@ async def get_subscription(telegram_id: int) -> asyncpg.Record | None:
     )
 
 
-async def activate_trial(
-    telegram_id: int, trial_days: int, provision: TrialProvision
-) -> asyncpg.Record | None:
-    """Atomically grant the one-time trial.
-
-    Returns the subscription row, or ``None`` if the trial was already used.
-    Raises if VPN provisioning fails (transaction rolls back — the user can
-    retry, ``trial_used_at`` stays NULL).
-    """
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            user = await conn.fetchrow(
-                "SELECT trial_used_at FROM users WHERE telegram_id = $1 FOR UPDATE",
-                telegram_id,
-            )
-            if user is None:
-                raise ValueError(f"user {telegram_id} not found")
-            if user["trial_used_at"] is not None:
-                return None
-
-            expires_at = utcnow() + timedelta(days=trial_days)
-            vpn_uuid, vpn_url = await provision(expires_at)
-
-            await conn.execute(
-                """
-                UPDATE users
-                SET trial_used_at = NOW(), trial_expires_at = $1
-                WHERE telegram_id = $2
-                """,
-                expires_at,
-                telegram_id,
-            )
-            return await conn.fetchrow(
-                _UPSERT_SUB, telegram_id, vpn_uuid, vpn_url, expires_at, "trial"
-            )
-
-
-async def grant_days(
+async def upsert_subscription(
     telegram_id: int,
-    days: int,
-    source: str,
-    provision: ExtendProvision,
     *,
-    invoice_id: str | None = None,
-    amount: int | None = None,
+    panel_uuid: str | None,
+    vless_uuid: str | None,
+    subscription_url: str | None,
+    expires_at: datetime,
+    source: str,
 ) -> asyncpg.Record:
-    """Extend (or create) a subscription by ``days``, optionally journaling a
-    payment in the same transaction.
-
-    Expiry uses ``GREATEST(expires_at, NOW()) + interval`` so paying while the
-    subscription is still active never burns the remaining time (§5.4).
-
-    Idempotent on ``invoice_id``: if that invoice was already marked paid the
-    function is a no-op and returns the current subscription.
-    """
+    """Mirror a provisioned panel entity into the DB and mark it active."""
     pool = get_pool()
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            if invoice_id is not None:
-                marked = await conn.fetchrow(
-                    """
-                    UPDATE payments
-                    SET status = 'paid', paid_at = NOW()
-                    WHERE invoice_id = $1 AND status <> 'paid'
-                    RETURNING id
-                    """,
-                    invoice_id,
-                )
-                if marked is None:
-                    # Either unknown invoice, or already processed.
-                    existing_pay = await conn.fetchrow(
-                        "SELECT status FROM payments WHERE invoice_id = $1", invoice_id
-                    )
-                    if existing_pay is not None and existing_pay["status"] == "paid":
-                        logger.info("Invoice %s already processed; skipping", invoice_id)
-                        return await conn.fetchrow(
-                            "SELECT * FROM subscriptions WHERE telegram_id = $1",
-                            telegram_id,
-                        )
-                    # No pending row — create one already-paid (e.g. admin path).
-                    await conn.execute(
-                        """
-                        INSERT INTO payments (telegram_id, invoice_id, amount_kopecks,
-                                              status, paid_at)
-                        VALUES ($1, $2, $3, 'paid', NOW())
-                        ON CONFLICT (invoice_id) DO NOTHING
-                        """,
-                        telegram_id,
-                        invoice_id,
-                        amount or 0,
-                    )
+    return await pool.fetchrow(
+        _UPSERT_SUB,
+        telegram_id,
+        panel_uuid,
+        vless_uuid,
+        subscription_url,
+        expires_at,
+        source,
+    )
 
-            sub = await conn.fetchrow(
-                "SELECT * FROM subscriptions WHERE telegram_id = $1 FOR UPDATE",
-                telegram_id,
-            )
-            base = utcnow()
-            if sub is not None and sub["expires_at"] is not None:
-                base = max(base, sub["expires_at"])
-            new_expires = base + timedelta(days=days)
 
-            vpn_uuid, vpn_url = await provision(sub, new_expires)
-            return await conn.fetchrow(
-                _UPSERT_SUB, telegram_id, vpn_uuid, vpn_url, new_expires, source
-            )
+async def clear_panel_uuid(telegram_id: int) -> None:
+    """Forget a stale panel uuid (the panel returned 404 on PATCH)."""
+    pool = get_pool()
+    await pool.execute(
+        "UPDATE subscriptions SET panel_uuid = NULL WHERE telegram_id = $1",
+        telegram_id,
+    )
 
+
+# --- Payments --------------------------------------------------------------
 
 async def create_pending_payment(
     telegram_id: int, invoice_id: str, amount: int
@@ -173,6 +92,45 @@ async def create_pending_payment(
     )
 
 
+async def is_payment_paid(invoice_id: str) -> bool:
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "SELECT 1 FROM payments WHERE invoice_id = $1 AND status = 'paid'", invoice_id
+    )
+    return row is not None
+
+
+async def has_paid_payment(telegram_id: int) -> bool:
+    """True if the user has ever completed a paid purchase (for first-purchase
+    discounts and referral crediting)."""
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "SELECT 1 FROM payments WHERE telegram_id = $1 AND status = 'paid' LIMIT 1",
+        telegram_id,
+    )
+    return row is not None
+
+
+async def mark_payment_paid(
+    telegram_id: int, invoice_id: str, amount: int | None = None
+) -> None:
+    """Mark a payment paid *after* provisioning succeeded (§10.1).
+
+    Upserts so the admin path (no pre-journaled pending row) also works.
+    """
+    pool = get_pool()
+    await pool.execute(
+        """
+        INSERT INTO payments (telegram_id, invoice_id, amount_kopecks, status, paid_at)
+        VALUES ($1, $2, $3, 'paid', NOW())
+        ON CONFLICT (invoice_id) DO UPDATE SET status = 'paid', paid_at = NOW()
+        """,
+        telegram_id,
+        invoice_id,
+        amount or 0,
+    )
+
+
 async def mark_payment_refunded(invoice_id: str) -> None:
     pool = get_pool()
     await pool.execute(
@@ -182,7 +140,7 @@ async def mark_payment_refunded(invoice_id: str) -> None:
 
 async def revoke_subscription(telegram_id: int) -> asyncpg.Record | None:
     """Mark a subscription expired (admin revoke / cleanup). Returns the row so
-    the caller can delete the panel user by uuid."""
+    the caller can delete the panel user by ``panel_uuid``."""
     pool = get_pool()
     return await pool.fetchrow(
         """
@@ -209,7 +167,7 @@ async def due_reminders(flag_column: str) -> list[asyncpg.Record]:
     pool = get_pool()
     return await pool.fetch(
         f"""
-        SELECT telegram_id, expires_at
+        SELECT telegram_id, expires_at, source
         FROM subscriptions
         WHERE status = 'active'
           AND expires_at BETWEEN NOW() AND NOW() + INTERVAL '{window}'
@@ -232,7 +190,7 @@ async def expired_active() -> list[asyncpg.Record]:
     pool = get_pool()
     return await pool.fetch(
         """
-        SELECT telegram_id, vpn_uuid
+        SELECT telegram_id, panel_uuid
         FROM subscriptions
         WHERE status = 'active' AND expires_at < NOW()
         """
@@ -243,6 +201,58 @@ async def mark_expired(telegram_id: int) -> None:
     pool = get_pool()
     await pool.execute(
         "UPDATE subscriptions SET status = 'expired' WHERE telegram_id = $1",
+        telegram_id,
+    )
+
+
+# --- Discount-offer scheduler ---------------------------------------------
+
+async def due_trial_end_offers() -> list[asyncpg.Record]:
+    """Users whose trial has ended, never bought, with no active subscription —
+    candidates for the one-day −10% first-purchase offer."""
+    pool = get_pool()
+    return await pool.fetch(
+        """
+        SELECT u.telegram_id
+        FROM users u
+        LEFT JOIN subscriptions s ON s.telegram_id = u.telegram_id
+        WHERE u.trial_used_at IS NOT NULL
+          AND u.trial_expires_at IS NOT NULL
+          AND u.trial_expires_at < NOW()
+          AND NOT u.trial_offer_sent
+          AND u.is_reachable
+          AND (s.telegram_id IS NULL OR s.status <> 'active')
+          AND NOT EXISTS (
+              SELECT 1 FROM payments p
+              WHERE p.telegram_id = u.telegram_id AND p.status = 'paid'
+          )
+        """
+    )
+
+
+async def due_reactivation_offers(after_days: int) -> list[asyncpg.Record]:
+    """Subscriptions that expired ~``after_days`` ago (a one-day window so old
+    backlog is not spammed) — candidates for the −20% reactivation offer."""
+    days = int(after_days)
+    pool = get_pool()
+    return await pool.fetch(
+        f"""
+        SELECT s.telegram_id
+        FROM subscriptions s
+        JOIN users u ON u.telegram_id = s.telegram_id
+        WHERE s.status = 'expired'
+          AND NOT s.react_offer_sent
+          AND u.is_reachable
+          AND s.expires_at <  NOW() - INTERVAL '{days} days'
+          AND s.expires_at >= NOW() - INTERVAL '{days + 1} days'
+        """
+    )
+
+
+async def mark_react_offer_sent(telegram_id: int) -> None:
+    pool = get_pool()
+    await pool.execute(
+        "UPDATE subscriptions SET react_offer_sent = TRUE WHERE telegram_id = $1",
         telegram_id,
     )
 

@@ -62,3 +62,135 @@ async def trial_available(telegram_id: int) -> bool:
         "SELECT trial_used_at FROM users WHERE telegram_id = $1", telegram_id
     )
     return bool(row) and row["trial_used_at"] is None
+
+
+async def claim_trial(telegram_id: int, trial_expires_at) -> bool:
+    """Atomically reserve the one-time trial slot.
+
+    Returns True if this call won the slot (``trial_used_at`` was NULL), False
+    if the trial was already used. On a provisioning failure the caller must
+    call :func:`release_trial` to free the slot for a retry.
+    """
+    pool = get_pool()
+    row = await pool.fetchrow(
+        """
+        UPDATE users
+        SET trial_used_at = NOW(), trial_expires_at = $2
+        WHERE telegram_id = $1 AND trial_used_at IS NULL
+        RETURNING telegram_id
+        """,
+        telegram_id,
+        trial_expires_at,
+    )
+    return row is not None
+
+
+async def release_trial(telegram_id: int) -> None:
+    """Undo a trial claim when provisioning ultimately failed."""
+    pool = get_pool()
+    await pool.execute(
+        """
+        UPDATE users
+        SET trial_used_at = NULL, trial_expires_at = NULL
+        WHERE telegram_id = $1
+        """,
+        telegram_id,
+    )
+
+
+# --- Referrals -------------------------------------------------------------
+
+async def set_referral(referred_id: int, referrer_id: int) -> bool:
+    """Record that ``referred_id`` was invited by ``referrer_id``.
+
+    Recorded once per invited user; self-invites and unknown referrers are
+    rejected. The +days bonus is granted later, on the friend's first purchase.
+    """
+    if referred_id == referrer_id:
+        return False
+    pool = get_pool()
+    if await pool.fetchrow("SELECT 1 FROM users WHERE telegram_id = $1", referrer_id) is None:
+        return False
+    row = await pool.fetchrow(
+        """
+        INSERT INTO referrals (referred_id, referrer_id)
+        VALUES ($1, $2)
+        ON CONFLICT (referred_id) DO NOTHING
+        RETURNING referred_id
+        """,
+        referred_id,
+        referrer_id,
+    )
+    if row is None:
+        return False
+    await pool.execute(
+        "UPDATE users SET referred_by = $2 WHERE telegram_id = $1 AND referred_by IS NULL",
+        referred_id,
+        referrer_id,
+    )
+    return True
+
+
+async def credit_referral(referred_id: int) -> int | None:
+    """Mark a pending referral credited (idempotent). Returns the referrer's id
+    to reward, or None if there was no pending referral."""
+    pool = get_pool()
+    row = await pool.fetchrow(
+        """
+        UPDATE referrals
+        SET status = 'credited', credited_at = NOW()
+        WHERE referred_id = $1 AND status = 'pending'
+        RETURNING referrer_id
+        """,
+        referred_id,
+    )
+    return row["referrer_id"] if row else None
+
+
+async def referral_stats(referrer_id: int) -> dict:
+    pool = get_pool()
+    row = await pool.fetchrow(
+        """
+        SELECT COUNT(*)                                  AS invited,
+               COUNT(*) FILTER (WHERE status = 'credited') AS purchased
+        FROM referrals WHERE referrer_id = $1
+        """,
+        referrer_id,
+    )
+    return dict(row)
+
+
+# --- Personal offers / discounts ------------------------------------------
+
+async def set_offer(telegram_id: int, code: str, pct: int, expires_at) -> None:
+    pool = get_pool()
+    await pool.execute(
+        """
+        UPDATE users
+        SET offer_code = $2, offer_pct = $3, offer_expires_at = $4
+        WHERE telegram_id = $1
+        """,
+        telegram_id,
+        code,
+        pct,
+        expires_at,
+    )
+
+
+async def clear_offer(telegram_id: int) -> None:
+    pool = get_pool()
+    await pool.execute(
+        """
+        UPDATE users
+        SET offer_code = NULL, offer_pct = NULL, offer_expires_at = NULL
+        WHERE telegram_id = $1
+        """,
+        telegram_id,
+    )
+
+
+async def mark_trial_offer_sent(telegram_id: int) -> None:
+    pool = get_pool()
+    await pool.execute(
+        "UPDATE users SET trial_offer_sent = TRUE WHERE telegram_id = $1", telegram_id
+    )
