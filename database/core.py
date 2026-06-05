@@ -51,6 +51,16 @@ CREATE TABLE IF NOT EXISTS referrals (
 );
 CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
 
+CREATE TABLE IF NOT EXISTS gifts (
+    code        TEXT PRIMARY KEY,
+    tariff_code TEXT NOT NULL,
+    created_by  BIGINT NOT NULL REFERENCES users(telegram_id),
+    status      TEXT NOT NULL DEFAULT 'pending',  -- pending | redeemed
+    redeemed_by BIGINT,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    redeemed_at TIMESTAMPTZ
+);
+
 CREATE TABLE IF NOT EXISTS subscriptions (
     telegram_id       BIGINT PRIMARY KEY REFERENCES users(telegram_id),
     panel_uuid        TEXT,                 -- internal Remnawave uuid (PATCH/DELETE)

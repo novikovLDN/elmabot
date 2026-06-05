@@ -22,7 +22,7 @@ from app.keyboards import (
 )
 from app.services import subscription_service
 from app.utils import safe_send
-from config import ADMIN_TELEGRAM_ID, PRICE_STARS
+from config import ADMIN_TELEGRAM_ID, PRICE_STARS, SUPPORT_USERNAME
 from database import (
     find_user_by_username,
     get_subscription,
@@ -62,6 +62,33 @@ class Broadcast(StatesGroup):
 async def cmd_admin(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("🛠 <b>Админ-панель</b>", parse_mode="HTML", reply_markup=admin_menu())
+
+
+BLOCK_TEXT = (
+    "🚫 <b>Доступ приостановлен</b>\n\n"
+    "Ваш аккаунт заблокирован за нарушение\n"
+    "условий использования ELMA VPN.\n\n"
+    "Причина: превышение лимита устройств.\n"
+    "Максимум по тарифу — 5 устройств.\n\n"
+    "Возврат средств и восстановление доступа\n"
+    "не предусмотрены.\n\n"
+    f"С вопросами: @{SUPPORT_USERNAME}"
+)
+
+
+@router.message(Command("block"))
+async def cmd_block(message: Message) -> None:
+    """Revoke access and send the block screen. Usage: /block <telegram_id>."""
+    parts = (message.text or "").split()
+    if len(parts) < 2 or not parts[1].lstrip("-").isdigit():
+        await message.answer("Использование: <code>/block &lt;telegram_id&gt;</code>")
+        return
+    target = int(parts[1])
+    sub = await revoke_subscription(target)
+    if sub is not None:
+        await subscription_service.deprovision(sub["panel_uuid"])
+    await safe_send(message.bot, target, BLOCK_TEXT)
+    await message.answer(f"🚫 Пользователь {target} заблокирован и уведомлён.")
 
 
 @router.callback_query(F.data == "admin:home")

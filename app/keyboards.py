@@ -6,9 +6,64 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 def back_to_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="⬅️ В меню", callback_data="menu:home")]
+            [InlineKeyboardButton(text="🔙 Главное меню", callback_data="menu:main")]
         ]
     )
+
+
+# --- Main menu / personal cabinet ---
+
+def main_menu_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="👤 Личный кабинет", callback_data="menu:cabinet")
+    if has_active_sub:
+        kb.button(text="🔄 Продлить подписку", callback_data="menu:buy")
+    else:
+        kb.button(text="💳 Купить подписку", callback_data="menu:buy")
+    kb.button(text="📲 Подключиться", callback_data="dev:menu")
+    kb.button(text="🫂 Реферальная программа", callback_data="menu:referral")
+    kb.button(text="🎁 Подарить", callback_data="gift:open")
+    kb.button(text="🛎️ Помощь", callback_data="help:open")
+    kb.button(text="ℹ️ О сервисе", callback_data="about:open")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def cabinet_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    if has_active_sub:
+        kb.button(text="🔄 Продлить подписку", callback_data="menu:buy")
+        kb.button(text="📲 Подключиться", callback_data="dev:menu")
+        kb.button(text="🫂 Реферальная программа", callback_data="menu:referral")
+        kb.button(text="🛎️ Поддержка", url=_support_url())
+    else:
+        kb.button(text="💳 Купить подписку", callback_data="menu:buy")
+        kb.button(text="🛎️ Написать в поддержку", url=_support_url())
+    kb.button(text="🔙 Назад", callback_data="menu:main")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def _support_url() -> str:
+    from config import SUPPORT_URL
+
+    return SUPPORT_URL
+
+
+def payment_methods_keyboard(
+    code: str, back_data: str, *, prefix: str = "pay"
+) -> InlineKeyboardMarkup:
+    """СБП / Карта — both placeholders until a provider is wired.
+
+    ``prefix`` is ``pay`` for a self-purchase or ``giftpay`` for a gift, so the
+    handlers stay separate; ``code`` is the chosen tariff.
+    """
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🏦 СБП", callback_data=f"{prefix}:sbp:{code}")
+    kb.button(text="💳 Банковская карта", callback_data=f"{prefix}:card:{code}")
+    kb.button(text="🔙 Назад", callback_data=back_data)
+    kb.adjust(1)
+    return kb.as_markup()
 
 
 # --- ELMA onboarding ---
@@ -38,10 +93,8 @@ def devices_keyboard() -> InlineKeyboardMarkup:
     kb.button(text="💻 Windows", callback_data="dev:windows")
     kb.button(text="📺 Android TV", callback_data="dev:androidtv")
     kb.button(text="🍎 Apple TV", callback_data="dev:appletv")
-    kb.button(text="➕ Добавить устройство", callback_data="share:open")
-    kb.button(text="💳 Тарифы", callback_data="menu:buy")
-    kb.button(text="👥 Друзья", callback_data="menu:referral")
-    kb.adjust(2, 2, 2, 1, 2)
+    kb.button(text="📤 Поделиться", callback_data="share:open")
+    kb.adjust(2, 2, 2, 1)
     return kb.as_markup()
 
 
@@ -75,10 +128,10 @@ def device_keyboard(
 def share_keyboard() -> InlineKeyboardMarkup:
     """Screen 9 — share the access link."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="📥 Копировать", callback_data="share:copy")
-    kb.button(text="⤵️ QR Code", callback_data="share:qr")
+    kb.button(text="📥 Копировать ссылку", callback_data="share:copy")
+    kb.button(text="⤵️ QR-код", callback_data="share:qr")
     kb.button(text="🔙 Назад", callback_data="dev:menu")
-    kb.adjust(2, 1)
+    kb.adjust(1)
     return kb.as_markup()
 
 
@@ -90,11 +143,23 @@ def qr_close_keyboard() -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-def buy_keyboard() -> InlineKeyboardMarkup:
-    """Compact entry point to the tariff list (used by reminders / trial-end)."""
+def buy_keyboard(*, renew: bool = False) -> InlineKeyboardMarkup:
+    """Compact entry point to the tariff list (used by reminders / offers)."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="💳 Выбрать тариф", callback_data="menu:buy")
-    kb.button(text="⬅️ В меню", callback_data="menu:home")
+    kb.button(
+        text="🔄 Продлить подписку" if renew else "💳 Купить подписку",
+        callback_data="menu:buy",
+    )
+    kb.button(text="🔙 Главное меню", callback_data="menu:main")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def offer_keyboard(button_text: str) -> InlineKeyboardMarkup:
+    """Single call-to-action (renew / restore / buy with discount) → buy flow."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text=button_text, callback_data="menu:buy")
+    kb.button(text="🔙 Главное меню", callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -105,23 +170,15 @@ def tariffs_keyboard(rows: list[tuple[str, str]]) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for data, label in rows:
         kb.button(text=label, callback_data=data)
-    kb.button(text="⬅️ В меню", callback_data="menu:home")
-    kb.adjust(1)
-    return kb.as_markup()
-
-
-def tariff_detail_keyboard(code: str) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text="💳 Оплатить", callback_data=f"buy:pay:{code}")
-    kb.button(text="🔙 К тарифам", callback_data="menu:buy")
+    kb.button(text="🔙 Назад", callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
 
 
 def referral_keyboard(share_url: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="📤 Поделиться", url=share_url)
-    kb.button(text="⬅️ В меню", callback_data="menu:home")
+    kb.button(text="🫂 Пригласить друга", url=share_url)
+    kb.button(text="🔙 Назад", callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
 

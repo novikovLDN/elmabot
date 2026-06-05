@@ -7,9 +7,14 @@
 ## Возможности
 
 - `/start` → онбординг ELMA: welcome → «Забрать доступ» → выбор устройства.
+- `/menu` → главное меню: Личный кабинет, Купить/Продлить, Подключиться,
+  Рефералка, Подарить, Помощь (4 FAQ + контакты), О сервисе + Политика.
 - 🆓 Одноразовый бесплатный доступ на 2 дня (атомарная транзакция).
 - 📱 Пошаговые экраны подключения: iOS, Android, MacOS, Windows, Android TV,
   Apple TV; «Поделиться» (ссылка) и QR-код для второго устройства.
+- 🎁 Подарить подписку: выбор тарифа → оплата (заглушка) → одноразовая
+  ссылка-подарок (`?start=gift_<code>`), активация получателем.
+- 🚫 Экран блокировки: `/block <id>` (админ) — отзыв доступа + уведомление.
 - 💳 Тарифы 1 / 3 / 6 / 12 мес (`/buy`). **Приём платежей ещё не подключён** —
   экран выбора тарифа работает, кнопка «Оплатить» — заглушка; точка
   подключения провайдера: `purchase.cb_pay` + `billing.complete_purchase`.
@@ -34,9 +39,9 @@ config.py                все env-vars и константы
 app/tariffs.py           каталог тарифов (1/3/6/12 мес)
 database/                core (pool/init/helpers), users, subscriptions
 app/
-  handlers/              onboarding · referral · common · trial · purchase · admin
+  handlers/              onboarding · menu · referral · gift · trial · purchase · admin
   services/              remnawave (REST) · subscription_service (provisioning)
-                         billing (покупка+рефералка) · discounts · payments · notifications
+                         billing (покупка+рефералка+подарки) · discounts · payments · notifications
   utils/telegram_safe.py safe_send / safe_edit / convert_tg_emoji
   keyboards.py, format.py
 docs/ARCHITECTURE.md

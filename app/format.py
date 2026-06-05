@@ -12,6 +12,12 @@ def fmt_dt(dt: datetime | None) -> str:
     return dt.strftime("%d.%m.%Y %H:%M UTC")
 
 
+def fmt_date(dt: datetime | None) -> str:
+    if dt is None:
+        return "—"
+    return dt.strftime("%d.%m.%Y")
+
+
 def time_left(expires_at: datetime) -> str:
     delta = expires_at - utcnow()
     if delta.total_seconds() <= 0:

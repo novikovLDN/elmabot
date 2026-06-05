@@ -111,6 +111,37 @@ async def has_paid_payment(telegram_id: int) -> bool:
     return row is not None
 
 
+# --- Gifts -----------------------------------------------------------------
+
+async def create_gift(code: str, tariff_code: str, created_by: int) -> None:
+    pool = get_pool()
+    await pool.execute(
+        """
+        INSERT INTO gifts (code, tariff_code, created_by)
+        VALUES ($1, $2, $3)
+        """,
+        code,
+        tariff_code,
+        created_by,
+    )
+
+
+async def redeem_gift_record(code: str, redeemed_by: int) -> asyncpg.Record | None:
+    """Atomically mark a gift redeemed. Returns the gift row (with tariff_code
+    and created_by) on success, or None if unknown / already redeemed."""
+    pool = get_pool()
+    return await pool.fetchrow(
+        """
+        UPDATE gifts
+        SET status = 'redeemed', redeemed_by = $2, redeemed_at = NOW()
+        WHERE code = $1 AND status = 'pending'
+        RETURNING tariff_code, created_by
+        """,
+        code,
+        redeemed_by,
+    )
+
+
 async def mark_payment_paid(
     telegram_id: int, invoice_id: str, amount: int | None = None
 ) -> None:
@@ -154,9 +185,10 @@ async def revoke_subscription(telegram_id: int) -> asyncpg.Record | None:
 
 # --- Scheduler queries -----------------------------------------------------
 
+# Columns repurposed for the approved timeline: 3 days before / day of expiry.
 _REMINDER_COLUMNS = {
-    "reminder_24h_sent": "24 hours",
-    "reminder_3h_sent": "3 hours",
+    "reminder_24h_sent": "3 days",
+    "reminder_3h_sent": "1 day",
 }
 
 

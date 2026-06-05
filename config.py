@@ -90,6 +90,10 @@ APP_ANDROIDTV_URL = _get_str(
 REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)
 EXPIRY_INTERVAL_SECONDS = _get_int("EXPIRY_INTERVAL_SECONDS", 600)
 
+# --- Support / contacts ---
+SUPPORT_USERNAME = _get_str("SUPPORT_USERNAME", "elmasupport").lstrip("@")
+SUPPORT_URL = f"https://t.me/{SUPPORT_USERNAME}"
+
 # --- Logging ---
 LOG_LEVEL = _get_str("LOG_LEVEL", "INFO")
 

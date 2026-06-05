@@ -8,6 +8,7 @@ from .core import (
 )
 from .subscriptions import (
     clear_panel_uuid,
+    create_gift,
     create_pending_payment,
     due_reactivation_offers,
     due_reminders,
@@ -23,6 +24,7 @@ from .subscriptions import (
     mark_reminder_sent,
     payment_history,
     recipients,
+    redeem_gift_record,
     revoke_subscription,
     stats,
     upsert_subscription,
@@ -88,4 +90,7 @@ __all__ = [
     "stats",
     "payment_history",
     "recipients",
+    # gifts
+    "create_gift",
+    "redeem_gift_record",
 ]

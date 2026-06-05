@@ -1,0 +1,289 @@
+"""Main menu (/menu), personal cabinet, About + Policy, Help + FAQ.
+
+Static, navigation-heavy screens. Copy follows the approved ELMA spec verbatim;
+tone is warm, on "ты", short.
+"""
+import logging
+
+from aiogram import F, Router
+from aiogram.filters import Command
+from aiogram.types import CallbackQuery, Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+from app.format import fmt_date
+from app.keyboards import cabinet_keyboard, main_menu_keyboard
+from app.utils import safe_edit
+from config import DEVICE_LIMIT, REFERRAL_BONUS_DAYS, SUPPORT_URL, SUPPORT_USERNAME
+from database import get_subscription, referral_stats
+
+logger = logging.getLogger(__name__)
+router = Router(name="menu")
+
+
+MAIN = (
+    "☁️ <b>ELMA</b>\n\n"
+    "VPN, который не мешает жить ⚡\n\n"
+    "Пока другие заставляют ждать и нервничать —\n"
+    "ELMA просто работает ✨\n\n"
+    "🫧 Без обрывов\n"
+    "🌐 Максимальная скорость\n"
+    "💎 Честные цены\n"
+    "📱 Все твои устройства"
+)
+
+ABOUT = (
+    "ℹ️ <b>О сервисе</b>\n\n"
+    "☁️ ELMA VPN — твой личный интернет\n"
+    "без границ и без нервов.\n\n"
+    "━━━━━━━━━━━━━━━\n\n"
+    "🌍 Серверы по всему миру\n"
+    "⚡️ Скорость до 75 Гбит/с\n"
+    "📱 До 5 устройств на одну подписку\n"
+    "♾️ Безлимитный трафик\n"
+    "🔒 Zero-logs — мы ничего не храним\n"
+    "🛡️ AES-256-GCM + WireGuard\n"
+    "💬 Поддержка каждый день\n\n"
+    "━━━━━━━━━━━━━━━\n\n"
+    "iOS · Android · MacOS · Windows\n"
+    "AndroidTV · Apple TV\n\n"
+    "━━━━━━━━━━━━━━━\n\n"
+    "С нами уже тысячи пользователей\n"
+    "которые просто пользуются интернетом —\n"
+    "без лагов, блокировок и нервов 🤍"
+)
+
+POLICY = (
+    "📋 <b>Политика сервиса ELMA VPN</b>\n\n"
+    "Пользуясь сервисом, ты соглашаешься\n"
+    "с этими условиями.\n\n"
+    "━━━━━━━━━━━━━━━\n\n"
+    "📱 <b>Устройства</b>\n"
+    "Максимум 5 устройств одновременно.\n"
+    "Превышение лимита — блокировка без\n"
+    "предупреждения и без возврата средств.\n\n"
+    "⚖️ <b>Законность</b>\n"
+    "ELMA VPN предназначен для легального\n"
+    "использования. Любая незаконная\n"
+    "активность — немедленная блокировка.\n\n"
+    "🤖 <b>Накрутки и боты</b>\n"
+    "Использование ботов и скриптов в\n"
+    "реферальной программе запрещено.\n"
+    "Бонусы будут аннулированы.\n\n"
+    "💰 <b>Возврат средств</b>\n"
+    "Возврат не предусмотрен после активации\n"
+    "подписки или выдачи ключа.\n\n"
+    "🚫 <b>Блокировка</b>\n"
+    "Администрация вправе ограничить или\n"
+    "полностью закрыть доступ без объяснения\n"
+    "причин и возврата средств при нарушении\n"
+    "любого из пунктов выше.\n\n"
+    "━━━━━━━━━━━━━━━\n\n"
+    f"Вопросы: @{SUPPORT_USERNAME} 🤍"
+)
+
+HELP = (
+    "🛎️ <b>Помощь</b>\n\n"
+    "Выбери — найдём решение быстро 👇"
+)
+
+FAQ = (
+    "📖 <b>Частые вопросы</b>\n\n"
+    "Выбери свой вопрос 👇"
+)
+
+CONTACTS = (
+    "📞 <b>Контакты</b>\n\n"
+    f"💬 Поддержка: @{SUPPORT_USERNAME}\n\n"
+    "Пишем каждый день, отвечаем за 5–10 минут 🤍"
+)
+
+FAQ_ANSWERS = {
+    "novpn": (
+        "🚫 <b>Не работает VPN</b>\n\n"
+        "Пройдись по шагам — обычно помогает один.\n\n"
+        "1️⃣ <b>Проверь интернет без VPN</b>\n"
+        "Отключи VPN, открой любой сайт.\n"
+        "Не работает? Проблема у провайдера, не у нас.\n\n"
+        "2️⃣ <b>Перезапусти приложение</b>\n"
+        "Смахни Happ из меню → открой заново →\n"
+        "включи подключение.\n\n"
+        "3️⃣ <b>Импортируй ключ заново</b>\n"
+        "В боте: «📲 Подключиться» → твоё устройство →\n"
+        "«Импортировать ключ».\n\n"
+        "Не помогло? Оператор ответит за 5–10 минут 💬"
+    ),
+    "howto": (
+        "📲 <b>Как подключиться</b>\n\n"
+        "Меньше минуты — серьёзно.\n\n"
+        "1️⃣ Нажми «📲 Подключиться» в боте\n"
+        "2️⃣ Выбери устройство\n"
+        "3️⃣ Скачай приложение\n"
+        "4️⃣ Нажми «🔗 Активировать ELMA VPN»\n"
+        "5️⃣ Включи VPN 🚀\n\n"
+        "Каждый шаг — с картинкой.\n"
+        "Заблудиться сложно 🤍"
+    ),
+    "slow": (
+        "🐌 <b>Низкая скорость</b>\n\n"
+        "Пройдись по шагам.\n\n"
+        "1️⃣ <b>Проверь скорость без VPN</b>\n"
+        "yandex.ru/internet с выключенным VPN.\n"
+        "Медленно без VPN — проблема не в нас.\n\n"
+        "2️⃣ <b>Смени сервер</b>\n"
+        "Другая страна — иногда быстрее.\n"
+        "Попробуй Германию или Финляндию.\n\n"
+        "3️⃣ <b>На мобильном интернете?</b>\n"
+        "Вечером вышки загружены — это нормально.\n"
+        "Ночью быстрее.\n\n"
+        "4️⃣ <b>Перезагрузи роутер</b>\n"
+        "30 секунд без розетки — иногда решает всё.\n\n"
+        "Стабильно медленно везде? Напиши нам 💬"
+    ),
+    "pay": (
+        "💳 <b>Не проходит оплата</b>\n\n"
+        "Пройдись по шагам.\n\n"
+        "1️⃣ <b>Смени способ оплаты</b>\n"
+        "СБП → карта, или наоборот.\n\n"
+        "2️⃣ <b>Платёж завис?</b>\n"
+        "Подожди 10–15 минут. Деньги либо\n"
+        "спишутся и подписка активируется —\n"
+        "либо вернутся автоматически.\n\n"
+        "3️⃣ <b>Списали, а подписки нет?</b>\n"
+        "Напиши оператору — разберёмся сразу.\n\n"
+        "Ответим за 5–10 минут 💬"
+    ),
+}
+
+
+async def _has_active_sub(user_id: int) -> bool:
+    sub = await get_subscription(user_id)
+    return sub is not None and sub["status"] == "active"
+
+
+async def show_main(message_or_call, user_id: int) -> None:
+    markup = main_menu_keyboard(has_active_sub=await _has_active_sub(user_id))
+    if isinstance(message_or_call, CallbackQuery):
+        await safe_edit(message_or_call.message, MAIN, reply_markup=markup)
+        await message_or_call.answer()
+    else:
+        await message_or_call.answer(MAIN, reply_markup=markup)
+
+
+@router.message(Command("menu"))
+async def cmd_menu(message: Message) -> None:
+    await show_main(message, message.from_user.id)
+
+
+@router.callback_query(F.data == "menu:main")
+async def cb_main(call: CallbackQuery) -> None:
+    await show_main(call, call.from_user.id)
+
+
+# --- Personal cabinet ------------------------------------------------------
+
+@router.callback_query(F.data == "menu:cabinet")
+async def cb_cabinet(call: CallbackQuery) -> None:
+    uid = call.from_user.id
+    sub = await get_subscription(uid)
+    active = sub is not None and sub["status"] == "active"
+    if active:
+        stats = await referral_stats(uid)
+        text = (
+            "👤 <b>Личный кабинет</b>\n\n"
+            f"🆔 ID: <code>{uid}</code>\n"
+            f"📅 Подписка активна до: <b>{fmt_date(sub['expires_at'])}</b>\n"
+            f"📱 Устройств: до {DEVICE_LIMIT}\n"
+            f"🫂 Приглашено друзей: {stats['invited']}\n"
+            f"🏆 Бонусных дней: {stats['purchased'] * REFERRAL_BONUS_DAYS}"
+        )
+    else:
+        text = (
+            "👤 <b>Личный кабинет</b>\n\n"
+            f"🆔 ID: <code>{uid}</code>\n"
+            "🔎 Статус подписки: не активна\n"
+            "📅 Дата окончания: —"
+        )
+    await safe_edit(call.message, text, reply_markup=cabinet_keyboard(has_active_sub=active))
+    await call.answer()
+
+
+# --- About / Policy --------------------------------------------------------
+
+@router.callback_query(F.data == "about:open")
+async def cb_about(call: CallbackQuery) -> None:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📋 Политика сервиса", callback_data="about:policy")
+    kb.button(text="🔙 Назад", callback_data="menu:main")
+    kb.adjust(1)
+    await safe_edit(call.message, ABOUT, reply_markup=kb.as_markup())
+    await call.answer()
+
+
+@router.callback_query(F.data == "about:policy")
+async def cb_policy(call: CallbackQuery) -> None:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🔙 Назад", callback_data="about:open")
+    await safe_edit(call.message, POLICY, reply_markup=kb.as_markup())
+    await call.answer()
+
+
+# --- Help / FAQ / Contacts -------------------------------------------------
+
+def _help_kb():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📖 Частые вопросы", callback_data="help:faq")
+    kb.button(text="📲 Инструкции", callback_data="dev:menu")
+    kb.button(text="📞 Контакты", callback_data="help:contacts")
+    kb.button(text="💬 Написать оператору", url=SUPPORT_URL)
+    kb.button(text="🔙 Назад", callback_data="menu:main")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+@router.message(Command("help"))
+async def cmd_help(message: Message) -> None:
+    await message.answer(HELP, reply_markup=_help_kb())
+
+
+@router.callback_query(F.data == "help:open")
+async def cb_help(call: CallbackQuery) -> None:
+    await safe_edit(call.message, HELP, reply_markup=_help_kb())
+    await call.answer()
+
+
+@router.callback_query(F.data == "help:faq")
+async def cb_faq(call: CallbackQuery) -> None:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🚫 Не работает VPN", callback_data="faq:novpn")
+    kb.button(text="📲 Как подключиться", callback_data="faq:howto")
+    kb.button(text="🐌 Низкая скорость", callback_data="faq:slow")
+    kb.button(text="💳 Не проходит оплата", callback_data="faq:pay")
+    kb.button(text="🔙 Назад", callback_data="help:open")
+    kb.adjust(1)
+    await safe_edit(call.message, FAQ, reply_markup=kb.as_markup())
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("faq:"))
+async def cb_faq_answer(call: CallbackQuery) -> None:
+    key = call.data.split(":", 1)[1]
+    text = FAQ_ANSWERS.get(key)
+    if text is None:
+        await call.answer()
+        return
+    kb = InlineKeyboardBuilder()
+    kb.button(text="💬 Написать оператору", url=SUPPORT_URL)
+    kb.button(text="🔙 Назад", callback_data="help:faq")
+    kb.adjust(1)
+    await safe_edit(call.message, text, reply_markup=kb.as_markup())
+    await call.answer()
+
+
+@router.callback_query(F.data == "help:contacts")
+async def cb_contacts(call: CallbackQuery) -> None:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="💬 Написать оператору", url=SUPPORT_URL)
+    kb.button(text="🔙 Назад", callback_data="help:open")
+    kb.adjust(1)
+    await safe_edit(call.message, CONTACTS, reply_markup=kb.as_markup())
+    await call.answer()

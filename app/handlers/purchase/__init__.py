@@ -1,19 +1,20 @@
-"""Tariff selection and purchase.
+"""Tariff selection and purchase (ELMA Plus).
 
-Payments are not wired yet: choosing a tariff shows its details and the
-"Оплатить" button is a placeholder. When a provider is connected, the only
-changes are inside ``cb_pay`` (create invoice) and ``on_paid`` (already routes
-through ``billing.complete_purchase``).
+Payments are not wired yet: choosing a tariff opens the payment screen (СБП /
+Карта), but the method buttons land on a placeholder. When a provider is
+connected, the only changes are inside ``cb_method`` (create invoice) and
+``on_paid`` (already routes through ``billing.complete_purchase``).
 """
 import logging
 
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message, PreCheckoutQuery
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app import tariffs
-from app.format import fmt_dt, subscription_text
-from app.keyboards import back_to_menu, tariff_detail_keyboard, tariffs_keyboard
+from app.format import fmt_date
+from app.keyboards import back_to_menu, payment_methods_keyboard, tariffs_keyboard
 from app.services import billing, discounts, payments
 from app.utils import safe_edit, safe_send
 from database import get_user, is_payment_paid, mark_payment_refunded
@@ -21,32 +22,35 @@ from database import get_user, is_payment_paid, mark_payment_refunded
 logger = logging.getLogger(__name__)
 router = Router(name="purchase")
 
+PLUS_HEADER = (
+    "👑 <b>ELMA Plus</b>\n\n"
+    "Один тариф — всё включено.\n\n"
+    "⚡️ Скорость без лагов и буферов\n"
+    "👨‍👩‍👧‍👦 До 5 устройств одновременно\n"
+    "🔒 Zero-logs — твои данные только твои"
+)
+
 
 async def _tariffs_view(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
     user = await get_user(user_id)
     offer = discounts.active_offer(user)
 
-    lines = [
-        "💳 <b>Тарифы ELMA VPN</b>",
-        "",
-        "Безлимит, до 5 устройств, zero-logs — на всех устройствах семьи.",
-    ]
+    lines = [PLUS_HEADER]
     if offer:
-        lines += [
-            "",
-            f"🎁 Тебе доступна {offer.reason}: <b>−{offer.pct}%</b> "
-            f"(до {fmt_dt(offer.expires_at)})",
-        ]
-    lines += ["", "Выбери срок 👇"]
+        lines.append(
+            f"\n🎁 Тебе доступна {offer.reason}: <b>−{offer.pct}%</b> "
+            f"(до {fmt_date(offer.expires_at)})"
+        )
+    lines.append("\nВыбери период 👇")
 
     rows: list[tuple[str, str]] = []
     for t in tariffs.TARIFFS:
         final = discounts.apply(t.price_rub, offer)
-        label = f"{t.title} — {final} ₽"
+        label = f"🗝️ {t.title} — {final} ₽"
         if offer and final != t.price_rub:
             label += " ⚡"
         elif t.save_label:
-            label += f" · {t.save_label}"
+            label += f"  {t.save_label}"
         rows.append((f"buy:tariff:{t.code}", label))
 
     return "\n".join(lines), tariffs_keyboard(rows)
@@ -67,6 +71,7 @@ async def cb_buy(call: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("buy:tariff:"))
 async def cb_tariff(call: CallbackQuery) -> None:
+    """Show the payment screen (СБП / Карта) for the chosen tariff."""
     code = call.data.split(":")[2]
     tariff = tariffs.get_tariff(code)
     if tariff is None:
@@ -76,29 +81,31 @@ async def cb_tariff(call: CallbackQuery) -> None:
     offer = discounts.active_offer(user)
     final = discounts.apply(tariff.price_rub, offer)
 
-    price_line = f"Цена: <b>{tariff.price_rub} ₽</b>"
-    if tariff.save_label:
-        price_line += f" ({tariff.save_label})"
     if offer and final != tariff.price_rub:
-        price_line = (
-            f"Цена: <s>{tariff.price_rub} ₽</s> → <b>{final} ₽</b> "
-            f"(−{offer.pct}%, {offer.reason})"
-        )
+        price = f"<s>{tariff.price_rub} ₽</s> {final} ₽ (−{offer.pct}%)"
+    else:
+        price = f"{final} ₽"
 
     text = (
-        f"💳 <b>{tariff.title}</b>\n\n"
-        f"Срок: {tariff.months} мес ({tariff.days} дней)\n"
-        f"{price_line}\n"
-        "Безлимитный трафик, до 5 устройств, zero-logs.\n\n"
-        "Нажми «Оплатить», чтобы продолжить 👇"
+        "⭐️ <b>Оформление подписки ELMA VPN</b>\n\n"
+        f"💰 Стоимость: {price}\n"
+        f"📅 Период: {tariff.title}\n"
+        "🌐 Устройств: до 5\n\n"
+        "Предупредим за 3 дня до окончания —\n"
+        "ничего не пропустишь.\n\n"
+        "Как оплатить? 👇"
     )
-    await safe_edit(call.message, text, reply_markup=tariff_detail_keyboard(code))
+    await safe_edit(
+        call.message,
+        text,
+        reply_markup=payment_methods_keyboard(code, back_data="menu:buy"),
+    )
     await call.answer()
 
 
-@router.callback_query(F.data.startswith("buy:pay:"))
-async def cb_pay(call: CallbackQuery) -> None:
-    """Placeholder — the payment provider is not connected yet."""
+@router.callback_query(F.data.startswith("pay:"))
+async def cb_method(call: CallbackQuery) -> None:
+    """Placeholder — the payment provider (СБП / Карта) is not connected yet."""
     code = call.data.split(":")[2]
     tariff = tariffs.get_tariff(code)
     if tariff is None:
@@ -108,7 +115,7 @@ async def cb_pay(call: CallbackQuery) -> None:
     final = discounts.apply(tariff.price_rub, discounts.active_offer(user))
     await safe_edit(
         call.message,
-        f"💳 <b>Оплата тарифа «{tariff.title}» — {final} ₽</b>\n\n"
+        f"⭐️ <b>Оплата ELMA Plus «{tariff.title}» — {final} ₽</b>\n\n"
         "⏳ Приём платежей скоро подключим. Загляни чуть позже 🙌",
         reply_markup=back_to_menu(),
     )
@@ -165,8 +172,19 @@ async def on_paid(message: Message) -> None:
         return
 
     logger.info("Payment processed for %s (%s)", user_id, tariff.code)
-    await message.answer(
-        "✅ <b>Оплата прошла, подписка активна!</b>\n\n" + subscription_text(sub),
-        parse_mode="HTML",
-        reply_markup=back_to_menu(),
+
+    key = sub["subscription_url"] or "—"
+    text = (
+        "✅ <b>Готово — добро пожаловать в ELMA</b> 🤍\n\n"
+        "Твой VPN-ключ:\n"
+        f"<code>{key}</code>\n\n"
+        f"📅 Подписка активна до: {fmt_date(sub['expires_at'])}\n"
+        "📱 Устройств: до 5\n\n"
+        "Подключись прямо сейчас 👇"
     )
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📲 Подключиться", callback_data="dev:menu")
+    kb.button(text="👥 Пригласить друга", callback_data="menu:referral")
+    kb.button(text="👤 Личный кабинет", callback_data="menu:cabinet")
+    kb.adjust(1)
+    await message.answer(text, parse_mode="HTML", reply_markup=kb.as_markup())

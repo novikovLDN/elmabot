@@ -29,7 +29,7 @@ from app.keyboards import (
     share_keyboard,
     welcome_keyboard,
 )
-from app.services import subscription_service
+from app.services import billing, subscription_service
 from app.utils import safe_edit
 from config import (
     APP_ANDROID_URL,
@@ -55,7 +55,7 @@ WELCOME = (
     "📱 5 устройств\n"
     "👥 Реферальная система\n"
     "🔒 Zero-logs\n"
-    "🛡️ Для всех устройств — iOS, Android, MacOS и Windows, AndroidTV, Apple TV\n"
+    "🛡️ iOS · Android · MacOS · Windows · AndroidTV · Apple TV\n\n"
     f"🎁 Первые {TRIAL_DAYS} дня бесплатно\n\n"
     "Твой доступ готов. Нажми Start 👇"
 )
@@ -70,11 +70,10 @@ SCREEN_1 = (
 
 SCREEN_2 = (
     "🫧 <b>ELMA активирован</b>\n\n"
-    "Теперь тебе открыт гостевой режим 🫂\n"
-    f"В ближайшие {TRIAL_DAYS} дня ты сможешь почувствовать,\n"
-    "как должен работать интернет без постоянных помех ⚡\n\n"
-    "ИЛИ ты можешь подключить до 5 устройств\n\n"
-    "👇 Выбери устройство для подключения"
+    "Теперь тебе открыт гостевой режим 🫂\n\n"
+    f"В ближайшие {TRIAL_DAYS} дня почувствуй,\n"
+    "как работает интернет без помех ⚡\n\n"
+    "Подключи до 5 устройств 👇"
 )
 
 TRIAL_USED = (
@@ -87,13 +86,19 @@ NO_ACCESS = (
     "чтобы получить ссылку для подключения 👇"
 )
 
+GIFT_REDEEMED = (
+    "🎁 <b>Подарок активирован!</b>\n\n"
+    "Добро пожаловать в ELMA 🤍\n\n"
+    "Подключи устройство 👇"
+)
+
 SHARE = (
-    "📱 <b>Поделиться</b>\n\n"
-    "Отправь ссылку на другое устройство:\n\n"
+    "📱 <b>Отправь ссылку на другое устройство</b>\n\n"
+    "🔗\n"
     "<code>{link}</code>"
 )
 
-QR_CAPTION = "Ваш QR Code на ELMA VPN 🤍"
+QR_CAPTION = "Ваш QR-код ELMA VPN 🤍"
 
 
 # --- Device instruction screens (3-8) -------------------------------------
@@ -105,9 +110,9 @@ DEVICES: dict[str, dict] = {
         "mode": "activate",
         "text": (
             "📄 <b>Подключение на iOS</b>\n\n"
-            "1. Нажмите «📥 Скачать приложение» и установите его\n"
-            "2. После установки нажмите «🔗 Активировать ELMA VPN»\n"
-            "3. Готово! Нажмите «Подключиться» 🚀"
+            "1. Нажми «📥 Скачать приложение» и установи его\n"
+            "2. Нажми «🔗 Активировать ELMA VPN»\n"
+            "3. Готово! Нажми «Подключиться» 🚀"
         ),
     },
     "android": {
@@ -116,9 +121,9 @@ DEVICES: dict[str, dict] = {
         "mode": "activate",
         "text": (
             "📄 <b>Подключение на Android</b>\n\n"
-            "1. Нажмите «📥 Скачать приложение» и установите его\n"
-            "2. После установки нажмите «🔗 Активировать ELMA VPN»\n"
-            "3. Готово! Выберите сервер и нажмите «Подключиться» 🚀"
+            "1. Нажми «📥 Скачать приложение» и установи его\n"
+            "2. Нажми «🔗 Активировать ELMA VPN»\n"
+            "3. Готово! Выбери сервер и нажми «Подключиться» 🚀"
         ),
     },
     "macos": {
@@ -126,11 +131,10 @@ DEVICES: dict[str, dict] = {
         "download_label": "📥 Скачать приложение",
         "mode": "activate",
         "text": (
-            "📄 <b>Подключение на MacOS Intel</b>\n\n"
-            "1. Нажмите «📥 Скачать приложение» и установите его на устройство\n"
-            "2. После установки нажмите «🔗 Активировать ELMA VPN», "
-            "чтобы добавить подписку в приложение\n"
-            "3. Готово! Теперь выберите сервер и нажмите «Подключиться» 🚀"
+            "📄 <b>Подключение на MacOS</b>\n\n"
+            "1. Нажми «📥 Скачать приложение» и установи его\n"
+            "2. Нажми «🔗 Активировать ELMA VPN»\n"
+            "3. Выбери сервер и нажми «Подключиться» 🚀"
         ),
     },
     "windows": {
@@ -139,12 +143,10 @@ DEVICES: dict[str, dict] = {
         "mode": "copy",
         "text": (
             "📄 <b>Подключение на Windows</b>\n\n"
-            "1. Нажмите «📥 Скачать программу», установите "
-            "и запустите Happ от имени администратора\n"
-            "2. Откройте Telegram на ПК, нажмите «🔗 Скопировать профиль» "
-            "и вставьте его в Happ\n"
-            "3. Настройте программу по инструкции\n"
-            "4. Готово! Нажмите «Подключиться» 🚀"
+            "1. Нажми «📥 Скачать программу»,\n"
+            "   установи и запусти от имени администратора\n"
+            "2. Нажми «🔗 Скопировать профиль» и вставь в Happ\n"
+            "3. Готово! Нажми «Подключиться» 🚀"
         ),
     },
     "androidtv": {
@@ -153,13 +155,12 @@ DEVICES: dict[str, dict] = {
         "mode": "activate",
         "text": (
             "📄 <b>Подключение на Android TV</b>\n\n"
-            "1. Установите приложение «Happ» на ваш Android TV через Google Play\n"
-            "2. Откройте Happ на TV, выберите «Управление → Импорт с телефона» "
-            "(Если язык английский: «Control» → «Import config from phone»)\n"
-            "3. Возьмите телефон, откройте сканер QR-кода — нажмите на маленькую "
-            "иконку QR-кода на любом из конфигов ELMA VPN в телефоне, "
-            "так откроется сканер. Наведите его на экран телевизора\n"
-            "4. Готово! Теперь выберите сервер и нажмите «Подключиться» 🚀"
+            "1. Установи Happ через Google Play на TV\n"
+            "2. Открой Happ → Управление → Импорт с телефона\n"
+            "   (англ: Control → Import config from phone)\n"
+            "3. На телефоне нажми иконку QR-кода на конфиге ELMA VPN\n"
+            "4. Наведи камеру телефона на экран TV\n"
+            "5. Готово! Нажми «Подключиться» 🚀"
         ),
     },
     "appletv": {
@@ -168,10 +169,10 @@ DEVICES: dict[str, dict] = {
         "mode": "activate",
         "text": (
             "📄 <b>Подключение на Apple TV</b>\n\n"
-            "1. Откройте Happ на iOS / Android\n"
-            "2. Сканируйте QR-код с экрана TV\n"
-            "3. Выберите, что отправлять (конфигурации / подписки) и подтвердите\n"
-            "4. Готово! Теперь выберите сервер и нажмите «Подключиться» 🚀"
+            "1. Открой Happ на iOS или Android\n"
+            "2. Сканируй QR-код с экрана TV\n"
+            "3. Выбери конфигурацию и подтверди\n"
+            "4. Готово! Нажми «Подключиться» 🚀"
         ),
     },
 }
@@ -216,12 +217,26 @@ def _parse_ref(args: str | None) -> int | None:
 async def cmd_start(message: Message, command: CommandObject) -> None:
     user = message.from_user
     is_new = await upsert_user(user.id, user.username, user.language_code or "ru")
+    args = command.args or ""
+
+    # Gift redemption works for any user (new or returning).
+    if args.startswith("gift_"):
+        try:
+            tariff = await billing.redeem_gift(message.bot, user.id, args[5:])
+        except Exception:  # noqa: BLE001
+            logger.exception("Gift redemption failed for %s", user.id)
+            tariff = None
+        if tariff is not None:
+            await message.answer(GIFT_REDEEMED, reply_markup=devices_keyboard())
+            return
+
     if is_new:
         logger.info("New user onboarded: %s (@%s)", user.id, user.username)
-        referrer_id = _parse_ref(command.args)
+        referrer_id = _parse_ref(args)
         if referrer_id and referrer_id != user.id:
             if await set_referral(user.id, referrer_id):
                 logger.info("User %s referred by %s", user.id, referrer_id)
+
     await message.answer(WELCOME, reply_markup=welcome_keyboard())
 
 
@@ -263,6 +278,8 @@ async def cb_claim(call: CallbackQuery) -> None:
             return
     else:
         logger.info("Trial activated for %s", user_id)
+        # Tell the inviter their friend joined (bonus comes on first purchase).
+        await billing.notify_referrer_on_trial(call.bot, user_id)
 
     await safe_edit(call.message, SCREEN_2, reply_markup=devices_keyboard())
 
