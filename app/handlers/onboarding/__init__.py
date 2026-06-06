@@ -20,6 +20,7 @@ import logging
 from aiogram import F, Router
 from aiogram.filters import CommandObject, CommandStart
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.keyboards import (
     buy_keyboard,
@@ -109,63 +110,73 @@ QR_CAPTION = "Ваш QR-код ELMA VPN 🤍"
 
 
 # --- Device instruction screens (3-8) -------------------------------------
+#
+# The subscription key is injected into ``{key}`` by ``cb_device`` and shown as
+# a tap-to-copy code block; the screens have no "activate" button — the user
+# copies the key and pastes it into the app ("＋" → "Вставить из буфера").
+
+_KEY_HINT = "👆 Нажми на ключ выше — он скопируется"
 
 DEVICES: dict[str, dict] = {
     "ios": {
         "download_url": APP_IOS_URL,
         "download_label": "📥 Скачать приложение",
-        "mode": "activate",
         "text": (
             "📄 <b>Подключение на iOS</b>\n\n"
-            "1. Нажми «📥 Скачать приложение» и установи его\n"
-            "2. Нажми «🔗 Активировать ELMA VPN»\n"
-            "3. Готово! Нажми «Подключиться» 🚀"
+            "{key}\n\n"
+            "1. Нажми «📥 Скачать приложение» и установи Happ или Incy\n"
+            "2. Открой приложение → справа вверху нажми «＋»\n"
+            "3. Выбери «Вставить из буфера» — ключ добавится сам\n"
+            "4. Выбери сервер и нажми «Подключиться» 🚀"
         ),
     },
     "android": {
         "download_url": APP_ANDROID_URL,
         "download_label": "📥 Скачать приложение",
-        "mode": "activate",
         "text": (
             "📄 <b>Подключение на Android</b>\n\n"
-            "1. Нажми «📥 Скачать приложение» и установи его\n"
-            "2. Нажми «🔗 Активировать ELMA VPN»\n"
-            "3. Готово! Выбери сервер и нажми «Подключиться» 🚀"
+            "{key}\n\n"
+            "1. Нажми «📥 Скачать приложение» и установи Happ или Incy\n"
+            "2. Открой приложение → справа вверху нажми «＋»\n"
+            "3. Выбери «Вставить из буфера» — ключ добавится сам\n"
+            "4. Выбери сервер и нажми «Подключиться» 🚀"
         ),
     },
     "macos": {
         "download_url": APP_MACOS_URL,
         "download_label": "📥 Скачать приложение",
-        "mode": "activate",
         "text": (
             "📄 <b>Подключение на MacOS</b>\n\n"
-            "1. Нажми «📥 Скачать приложение» и установи его\n"
-            "2. Нажми «🔗 Активировать ELMA VPN»\n"
-            "3. Выбери сервер и нажми «Подключиться» 🚀"
+            "{key}\n\n"
+            "1. Нажми «📥 Скачать приложение» и установи Happ или Incy\n"
+            "2. Открой приложение → справа вверху нажми «＋»\n"
+            "3. Выбери «Вставить из буфера» — ключ добавится сам\n"
+            "4. Выбери сервер и нажми «Подключиться» 🚀"
         ),
     },
     "windows": {
         "download_url": APP_WINDOWS_URL,
         "download_label": "📥 Скачать программу",
-        "mode": "copy",
         "text": (
             "📄 <b>Подключение на Windows</b>\n\n"
-            "1. Нажми «📥 Скачать программу»,\n"
-            "   установи и запусти от имени администратора\n"
-            "2. Нажми «🔗 Скопировать профиль» и вставь в Happ\n"
-            "3. Готово! Нажми «Подключиться» 🚀"
+            "{key}\n\n"
+            "1. Нажми «📥 Скачать программу», установи\n"
+            "   и запусти Happ от имени администратора\n"
+            "2. В приложении справа вверху нажми «＋»\n"
+            "3. Выбери «Вставить из буфера» — ключ добавится сам\n"
+            "4. Выбери сервер и нажми «Подключиться» 🚀"
         ),
     },
     "androidtv": {
         "download_url": None,
         "download_label": "",
-        "mode": "activate",
         "text": (
             "📄 <b>Подключение на Android TV</b>\n\n"
+            "{key}\n\n"
             "1. Установи Happ через Google Play на TV\n"
             "2. Открой Happ → Управление → Импорт с телефона\n"
             "   (англ: Control → Import config from phone)\n"
-            "3. На телефоне нажми иконку QR-кода на конфиге ELMA VPN\n"
+            "3. На телефоне открой «📤 Поделиться» → «⤵️ QR-код»\n"
             "4. Наведи камеру телефона на экран TV\n"
             "5. Готово! Нажми «Подключиться» 🚀"
         ),
@@ -173,10 +184,10 @@ DEVICES: dict[str, dict] = {
     "appletv": {
         "download_url": None,
         "download_label": "",
-        "mode": "activate",
         "text": (
             "📄 <b>Подключение на Apple TV</b>\n\n"
-            "1. Открой Happ на iOS или Android\n"
+            "{key}\n\n"
+            "1. Открой Happ или Incy на iOS / Android\n"
             "2. Сканируй QR-код с экрана TV\n"
             "3. Выбери конфигурацию и подтверди\n"
             "4. Готово! Нажми «Подключиться» 🚀"
@@ -306,19 +317,6 @@ async def cb_devices(call: CallbackQuery) -> None:
 
 # --- Screens 3-8: device instructions -------------------------------------
 
-@router.callback_query(F.data == "dev:copy")
-async def cb_copy_profile(call: CallbackQuery) -> None:
-    url = await _active_sub_url(call.from_user.id)
-    if not url:
-        await call.answer("Сначала забери доступ", show_alert=True)
-        return
-    await call.message.answer(
-        "🔗 Ваш профиль ELMA VPN — скопируйте и вставьте в Happ:\n\n"
-        f"<code>{html.escape(url)}</code>"
-    )
-    await call.answer("Профиль отправлен ниже 👇")
-
-
 @router.callback_query(F.data.startswith("dev:"))
 async def cb_device(call: CallbackQuery) -> None:
     key = call.data.split(":", 1)[1]
@@ -327,14 +325,31 @@ async def cb_device(call: CallbackQuery) -> None:
         await call.answer()
         return
     sub_url = await _active_sub_url(call.from_user.id)
+    if not sub_url:
+        # Reachable from the main menu without an active subscription.
+        kb = InlineKeyboardBuilder()
+        kb.button(text="💳 Купить подписку", callback_data="menu:buy")
+        kb.button(text="🏠 Главное меню", callback_data="menu:main")
+        kb.adjust(1)
+        await safe_edit(
+            call.message,
+            "🔒 Доступ не активен.\n\nОформи подписку, чтобы получить ключ 👇",
+            reply_markup=kb.as_markup(),
+        )
+        await call.answer()
+        return
+
+    key_block = (
+        "🔑 Твой ключ:\n"
+        f"<code>{html.escape(sub_url)}</code>\n"
+        f"{_KEY_HINT}"
+    )
     await safe_edit(
         call.message,
-        device["text"],
+        device["text"].format(key=key_block),
         reply_markup=device_keyboard(
             download_url=device["download_url"],
             download_label=device["download_label"],
-            mode=device["mode"],
-            sub_url=sub_url,
         ),
     )
     await call.answer()

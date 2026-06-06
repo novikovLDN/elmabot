@@ -103,25 +103,18 @@ def device_keyboard(
     *,
     download_url: str | None,
     download_label: str,
-    mode: str,
-    sub_url: str | None,
 ) -> InlineKeyboardMarkup:
     """A single device instruction screen (screens 3-8).
 
-    ``mode`` is "activate" (import the subscription) or "copy" (Windows: copy
-    the raw profile). When ``sub_url`` is missing the activate button falls back
-    to the claim flow so we never build an invalid empty-url button.
+    The subscription key is shown in the message text (tap-to-copy), so there is
+    no "activate" button here — only the app download link plus navigation:
+    Back (to device list) and Main menu.
     """
     kb = InlineKeyboardBuilder()
     if download_url:
         kb.button(text=download_label, url=download_url)
-    if mode == "copy":
-        kb.button(text="🔗 Скопировать профиль", callback_data="dev:copy")
-    elif sub_url:
-        kb.button(text="🔗 Активировать ELMA VPN", url=sub_url)
-    else:
-        kb.button(text="🔗 Активировать ELMA VPN", callback_data="onb:claim")
     kb.button(text="🔙 Назад", callback_data="dev:menu")
+    kb.button(text="🏠 Главное меню", callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
 
