@@ -43,9 +43,14 @@ async def main() -> None:
     await bot.set_my_commands(
         [
             BotCommand(command="start", description="Запустить ELMA"),
-            BotCommand(command="buy", description="Тарифы и оплата"),
-            BotCommand(command="invite", description="Пригласить друзей"),
+            BotCommand(command="menu", description="Главное меню"),
+            BotCommand(command="connect", description="Подключиться"),
+            BotCommand(command="buy", description="Купить / продлить подписку"),
+            BotCommand(command="account", description="Личный кабинет"),
+            BotCommand(command="invite", description="Реферальная программа"),
+            BotCommand(command="gift", description="Подарить подписку"),
             BotCommand(command="help", description="Помощь"),
+            BotCommand(command="about", description="О сервисе"),
         ]
     )
 

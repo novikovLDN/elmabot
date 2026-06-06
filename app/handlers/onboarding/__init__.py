@@ -18,7 +18,7 @@ import io
 import logging
 
 from aiogram import F, Router
-from aiogram.filters import CommandObject, CommandStart
+from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -307,6 +307,11 @@ async def cb_claim(call: CallbackQuery) -> None:
         await billing.notify_referrer_on_trial(call.bot, user_id)
 
     await safe_edit(call.message, SCREEN_2, reply_markup=devices_keyboard())
+
+
+@router.message(Command("connect"))
+async def cmd_connect(message: Message) -> None:
+    await message.answer(SCREEN_2, reply_markup=devices_keyboard())
 
 
 @router.callback_query(F.data == "dev:menu")

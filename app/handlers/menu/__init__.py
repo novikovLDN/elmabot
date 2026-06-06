@@ -181,9 +181,7 @@ async def cb_main(call: CallbackQuery) -> None:
 
 # --- Personal cabinet ------------------------------------------------------
 
-@router.callback_query(F.data == "menu:cabinet")
-async def cb_cabinet(call: CallbackQuery) -> None:
-    uid = call.from_user.id
+async def _cabinet_view(uid: int):
     sub = await get_subscription(uid)
     active = sub is not None and sub["status"] == "active"
     if active:
@@ -203,19 +201,40 @@ async def cb_cabinet(call: CallbackQuery) -> None:
             "🔎 Статус подписки: не активна\n"
             "📅 Дата окончания: —"
         )
-    await safe_edit(call.message, text, reply_markup=cabinet_keyboard(has_active_sub=active))
+    return text, cabinet_keyboard(has_active_sub=active)
+
+
+@router.message(Command("account"))
+async def cmd_account(message: Message) -> None:
+    text, markup = await _cabinet_view(message.from_user.id)
+    await message.answer(text, reply_markup=markup)
+
+
+@router.callback_query(F.data == "menu:cabinet")
+async def cb_cabinet(call: CallbackQuery) -> None:
+    text, markup = await _cabinet_view(call.from_user.id)
+    await safe_edit(call.message, text, reply_markup=markup)
     await call.answer()
 
 
 # --- About / Policy --------------------------------------------------------
 
-@router.callback_query(F.data == "about:open")
-async def cb_about(call: CallbackQuery) -> None:
+def _about_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text="📋 Политика сервиса", callback_data="about:policy")
     kb.button(text="🔙 Назад", callback_data="menu:main")
     kb.adjust(1)
-    await safe_edit(call.message, ABOUT, reply_markup=kb.as_markup())
+    return kb.as_markup()
+
+
+@router.message(Command("about"))
+async def cmd_about(message: Message) -> None:
+    await message.answer(ABOUT, reply_markup=_about_kb())
+
+
+@router.callback_query(F.data == "about:open")
+async def cb_about(call: CallbackQuery) -> None:
+    await safe_edit(call.message, ABOUT, reply_markup=_about_kb())
     await call.answer()
 
 

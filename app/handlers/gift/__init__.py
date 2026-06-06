@@ -8,8 +8,9 @@ one-time gift link (recipient activates via ``?start=gift_<code>``).
 import logging
 
 from aiogram import F, Router
+from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 
 from app import tariffs
 from app.keyboards import back_to_menu, payment_methods_keyboard
@@ -27,13 +28,22 @@ INTRO = (
 )
 
 
-@router.callback_query(F.data == "gift:open")
-async def cb_gift(call: CallbackQuery) -> None:
+def _intro_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text="📅 Выбрать срок", callback_data="gift:tariffs")
     kb.button(text="🔙 Назад", callback_data="menu:main")
     kb.adjust(1)
-    await safe_edit(call.message, INTRO, reply_markup=kb.as_markup())
+    return kb.as_markup()
+
+
+@router.message(Command("gift"))
+async def cmd_gift(message: Message) -> None:
+    await message.answer(INTRO, reply_markup=_intro_kb())
+
+
+@router.callback_query(F.data == "gift:open")
+async def cb_gift(call: CallbackQuery) -> None:
+    await safe_edit(call.message, INTRO, reply_markup=_intro_kb())
     await call.answer()
 
 
