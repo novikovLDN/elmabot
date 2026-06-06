@@ -2,12 +2,13 @@
 
 The whole user-facing journey lives here as a chain of edited messages:
 
-    /start  ──▶  Welcome (features + Start)
-       └─ onb:start   ──▶  Screen 1 — "почти завершено" + Забрать доступ
+    /start (no trial yet, no sub)  ──▶  Screen 1 — "почти завершено" + Забрать доступ
             └─ onb:claim  ──▶  Screen 2 — ELMA активирован + выбор устройства
                  ├─ dev:<device>  ──▶  Screens 3-8 — инструкция по подключению
                  └─ share:open    ──▶  Screen 9 — Поделиться (ссылка)
                       └─ share:qr  ──▶  Screen 10 — QR-код (фото)
+
+    /start (trial already used, or an active subscription)  ──▶  главное меню
 
 Everything is stateless callback-data; the only state is the user's
 subscription row (whose ``subscription_url`` powers "Активировать" / share / QR).
@@ -29,6 +30,7 @@ from app.keyboards import (
     share_keyboard,
     welcome_keyboard,
 )
+from app.handlers.menu import show_main
 from app.services import billing, subscription_service
 from app.utils import safe_edit
 from config import (
@@ -39,7 +41,12 @@ from config import (
     APP_WINDOWS_URL,
     TRIAL_DAYS,
 )
-from database import get_subscription, set_referral, upsert_user
+from database import (
+    get_subscription,
+    set_referral,
+    trial_available,
+    upsert_user,
+)
 
 logger = logging.getLogger(__name__)
 router = Router(name="onboarding")
@@ -237,7 +244,14 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
             if await set_referral(user.id, referrer_id):
                 logger.info("User %s referred by %s", user.id, referrer_id)
 
-    await message.answer(SCREEN_1, reply_markup=claim_keyboard())
+    # First visit (trial never used and no active subscription) -> onboarding;
+    # returning users (trial used, or any active sub) -> main menu.
+    sub = await get_subscription(user.id)
+    has_active = sub is not None and sub["status"] == "active"
+    if await trial_available(user.id) and not has_active:
+        await message.answer(SCREEN_1, reply_markup=claim_keyboard())
+    else:
+        await show_main(message, user.id)
 
 
 @router.callback_query(F.data == "menu:home")

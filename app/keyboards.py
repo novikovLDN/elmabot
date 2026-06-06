@@ -15,17 +15,17 @@ def back_to_menu() -> InlineKeyboardMarkup:
 
 def main_menu_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="👤 Личный кабинет", callback_data="menu:cabinet")
+    kb.button(text="📲 Подключиться", callback_data="dev:menu")
     if has_active_sub:
         kb.button(text="🔄 Продлить подписку", callback_data="menu:buy")
     else:
         kb.button(text="💳 Купить подписку", callback_data="menu:buy")
-    kb.button(text="📲 Подключиться", callback_data="dev:menu")
+    kb.button(text="👤 Личный кабинет", callback_data="menu:cabinet")
     kb.button(text="🫂 Реферальная программа", callback_data="menu:referral")
     kb.button(text="🎁 Подарить", callback_data="gift:open")
     kb.button(text="🛎️ Помощь", callback_data="help:open")
     kb.button(text="ℹ️ О сервисе", callback_data="about:open")
-    kb.adjust(1)
+    kb.adjust(1, 2, 1, 2, 1)
     return kb.as_markup()
 
 
@@ -94,7 +94,8 @@ def devices_keyboard() -> InlineKeyboardMarkup:
     kb.button(text="📺 Android TV", callback_data="dev:androidtv")
     kb.button(text="🍎 Apple TV", callback_data="dev:appletv")
     kb.button(text="📤 Поделиться", callback_data="share:open")
-    kb.adjust(2, 2, 2, 1)
+    kb.button(text="🔙 Назад", callback_data="menu:main")
+    kb.adjust(2, 2, 2, 1, 1)
     return kb.as_markup()
 
 
