@@ -237,7 +237,7 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
             if await set_referral(user.id, referrer_id):
                 logger.info("User %s referred by %s", user.id, referrer_id)
 
-    await message.answer(WELCOME, reply_markup=welcome_keyboard())
+    await message.answer(SCREEN_1, reply_markup=claim_keyboard())
 
 
 @router.callback_query(F.data == "menu:home")
