@@ -297,12 +297,22 @@ async def stats() -> dict:
         """
         SELECT
             (SELECT COUNT(*) FROM users)                                    AS users_total,
+            (SELECT COUNT(*) FROM users
+                 WHERE created_at >= date_trunc('day', now()))             AS users_today,
             (SELECT COUNT(*) FROM users WHERE is_reachable)                 AS users_reachable,
+            -- any activation (trial / payment / admin) leaves a subscriptions row
+            (SELECT COUNT(*) FROM subscriptions)                            AS activated_total,
             (SELECT COUNT(*) FROM users WHERE trial_used_at IS NOT NULL)    AS trials_used,
+            (SELECT COUNT(DISTINCT telegram_id) FROM payments
+                 WHERE status = 'paid')                                     AS buyers,
             (SELECT COUNT(*) FROM subscriptions WHERE status = 'active')    AS subs_active,
             (SELECT COUNT(*) FROM payments WHERE status = 'paid')           AS payments_paid,
+            -- revenue across ALL payment providers (in kopecks)
             (SELECT COALESCE(SUM(amount_kopecks), 0) FROM payments
-                 WHERE status = 'paid')                                     AS revenue_total
+                 WHERE status = 'paid')                                     AS revenue_total,
+            (SELECT COALESCE(SUM(amount_kopecks), 0) FROM payments
+                 WHERE status = 'paid'
+                   AND paid_at >= date_trunc('day', now()))                 AS revenue_today
         """
     )
     return dict(row)

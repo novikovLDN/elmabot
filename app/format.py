@@ -18,6 +18,13 @@ def fmt_date(dt: datetime | None) -> str:
     return dt.strftime("%d.%m.%Y")
 
 
+def fmt_rub(kopecks: int | None) -> str:
+    """Render a kopecks amount as roubles: 14900 -> '149 ₽'."""
+    rub = (kopecks or 0) / 100
+    whole = f"{rub:,.0f}".replace(",", " ")
+    return f"{whole} ₽"
+
+
 def time_left(expires_at: datetime) -> str:
     delta = expires_at - utcnow()
     if delta.total_seconds() <= 0:

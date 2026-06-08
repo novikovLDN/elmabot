@@ -42,10 +42,19 @@ def _iso_z(dt: datetime) -> str:
 def next_expiry(current: asyncpg.Record | None, days: int) -> datetime:
     """``max(now, current_expiry) + days`` — renewing never burns leftover time
     and never resurrects an expired date into the past."""
+    return next_expiry_delta(current, timedelta(days=days))
+
+
+def next_expiry_delta(
+    current: asyncpg.Record | None, delta: timedelta
+) -> datetime:
+    """Like :func:`next_expiry` but for an arbitrary duration (admin grants of
+    months / days / hours / minutes). Extends from the later of now and the
+    current expiry, so an active subscription is prolonged rather than reset."""
     base = utcnow()
     if current is not None and current["expires_at"] is not None:
         base = max(base, current["expires_at"])
-    return base + timedelta(days=days)
+    return base + delta
 
 
 def _extract(data: dict | None) -> dict:

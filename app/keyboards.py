@@ -181,20 +181,35 @@ def referral_keyboard(share_url: str) -> InlineKeyboardMarkup:
 
 def admin_menu() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="📊 Статистика", callback_data="admin:stats")
+    kb.button(text="📊 Дашборд", callback_data="admin:stats")
     kb.button(text="👤 Найти пользователя", callback_data="admin:find")
     kb.button(text="📢 Рассылка", callback_data="admin:broadcast")
     kb.adjust(1)
     return kb.as_markup()
 
 
-def admin_user_actions(telegram_id: int) -> InlineKeyboardMarkup:
+def admin_dashboard_actions() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="➕ Выдать 30 дней", callback_data=f"admin:grant:{telegram_id}")
-    kb.button(text="🚫 Отозвать", callback_data=f"admin:revoke:{telegram_id}")
-    kb.button(text="🧾 История", callback_data=f"admin:history:{telegram_id}")
+    kb.button(text="🔄 Обновить", callback_data="admin:stats")
+    kb.button(text="👤 Найти пользователя", callback_data="admin:find")
     kb.button(text="⬅️ Админка", callback_data="admin:home")
     kb.adjust(1)
+    return kb.as_markup()
+
+
+def admin_user_actions(telegram_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="➕ Выдать доступ", callback_data=f"admin:grant:{telegram_id}")
+    kb.button(text="🚫 Лишить доступа", callback_data=f"admin:revoke:{telegram_id}")
+    kb.button(text="🧾 История платежей", callback_data=f"admin:history:{telegram_id}")
+    kb.button(text="⬅️ Админка", callback_data="admin:home")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def admin_grant_cancel(telegram_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="⬅️ Отмена", callback_data=f"admin:card:{telegram_id}")
     return kb.as_markup()
 
 

@@ -102,11 +102,13 @@ CREATE TABLE IF NOT EXISTS payments (
     id             BIGSERIAL PRIMARY KEY,
     telegram_id    BIGINT NOT NULL REFERENCES users(telegram_id),
     invoice_id     TEXT UNIQUE,
-    amount_kopecks BIGINT NOT NULL,
+    amount_kopecks BIGINT NOT NULL,           -- money amount in kopecks (₽×100)
+    provider       TEXT NOT NULL DEFAULT 'unknown',  -- sbp | card | stars | ...
     status         TEXT NOT NULL,
     created_at     TIMESTAMPTZ DEFAULT NOW(),
     paid_at        TIMESTAMPTZ
 );
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'unknown';
 
 CREATE INDEX IF NOT EXISTS idx_subs_expiry
     ON subscriptions(expires_at) WHERE status = 'active';

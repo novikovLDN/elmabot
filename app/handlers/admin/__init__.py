@@ -5,6 +5,8 @@ handler here; everyone else falls through to the other routers.
 """
 import asyncio
 import logging
+import re
+from datetime import timedelta
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
@@ -13,16 +15,18 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
-from app.format import fmt_dt, subscription_text
+from app.format import fmt_dt, fmt_rub, subscription_text
 from app.keyboards import (
     admin_broadcast_confirm,
     admin_broadcast_segments,
+    admin_dashboard_actions,
+    admin_grant_cancel,
     admin_menu,
     admin_user_actions,
 )
 from app.services import subscription_service
-from app.utils import safe_send
-from config import ADMIN_TELEGRAM_ID, PRICE_STARS, SUPPORT_USERNAME
+from app.utils import safe_edit, safe_send
+from config import ADMIN_TELEGRAM_ID, SUPPORT_USERNAME
 from database import (
     find_user_by_username,
     get_subscription,
@@ -40,8 +44,6 @@ router = Router(name="admin")
 router.message.filter(F.from_user.id == ADMIN_TELEGRAM_ID)
 router.callback_query.filter(F.from_user.id == ADMIN_TELEGRAM_ID)
 
-ADMIN_GRANT_DAYS = 30
-
 # Broadcast tuning (§9): stay under Telegram's ~30 msg/s.
 BROADCAST_CONCURRENCY = 15
 BROADCAST_BATCH = 200
@@ -52,8 +54,57 @@ class FindUser(StatesGroup):
     waiting_query = State()
 
 
+class GrantAccess(StatesGroup):
+    waiting_duration = State()
+
+
 class Broadcast(StatesGroup):
     waiting_message = State()
+
+
+# --- Flexible duration parsing (admin grant) -------------------------------
+
+_DUR_RE = re.compile(r"(\d+)\s*([a-zа-яё]*)", re.IGNORECASE)
+
+
+def parse_duration(text: str) -> timedelta | None:
+    """Parse a free-form duration into a timedelta.
+
+    Accepts months / days / hours / minutes in RU or EN, combined freely; a bare
+    number means days. Examples: ``30``, ``1 мес 10 дней``, ``12 часов``,
+    ``90 мин``, ``2mo 5d 3h 30min``. Months are treated as 30 days.
+    """
+    total = timedelta()
+    matched = False
+    for num, unit in _DUR_RE.findall((text or "").strip().lower()):
+        n = int(num)
+        u = unit
+        if u in ("", "д", "дн", "день", "дня", "дней", "d", "day", "days"):
+            total += timedelta(days=n)
+        elif u.startswith("мес") or u in ("mo", "mon", "month", "months"):
+            total += timedelta(days=30 * n)
+        elif u.startswith("час") or u in ("ч", "h", "hr", "hour", "hours"):
+            total += timedelta(hours=n)
+        elif u.startswith("мин") or u in ("min", "minute", "minutes", "m"):
+            total += timedelta(minutes=n)
+        else:
+            return None  # unknown unit -> reject the whole input
+        matched = True
+    return total if matched and total > timedelta() else None
+
+
+def fmt_duration(td: timedelta) -> str:
+    total_min = int(td.total_seconds() // 60)
+    days, rem = divmod(total_min, 24 * 60)
+    hours, mins = divmod(rem, 60)
+    parts = []
+    if days:
+        parts.append(f"{days} дн")
+    if hours:
+        parts.append(f"{hours} ч")
+    if mins:
+        parts.append(f"{mins} мин")
+    return " ".join(parts) or "0 мин"
 
 
 # --- Menu ------------------------------------------------------------------
@@ -106,16 +157,21 @@ async def cb_admin_home(call: CallbackQuery, state: FSMContext) -> None:
 async def cb_stats(call: CallbackQuery) -> None:
     s = await stats()
     text = (
-        "📊 <b>Статистика</b>\n\n"
-        f"👥 Пользователей: <b>{s['users_total']}</b> "
-        f"(доступны: {s['users_reachable']})\n"
-        f"🆓 Использовали триал: <b>{s['trials_used']}</b>\n"
-        f"✅ Активных подписок: <b>{s['subs_active']}</b>\n"
-        f"💳 Платежей: <b>{s['payments_paid']}</b>\n"
-        f"⭐ Выручка: <b>{s['revenue_total']}</b>\n"
-        f"📈 MRR (оценка): <b>{s['subs_active'] * PRICE_STARS}</b> ⭐"
+        "📊 <b>Дашборд ELMA</b>\n\n"
+        "👥 <b>Пользователи</b>\n"
+        f"• Новые сегодня: <b>{s['users_today']}</b>\n"
+        f"• Всего: <b>{s['users_total']}</b> (на связи: {s['users_reachable']})\n\n"
+        "🚀 <b>Активации подписки</b> (вкл. триал)\n"
+        f"• Всего активаций: <b>{s['activated_total']}</b>\n"
+        f"• 🆓 Триал: <b>{s['trials_used']}</b>\n"
+        f"• 💳 Купили: <b>{s['buyers']}</b>\n"
+        f"• ✅ Активны сейчас: <b>{s['subs_active']}</b>\n\n"
+        "💰 <b>Финансы</b> (все платёжные системы)\n"
+        f"• Заработано сегодня: <b>{fmt_rub(s['revenue_today'])}</b>\n"
+        f"• Всего: <b>{fmt_rub(s['revenue_total'])}</b>\n"
+        f"• Платежей: <b>{s['payments_paid']}</b>"
     )
-    await call.message.edit_text(text, parse_mode="HTML", reply_markup=admin_menu())
+    await safe_edit(call.message, text, reply_markup=admin_dashboard_actions())
     await call.answer()
 
 
@@ -163,24 +219,71 @@ async def _show_user_card(message: Message, telegram_id: int) -> None:
     )
 
 
-@router.callback_query(F.data.startswith("admin:grant:"))
-async def cb_grant(call: CallbackQuery) -> None:
+@router.callback_query(F.data.startswith("admin:card:"))
+async def cb_card(call: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
     target = int(call.data.split(":")[2])
+    await _show_user_card(call.message, target)
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("admin:grant:"))
+async def cb_grant(call: CallbackQuery, state: FSMContext) -> None:
+    """Ask for a flexible duration; the grant itself happens on the reply."""
+    target = int(call.data.split(":")[2])
+    await state.set_state(GrantAccess.waiting_duration)
+    await state.update_data(target=target)
+    await call.message.edit_text(
+        f"⏳ На какой срок выдать доступ пользователю <b>{target}</b>?\n\n"
+        "Примеры: <code>30</code> (дней), <code>1 мес 10 дней</code>, "
+        "<code>12 часов</code>, <code>90 мин</code>, <code>2mo 5d 3h</code>",
+        parse_mode="HTML",
+        reply_markup=admin_grant_cancel(target),
+    )
+    await call.answer()
+
+
+@router.message(StateFilter(GrantAccess.waiting_duration))
+async def on_grant_duration(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    target = data.get("target")
+    delta = parse_duration(message.text or "")
+    if target is None or delta is None:
+        await message.answer(
+            "Не понял срок. Примеры: <code>1 мес 10 дней</code>, <code>30</code>, "
+            "<code>12 часов</code>, <code>90 мин</code>.",
+            parse_mode="HTML",
+        )
+        return
+    await state.clear()
     try:
         current = await get_subscription(target)
-        new_expires = subscription_service.next_expiry(current, ADMIN_GRANT_DAYS)
-        await subscription_service.create_or_renew(
-            target, new_expires, source="admin"
-        )
+        new_expires = subscription_service.next_expiry_delta(current, delta)
+        # create_or_renew provisions a new panel user if there was none, or
+        # PATCHes the existing one's expiry — i.e. a clean extend/renew.
+        await subscription_service.create_or_renew(target, new_expires, source="admin")
     except Exception:  # noqa: BLE001
         logger.exception("Admin grant failed for %s", target)
-        await call.answer("Ошибка выдачи доступа", show_alert=True)
+        await message.answer(
+            "⚠️ Не удалось выдать доступ (панель недоступна?). Попробуйте ещё раз.",
+            reply_markup=admin_menu(),
+        )
         return
-    await call.answer(f"Выдано {ADMIN_GRANT_DAYS} дней")
+
+    human = fmt_duration(delta)
+    renewed = current is not None and current["status"] == "active"
     await safe_send(
-        call.bot, target, f"🎁 Вам выдан VPN-доступ на {ADMIN_GRANT_DAYS} дней!"
+        message.bot,
+        target,
+        f"🎁 Тебе {'продлён' if renewed else 'выдан'} доступ к ELMA на {human}. "
+        "Приятного пользования! ☁️",
     )
-    await _show_user_card(call.message, target)
+    await message.answer(
+        f"✅ {'Продлено' if renewed else 'Выдано'}: <b>{human}</b>\n"
+        f"📅 Новая дата окончания: <b>{fmt_dt(new_expires)}</b>",
+        parse_mode="HTML",
+    )
+    await _show_user_card(message, target)
 
 
 @router.callback_query(F.data.startswith("admin:revoke:"))
@@ -189,7 +292,12 @@ async def cb_revoke(call: CallbackQuery) -> None:
     sub = await revoke_subscription(target)
     if sub is not None:
         await subscription_service.deprovision(sub["panel_uuid"])
-    await call.answer("Доступ отозван")
+        await safe_send(
+            call.bot, target, "⛔️ Доступ к ELMA отключён."
+        )
+        await call.answer("Доступ отозван")
+    else:
+        await call.answer("У пользователя нет активного доступа", show_alert=True)
     await _show_user_card(call.message, target)
 
 
