@@ -98,12 +98,6 @@ FAQ = (
     "Выбери свой вопрос 👇"
 )
 
-CONTACTS = (
-    "📞 <b>Контакты</b>\n\n"
-    f"💬 Поддержка: @{SUPPORT_USERNAME}\n\n"
-    "Пишем каждый день, отвечаем за 5–10 минут 🤍"
-)
-
 FAQ_ANSWERS = {
     "novpn": (
         "🚫 <b>Не работает VPN</b>\n\n"
@@ -280,7 +274,6 @@ def _help_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text="📖 Частые вопросы", callback_data="help:faq")
     kb.button(text="📲 Инструкции", callback_data="dev:menu")
-    kb.button(text="📞 Контакты", callback_data="help:contacts")
     kb.button(text="💬 Написать оператору", url=SUPPORT_URL)
     kb.button(text="🔙 Назад", callback_data="menu:main")
     kb.adjust(1)
@@ -323,14 +316,4 @@ async def cb_faq_answer(call: CallbackQuery) -> None:
     kb.button(text="🔙 Назад", callback_data="help:faq")
     kb.adjust(1)
     await safe_edit(call.message, text, reply_markup=kb.as_markup())
-    await call.answer()
-
-
-@router.callback_query(F.data == "help:contacts")
-async def cb_contacts(call: CallbackQuery) -> None:
-    kb = InlineKeyboardBuilder()
-    kb.button(text="💬 Написать оператору", url=SUPPORT_URL)
-    kb.button(text="🔙 Назад", callback_data="help:open")
-    kb.adjust(1)
-    await safe_edit(call.message, CONTACTS, reply_markup=kb.as_markup())
     await call.answer()

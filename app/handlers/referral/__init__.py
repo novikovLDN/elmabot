@@ -29,13 +29,13 @@ async def _render(bot: Bot, user_id: int) -> tuple[str, str]:
 
     text = (
         "🫂 <b>Реферальная программа</b>\n\n"
-        "Приведи друга — получи бонус.\n\n"
+        "🌐 Чем больше друзей, тем дольше ELMA\n\n"
         "За каждого друга купившего подписку\n"
-        f"<b>+{REFERRAL_BONUS_DAYS} дней</b> к твоей 🎁\n\n"
+        f"<b>+{REFERRAL_BONUS_DAYS} дней</b> к твоей 💎\n\n"
         f"🫂 Приглашено: {invited}\n"
         f"💰 Купили подписку: {purchased}\n"
         f"🏆 Бонусных дней: {purchased * REFERRAL_BONUS_DAYS}\n\n"
-        "🔗 Твоя ссылка:\n"
+        "🔗 Твоя ссылка (нажми, чтобы скопировать) 👇\n"
         f"<code>{link}</code>"
     )
     share_text = "Подключайся к ELMA — VPN, который не играет на нервах ⚡"
