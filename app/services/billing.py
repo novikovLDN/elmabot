@@ -12,7 +12,6 @@ import asyncpg
 from aiogram import Bot
 
 import config
-from app.format import fmt_date
 from app.tariffs import Tariff, get_tariff
 from app.utils import safe_send
 from database import (
@@ -75,9 +74,9 @@ async def _reward_referrer(bot: Bot, buyer_id: int) -> None:
         await safe_send(
             bot,
             referrer_id,
-            "🎉 <b>Друг оформил подписку!</b>\n\n"
-            f"+{config.REFERRAL_BONUS_DAYS} дней добавлены к твоей подписке 🤍\n\n"
-            f"📅 Теперь активна до: {fmt_date(sub['expires_at'])}",
+            "💎 <b>Ваш друг остался в ELMA</b>\n\n"
+            "Подписка успешно оформлена ✨\n"
+            f"Вам начислено +{config.REFERRAL_BONUS_DAYS} бонусных дней",
         )
     except Exception:  # noqa: BLE001 - never fail the buyer's purchase on this
         logger.exception("Failed to reward referrer %s", referrer_id)
@@ -92,9 +91,10 @@ async def notify_referrer_on_trial(bot: Bot, user_id: int) -> None:
     await safe_send(
         bot,
         referrer_id,
-        "🫂 <b>Твой друг подключился к ELMA!</b>\n\n"
-        "Как только он оформит подписку —\n"
-        "ты получишь +7 дней 🎁",
+        "🎉 <b>Ваш друг активировал ELMA</b>\n\n"
+        "Пробный доступ уже запущен ✨\n\n"
+        f"Если он оформит подписку — вы получите +{config.REFERRAL_BONUS_DAYS} "
+        "бонусных дней автоматически",
     )
 
 
@@ -105,6 +105,26 @@ async def create_gift_code(buyer_id: int, tariff: Tariff) -> str:
     code = secrets.token_urlsafe(9)
     await create_gift(code, tariff.code, buyer_id)
     return code
+
+
+async def complete_gift_purchase(bot: Bot, buyer_id: int, tariff: Tariff) -> str:
+    """After a gift payment: create the code and send the buyer a ready-to-
+    forward message with the activation link. Returns the gift link."""
+    code = await create_gift_code(buyer_id, tariff)
+    me = await bot.me()
+    link = f"https://t.me/{me.username}?start=gift_{code}"
+    await safe_send(
+        bot,
+        buyer_id,
+        "Привет! Дарю тебе подписку\n"
+        f"🌐 ELMA VPN на {tariff.title}\n\n"
+        "Чтобы интернет работал спокойно — без лагов, обрывов "
+        "и бесконечной загрузки ⚡\n\n"
+        "Нажми на ссылку для активации:\n"
+        f"🔗 {link}",
+        disable_web_page_preview=True,
+    )
+    return link
 
 
 async def redeem_gift(bot: Bot, user_id: int, code: str) -> Tariff | None:

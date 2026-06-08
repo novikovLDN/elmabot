@@ -13,7 +13,14 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.format import fmt_date
 from app.keyboards import cabinet_keyboard, main_menu_keyboard
 from app.utils import safe_edit
-from config import DEVICE_LIMIT, REFERRAL_BONUS_DAYS, SUPPORT_URL, SUPPORT_USERNAME
+from config import (
+    DEVICE_LIMIT,
+    PRIVACY_POLICY_URL,
+    REFERRAL_BONUS_DAYS,
+    SUPPORT_URL,
+    SUPPORT_USERNAME,
+    TERMS_URL,
+)
 from database import get_subscription, referral_stats
 
 logger = logging.getLogger(__name__)
@@ -241,8 +248,29 @@ async def cb_about(call: CallbackQuery) -> None:
 @router.callback_query(F.data == "about:policy")
 async def cb_policy(call: CallbackQuery) -> None:
     kb = InlineKeyboardBuilder()
+    kb.button(text="📑 Документы", callback_data="about:docs")
     kb.button(text="🔙 Назад", callback_data="about:open")
+    kb.adjust(1)
     await safe_edit(call.message, POLICY, reply_markup=kb.as_markup())
+    await call.answer()
+
+
+@router.callback_query(F.data == "about:docs")
+async def cb_docs(call: CallbackQuery) -> None:
+    text = (
+        f'🔒 Политика конфиденциальности: <a href="{PRIVACY_POLICY_URL}">читать</a>\n'
+        f'📜 Пользовательское соглашение: <a href="{TERMS_URL}">читать</a>\n\n'
+        "ELMA.\n"
+        "Конфиденциальность заложена\n"
+        "в архитектуре сервиса."
+    )
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🏠 Главное меню", callback_data="menu:main")
+    kb.button(text="🔙 Назад", callback_data="about:policy")
+    kb.adjust(1)
+    await safe_edit(
+        call.message, text, reply_markup=kb.as_markup(), disable_web_page_preview=True
+    )
     await call.answer()
 
 

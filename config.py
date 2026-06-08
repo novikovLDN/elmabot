@@ -94,6 +94,16 @@ EXPIRY_INTERVAL_SECONDS = _get_int("EXPIRY_INTERVAL_SECONDS", 600)
 SUPPORT_USERNAME = _get_str("SUPPORT_USERNAME", "elmasupport").lstrip("@")
 SUPPORT_URL = f"https://t.me/{SUPPORT_USERNAME}"
 
+# --- Legal documents (shown on the Documents screen) ---
+PRIVACY_POLICY_URL = _get_str(
+    "PRIVACY_POLICY_URL",
+    "https://telegra.ph/Politika-konfidencialnosti-06-08-18",
+)
+TERMS_URL = _get_str(
+    "TERMS_URL",
+    "https://telegra.ph/Polzovatelskoe-soglashenie-06-08-14",
+)
+
 # --- Logging ---
 LOG_LEVEL = _get_str("LOG_LEVEL", "INFO")
 

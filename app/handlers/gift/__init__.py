@@ -91,7 +91,12 @@ async def cb_gift_tariff(call: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("giftpay:"))
 async def cb_gift_pay(call: CallbackQuery) -> None:
-    """Placeholder — the payment provider is not connected yet."""
+    """Placeholder — the payment provider is not connected yet.
+
+    Once payments are wired, the success path calls
+    ``billing.complete_gift_purchase(bot, buyer_id, tariff)``, which creates the
+    one-time code and sends the buyer the forwardable gift link.
+    """
     code = call.data.split(":")[2]
     tariff = tariffs.get_tariff(code)
     if tariff is None:

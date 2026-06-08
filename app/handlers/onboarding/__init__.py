@@ -84,6 +84,15 @@ SCREEN_2 = (
     "Подключи до 5 устройств 👇"
 )
 
+TRIAL_WELCOME = (
+    "🌐 <b>Доступ к ELMA открыт</b>\n\n"
+    f"Пробный период на {TRIAL_DAYS} дня успешно активирован ☁️\n\n"
+    "Теперь ты можешь почувствовать,\n"
+    "каким должен быть интернет без зависаний, раздражения "
+    "и постоянных переподключений ⚡\n\n"
+    "Добро пожаловать в ELMA"
+)
+
 TRIAL_USED = (
     "🎁 Бесплатный доступ уже был использован.\n\n"
     "Чтобы вернуться в ELMA, оформи подписку 👇"
@@ -295,18 +304,21 @@ async def cb_claim(call: CallbackQuery) -> None:
         return
 
     if sub is None:
-        # Trial already used: fall through to device selection if a paid
-        # subscription is still active, otherwise nudge to buy.
+        # Trial already used: show device selection if a paid subscription is
+        # still active, otherwise nudge to buy.
         current = await get_subscription(user_id)
         if current is None or current["status"] != "active":
             await safe_edit(call.message, TRIAL_USED, reply_markup=buy_keyboard())
             return
-    else:
-        logger.info("Trial activated for %s", user_id)
-        # Tell the inviter their friend joined (bonus comes on first purchase).
-        await billing.notify_referrer_on_trial(call.bot, user_id)
+        await safe_edit(call.message, SCREEN_2, reply_markup=devices_keyboard())
+        return
 
-    await safe_edit(call.message, SCREEN_2, reply_markup=devices_keyboard())
+    # Trial newly activated -> welcome notification, then device selection.
+    logger.info("Trial activated for %s", user_id)
+    # Tell the inviter their friend joined (bonus comes on first purchase).
+    await billing.notify_referrer_on_trial(call.bot, user_id)
+    await safe_edit(call.message, TRIAL_WELCOME)
+    await call.message.answer(SCREEN_2, reply_markup=devices_keyboard())
 
 
 @router.message(Command("connect"))
