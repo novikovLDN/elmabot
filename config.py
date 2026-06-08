@@ -91,7 +91,7 @@ REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)
 EXPIRY_INTERVAL_SECONDS = _get_int("EXPIRY_INTERVAL_SECONDS", 600)
 
 # --- Support / contacts ---
-SUPPORT_USERNAME = _get_str("SUPPORT_USERNAME", "elmasupport").lstrip("@")
+SUPPORT_USERNAME = _get_str("SUPPORT_USERNAME", "elma_supboperator").lstrip("@")
 SUPPORT_URL = f"https://t.me/{SUPPORT_USERNAME}"
 
 # --- Legal documents (shown on the Documents screen) ---
