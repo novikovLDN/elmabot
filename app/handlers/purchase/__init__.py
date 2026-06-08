@@ -87,7 +87,7 @@ async def cb_tariff(call: CallbackQuery) -> None:
         price = f"{final} ₽"
 
     text = (
-        "⭐️ <b>Оформление подписки ELMA VPN</b>\n\n"
+        "⭐️ <b>Оформление подписки ELMA</b>\n\n"
         f"💰 Стоимость: {price}\n"
         f"📅 Период: {tariff.title}\n"
         "🌐 Устройств: до 5\n\n"

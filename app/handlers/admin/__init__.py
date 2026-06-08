@@ -117,8 +117,8 @@ async def cmd_admin(message: Message, state: FSMContext) -> None:
 
 BLOCK_TEXT = (
     "🚫 <b>Доступ приостановлен</b>\n\n"
-    "Ваш аккаунт заблокирован за нарушение\n"
-    "условий использования ELMA VPN.\n\n"
+    "Ваш доступ ограничен за нарушение\n"
+    "условий использования ELMA.\n\n"
     "Причина: превышение лимита устройств.\n"
     "Максимум по тарифу — 5 устройств.\n\n"
     "Возврат средств и восстановление доступа\n"
@@ -139,7 +139,7 @@ async def cmd_block(message: Message) -> None:
     if sub is not None:
         await subscription_service.deprovision(sub["panel_uuid"])
     await safe_send(message.bot, target, BLOCK_TEXT)
-    await message.answer(f"🚫 Пользователь {target} заблокирован и уведомлён.")
+    await message.answer(f"🚫 Доступ пользователя {target} ограничен, он уведомлён.")
 
 
 @router.callback_query(F.data == "admin:home")

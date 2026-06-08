@@ -38,7 +38,7 @@ async def _render(bot: Bot, user_id: int) -> tuple[str, str]:
         "🔗 Твоя ссылка (нажми, чтобы скопировать) 👇\n"
         f"<code>{link}</code>"
     )
-    share_text = "Подключайся к ELMA — VPN, который не играет на нервах ⚡"
+    share_text = "Подключайся к ELMA — интернет, который не играет на нервах ⚡"
     share_url = (
         f"https://t.me/share/url?url={quote(link)}&text={quote(share_text)}"
     )

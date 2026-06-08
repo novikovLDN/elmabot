@@ -42,8 +42,8 @@ async def send_subscription_invoice(
 ) -> None:
     await bot.send_invoice(
         chat_id=chat_id,
-        title=f"ELMA VPN — {tariff.title}",
-        description="ELMA VPN — безлимитный трафик, до 5 устройств, zero-logs.",
+        title=f"ELMA — {tariff.title}",
+        description="ELMA — безлимитный трафик, до 5 устройств, zero-logs.",
         payload=payload,
         currency="XTR",  # Telegram Stars
         prices=[LabeledPrice(label=tariff.title, amount=amount_stars)],

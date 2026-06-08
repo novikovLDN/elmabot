@@ -56,7 +56,7 @@ router = Router(name="onboarding")
 # --- Screen copy ----------------------------------------------------------
 
 WELCOME = (
-    "<b>ELMA — VPN, который не играет на нервах.</b>\n\n"
+    "<b>ELMA — интернет, который не играет на нервах.</b>\n\n"
     "⚡️ Высокая скорость\n"
     "♾️ Безлимитный трафик\n"
     "💎 От 149 ₽\n"
@@ -87,8 +87,8 @@ SCREEN_2_TRIAL = (
 SCREEN_2_PAID = (
     "🫧 <b>ELMA активирован</b>\n\n"
     "Добро пожаловать в Premium-доступ 🤍\n\n"
-    "Свободный интернет без ограничений,\n"
-    "блокировок и лишних препятствий ⚡\n\n"
+    "Свободный интернет без ограничений\n"
+    "и лишних препятствий ⚡\n\n"
     "Подключай до 5 устройств одновременно 👇"
 )
 
@@ -123,7 +123,7 @@ SHARE = (
     "<code>{link}</code>"
 )
 
-QR_CAPTION = "Ваш QR-код ELMA VPN 🤍"
+QR_CAPTION = "Ваш QR-код ELMA 🤍"
 
 
 # --- Device instruction screens (3-8) -------------------------------------
@@ -416,7 +416,7 @@ async def cb_share_copy(call: CallbackQuery) -> None:
         await call.answer("Сначала забери доступ", show_alert=True)
         return
     await call.message.answer(
-        "🔗 Ссылка ELMA VPN — нажми, чтобы скопировать:\n\n"
+        "🔗 Ссылка ELMA — нажми, чтобы скопировать:\n\n"
         f"<code>{html.escape(url)}</code>"
     )
     await call.answer("Ссылка отправлена ниже 👇")

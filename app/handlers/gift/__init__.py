@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = Router(name="gift")
 
 INTRO = (
-    "🎁 <b>Подарить ELMA VPN</b>\n\n"
+    "🎁 <b>Подарить ELMA</b>\n\n"
     "Стабильный интернет без нервов —\n"
     "лучшая забота о близких.\n\n"
     "Выбери тариф → оплати →\n"
@@ -59,7 +59,7 @@ async def cb_gift_tariffs(call: CallbackQuery) -> None:
     kb.adjust(1)
     await safe_edit(
         call.message,
-        "🎁 <b>Подарок ELMA VPN</b>\n\nВыбери период 👇",
+        "🎁 <b>Подарок ELMA</b>\n\nВыбери период 👇",
         reply_markup=kb.as_markup(),
     )
     await call.answer()
@@ -73,7 +73,7 @@ async def cb_gift_tariff(call: CallbackQuery) -> None:
         await call.answer()
         return
     text = (
-        "⭐️ <b>Оформление подарка ELMA VPN</b>\n\n"
+        "⭐️ <b>Оформление подарка ELMA</b>\n\n"
         f"💰 Стоимость: {tariff.price_rub} ₽\n"
         f"📅 Период: {tariff.title}\n"
         "🌐 Устройств: до 5\n\n"

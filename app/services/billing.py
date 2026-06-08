@@ -117,7 +117,7 @@ async def complete_gift_purchase(bot: Bot, buyer_id: int, tariff: Tariff) -> str
         bot,
         buyer_id,
         "Привет! Дарю тебе подписку\n"
-        f"🌐 ELMA VPN на {tariff.title}\n\n"
+        f"🌐 ELMA на {tariff.title}\n\n"
         "Чтобы интернет работал спокойно — без лагов, обрывов "
         "и бесконечной загрузки ⚡\n\n"
         "Нажми на ссылку для активации:\n"
@@ -143,6 +143,6 @@ async def redeem_gift(bot: Bot, user_id: int, code: str) -> Tariff | None:
         bot,
         rec["created_by"],
         "🎁 <b>Твой подарок активирован!</b>\n\n"
-        "Получатель уже в сети —\nбез лагов и блокировок 🤍",
+        "Получатель уже в сети —\nбез лагов и обрывов 🤍",
     )
     return tariff
