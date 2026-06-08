@@ -76,12 +76,20 @@ SCREEN_1 = (
     f"🎁 Тебе доступно {TRIAL_DAYS} дня бесплатного доступа"
 )
 
-SCREEN_2 = (
+SCREEN_2_TRIAL = (
     "🫧 <b>ELMA активирован</b>\n\n"
     "Теперь тебе открыт гостевой режим 🫂\n\n"
     f"В ближайшие {TRIAL_DAYS} дня почувствуй,\n"
     "как работает интернет без помех ⚡\n\n"
     "Подключи до 5 устройств 👇"
+)
+
+SCREEN_2_PAID = (
+    "🫧 <b>ELMA активирован</b>\n\n"
+    "Добро пожаловать в Premium-доступ 🤍\n\n"
+    "Свободный интернет без ограничений,\n"
+    "блокировок и лишних препятствий ⚡\n\n"
+    "Подключай до 5 устройств одновременно 👇"
 )
 
 TRIAL_WELCOME = (
@@ -215,6 +223,15 @@ async def _active_sub_url(telegram_id: int) -> str | None:
     return None
 
 
+async def _device_select_text(telegram_id: int) -> str:
+    """Screen-2 copy by access type: Premium for any paid/admin/gift/referral
+    access, guest copy for the free trial (or no active subscription yet)."""
+    sub = await get_subscription(telegram_id)
+    if sub is not None and sub["status"] == "active" and sub["source"] != "trial":
+        return SCREEN_2_PAID
+    return SCREEN_2_TRIAL
+
+
 def _make_qr_png(data: str) -> bytes | None:
     """Render ``data`` to a PNG QR code; None if the lib is unavailable."""
     try:
@@ -310,7 +327,8 @@ async def cb_claim(call: CallbackQuery) -> None:
         if current is None or current["status"] != "active":
             await safe_edit(call.message, TRIAL_USED, reply_markup=buy_keyboard())
             return
-        await safe_edit(call.message, SCREEN_2, reply_markup=devices_keyboard())
+        text = SCREEN_2_PAID if current["source"] != "trial" else SCREEN_2_TRIAL
+        await safe_edit(call.message, text, reply_markup=devices_keyboard())
         return
 
     # Trial newly activated -> welcome notification, then device selection.
@@ -318,17 +336,19 @@ async def cb_claim(call: CallbackQuery) -> None:
     # Tell the inviter their friend joined (bonus comes on first purchase).
     await billing.notify_referrer_on_trial(call.bot, user_id)
     await safe_edit(call.message, TRIAL_WELCOME)
-    await call.message.answer(SCREEN_2, reply_markup=devices_keyboard())
+    await call.message.answer(SCREEN_2_TRIAL, reply_markup=devices_keyboard())
 
 
 @router.message(Command("connect"))
 async def cmd_connect(message: Message) -> None:
-    await message.answer(SCREEN_2, reply_markup=devices_keyboard())
+    text = await _device_select_text(message.from_user.id)
+    await message.answer(text, reply_markup=devices_keyboard())
 
 
 @router.callback_query(F.data == "dev:menu")
 async def cb_devices(call: CallbackQuery) -> None:
-    await safe_edit(call.message, SCREEN_2, reply_markup=devices_keyboard())
+    text = await _device_select_text(call.from_user.id)
+    await safe_edit(call.message, text, reply_markup=devices_keyboard())
     await call.answer()
 
 
