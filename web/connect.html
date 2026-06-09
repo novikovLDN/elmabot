@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#ffffff" />
+<title>Подключение Elma VPN</title>
+<style>
+  /* ====== Палитра (как на референсе: белый фон, чёрная кнопка, серый текст) === */
+  :root {
+    --bg:        #ffffff;
+    --ink:       #111114;   /* заголовок / кнопка        */
+    --ink-soft:  #6b7280;   /* подписи, ключ             */
+    --btn-text:  #ffffff;
+    --radius:    14px;
+    --maxw:      460px;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex; justify-content: center;
+    padding: 56px 22px 40px;
+  }
+  .wrap { width: 100%; max-width: var(--maxw); animation: rise .45s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+
+  h1 { margin: 0 0 14px; font-size: 23px; font-weight: 800; letter-spacing: -.2px; }
+  .sub { margin: 0 0 26px; color: var(--ink-soft); font-size: 16px; line-height: 1.5; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    border: 0; cursor: pointer; text-decoration: none;
+    background: var(--ink); color: var(--btn-text);
+    padding: 15px 26px; border-radius: var(--radius);
+    font-size: 16px; font-weight: 700;
+    transition: transform .12s ease, opacity .2s ease;
+  }
+  .btn:active { transform: scale(.98); opacity: .9; }
+  .btn .arrow { font-size: 17px; }
+
+  .manual { margin-top: 34px; }
+  .manual .label { margin: 0 0 10px; color: var(--ink-soft); font-size: 14.5px; line-height: 1.5; }
+  .key {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 13px; line-height: 1.65; color: var(--ink-soft);
+    word-break: break-all; white-space: pre-wrap;
+    cursor: pointer; user-select: all; -webkit-user-select: all;
+  }
+  .key:active { color: var(--ink); }
+
+  .error { color: #b23b5e; font-size: 16px; line-height: 1.5; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%) translateY(20px);
+    background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 12px;
+    font-size: 14px; opacity: 0; pointer-events: none; transition: all .25s ease;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- обычное состояние -->
+    <div id="ok">
+      <h1>Подключение Elma VPN</h1>
+      <p class="sub">Нажми кнопку — откроется приложение Happ и импортируется подписка.</p>
+
+      <button class="btn" id="connect">Открыть в Happ <span class="arrow">→</span></button>
+
+      <div class="manual">
+        <p class="label">Если не открылось, скопируй и вставь вручную:</p>
+        <div class="key" id="key" title="Нажми, чтобы скопировать"></div>
+      </div>
+    </div>
+
+    <!-- нет ключа в ссылке -->
+    <div id="bad" hidden>
+      <h1>Подключение Elma VPN</h1>
+      <p class="error">Ссылка открыта не полностью или устарела.<br>Вернись в бота Elma VPN и открой ссылку заново.</p>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Ключ скопирован</div>
+
+<script>
+  (function () {
+    // Ключ приходит в #fragment — на сервер он не уходит.
+    var raw = decodeURIComponent((location.hash || "").slice(1)).trim();
+    var deeplink = raw
+      ? (raw.indexOf("happ://") === 0 ? raw : "happ://crypt4/" + raw)
+      : "";
+
+    if (!deeplink) {
+      document.getElementById("ok").hidden = true;
+      document.getElementById("bad").hidden = false;
+      return;
+    }
+
+    document.getElementById("key").textContent = deeplink;
+
+    function openHapp() { window.location.href = deeplink; }
+    document.getElementById("connect").addEventListener("click", openHapp);
+
+    function toast() {
+      var t = document.getElementById("toast");
+      t.classList.add("show");
+      setTimeout(function () { t.classList.remove("show"); }, 1600);
+    }
+    document.getElementById("key").addEventListener("click", function () {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(deeplink).then(toast, toast);
+      } else {
+        var ta = document.createElement("textarea");
+        ta.value = deeplink; document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); } catch (e) {}
+        document.body.removeChild(ta); toast();
+      }
+    });
+
+    // авто-попытка открыть Happ сразу после загрузки
+    window.addEventListener("load", function () { setTimeout(openHapp, 500); });
+  })();
+</script>
+</body>
+</html>

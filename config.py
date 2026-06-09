@@ -66,6 +66,12 @@ DISCOUNT_REACTIVATION_PCT = _get_int("DISCOUNT_REACTIVATION_PCT", 20)
 REACTIVATION_AFTER_DAYS = _get_int("REACTIVATION_AFTER_DAYS", 3)
 
 # --- Branding / onboarding ---
+# Optional branded landing page (web/connect.html) that auto-opens Happ and
+# imports the subscription. When set, the connection screens show an "Открыть в
+# Happ" button linking to it; the crypt key travels in the URL #fragment, so it
+# never reaches the page's web server. Empty -> button hidden, key shown as text.
+# Example: "https://your-domain/connect.html"
+CONNECT_PAGE_URL = _get_str("CONNECT_PAGE_URL", "").rstrip("/")
 # Per-platform app download links shown on the device connection screens.
 # Default to the public Happ client pages; override per deployment if needed.
 APP_IOS_URL = _get_str(

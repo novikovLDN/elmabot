@@ -16,6 +16,7 @@ subscription row (whose ``subscription_url`` powers "Активировать" /
 import html
 import io
 import logging
+from urllib.parse import quote
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject, CommandStart
@@ -40,6 +41,7 @@ from config import (
     APP_IOS_URL,
     APP_MACOS_URL,
     APP_WINDOWS_URL,
+    CONNECT_PAGE_URL,
     TRIAL_DAYS,
 )
 from database import (
@@ -383,12 +385,16 @@ async def cb_device(call: CallbackQuery) -> None:
         f"<code>{html.escape(sub_url)}</code>\n"
         f"{_KEY_HINT}"
     )
+    connect_url = (
+        f"{CONNECT_PAGE_URL}#{quote(sub_url, safe='')}" if CONNECT_PAGE_URL else None
+    )
     await safe_edit(
         call.message,
         device["text"].format(key=key_block),
         reply_markup=device_keyboard(
             download_url=device["download_url"],
             download_label=device["download_label"],
+            connect_url=connect_url,
         ),
     )
     await call.answer()
