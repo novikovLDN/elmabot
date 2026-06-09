@@ -68,9 +68,9 @@
     <!-- обычное состояние -->
     <div id="ok">
       <h1>Подключение Elma VPN</h1>
-      <p class="sub">Нажми кнопку — откроется приложение Happ и импортируется подписка.</p>
+      <p class="sub">Нажми кнопку — откроется приложение <span id="app1">Happ</span> и импортируется подписка.</p>
 
-      <button class="btn" id="connect">Открыть в Happ <span class="arrow">→</span></button>
+      <button class="btn" id="connect">Открыть в <span id="app2">Happ</span> <span class="arrow">→</span></button>
 
       <div class="manual">
         <p class="label">Если не открылось, скопируй и вставь вручную:</p>
@@ -89,17 +89,27 @@
 
 <script>
   (function () {
-    // Ключ приходит в #fragment — на сервер он не уходит.
+    // Ключ приходит в #fragment — на сервер он не уходит. Поддерживаем оба
+    // приложения: happ:// (RSA crypt4) и incy:// (AES crypt1). Голый base64
+    // без схемы трактуем как Happ (обратная совместимость).
     var raw = decodeURIComponent((location.hash || "").slice(1)).trim();
-    var deeplink = raw
-      ? (raw.indexOf("happ://") === 0 ? raw : "happ://crypt4/" + raw)
-      : "";
+    var deeplink = "";
+    if (raw) {
+      deeplink = (raw.indexOf("happ://") === 0 || raw.indexOf("incy://") === 0)
+        ? raw
+        : "happ://crypt4/" + raw;
+    }
 
     if (!deeplink) {
       document.getElementById("ok").hidden = true;
       document.getElementById("bad").hidden = false;
       return;
     }
+
+    // Подпись кнопки/текста под конкретное приложение.
+    var appName = deeplink.indexOf("incy://") === 0 ? "Incy" : "Happ";
+    document.getElementById("app1").textContent = appName;
+    document.getElementById("app2").textContent = appName;
 
     document.getElementById("key").textContent = deeplink;
 

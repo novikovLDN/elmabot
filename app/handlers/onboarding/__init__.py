@@ -33,7 +33,7 @@ from app.keyboards import (
     welcome_keyboard,
 )
 from app.handlers.menu import show_main
-from app.services import billing, happ_crypto, subscription_service
+from app.services import billing, happ_crypto, incy_crypto, subscription_service
 from app.utils import safe_edit
 from config import (
     APP_ANDROID_URL,
@@ -217,14 +217,19 @@ DEVICES: dict[str, dict] = {
 
 # --- Helpers --------------------------------------------------------------
 
+async def _active_sub_raw(telegram_id: int) -> str | None:
+    """Raw subscription URL of an active subscription, else None."""
+    sub = await get_subscription(telegram_id)
+    if sub is not None and sub["status"] == "active" and sub["subscription_url"]:
+        return sub["subscription_url"]
+    return None
+
+
 async def _active_sub_url(telegram_id: int) -> str | None:
     """Return the user-facing connection link of an active subscription, else
     None. The raw subscription URL is wrapped into a Happ crypt link
     (``happ://crypt4/…``) so the real address stays hidden from the user."""
-    sub = await get_subscription(telegram_id)
-    if sub is not None and sub["status"] == "active" and sub["subscription_url"]:
-        return happ_crypto.format_for_user(sub["subscription_url"])
-    return None
+    return happ_crypto.format_for_user(await _active_sub_raw(telegram_id))
 
 
 async def _device_select_text(telegram_id: int) -> str:
@@ -365,8 +370,8 @@ async def cb_device(call: CallbackQuery) -> None:
     if device is None:
         await call.answer()
         return
-    sub_url = await _active_sub_url(call.from_user.id)
-    if not sub_url:
+    raw_url = await _active_sub_raw(call.from_user.id)
+    if not raw_url:
         # Reachable from the main menu without an active subscription.
         kb = InlineKeyboardBuilder()
         kb.button(text="💳 Купить подписку", callback_data="menu:buy")
@@ -380,14 +385,23 @@ async def cb_device(call: CallbackQuery) -> None:
         await call.answer()
         return
 
+    # Happ crypt key — shown as text (manual paste) and behind the Happ button.
+    happ_link = happ_crypto.format_for_user(raw_url)
     key_block = (
         "🔑 Твой ключ:\n"
-        f"<code>{html.escape(sub_url)}</code>\n"
+        f"<code>{html.escape(happ_link)}</code>\n"
         f"{_KEY_HINT}"
     )
-    connect_url = (
-        f"{CONNECT_PAGE_URL}#{quote(sub_url, safe='')}" if CONNECT_PAGE_URL else None
-    )
+
+    # Branded connect page deep-links (key in #fragment). Happ link always;
+    # Incy link only when the Node encoder is available.
+    connect_url = connect_incy_url = None
+    if CONNECT_PAGE_URL:
+        connect_url = f"{CONNECT_PAGE_URL}#{quote(happ_link, safe='')}"
+        incy_link = await incy_crypto.to_incy_link(raw_url)
+        if incy_link:
+            connect_incy_url = f"{CONNECT_PAGE_URL}#{quote(incy_link, safe='')}"
+
     await safe_edit(
         call.message,
         device["text"].format(key=key_block),
@@ -395,6 +409,7 @@ async def cb_device(call: CallbackQuery) -> None:
             download_url=device["download_url"],
             download_label=device["download_label"],
             connect_url=connect_url,
+            connect_incy_url=connect_incy_url,
         ),
     )
     await call.answer()

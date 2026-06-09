@@ -1,0 +1,10 @@
+{
+  "name": "elmabot-incy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Node sidecar deps for generating Incy crypt deep links (incy://crypt1/).",
+  "type": "module",
+  "dependencies": {
+    "@incy/link-encoder": "^1.0.1"
+  }
+}

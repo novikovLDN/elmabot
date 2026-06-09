@@ -104,17 +104,20 @@ def device_keyboard(
     download_url: str | None,
     download_label: str,
     connect_url: str | None = None,
+    connect_incy_url: str | None = None,
 ) -> InlineKeyboardMarkup:
     """A single device instruction screen (screens 3-8).
 
     The subscription key is shown in the message text (tap-to-copy). When a
-    branded connect page is configured, a primary "Открыть в Happ" button opens
-    it (auto-imports the key); otherwise users paste the key by hand. Plus the
-    app download link and navigation: Back (to device list) and Main menu.
+    branded connect page is configured, primary "Открыть в Happ" / "Открыть в
+    Incy" buttons open it (auto-import the key); otherwise users paste the key by
+    hand. Plus the app download link and navigation: Back / Main menu.
     """
     kb = InlineKeyboardBuilder()
     if connect_url:
         kb.button(text="🚀 Открыть в Happ", url=connect_url)
+    if connect_incy_url:
+        kb.button(text="🚀 Открыть в Incy", url=connect_incy_url)
     if download_url:
         kb.button(text=download_label, url=download_url)
     kb.button(text="🔙 Назад", callback_data="dev:menu")
