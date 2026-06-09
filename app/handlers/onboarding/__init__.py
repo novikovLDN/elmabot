@@ -32,7 +32,7 @@ from app.keyboards import (
     welcome_keyboard,
 )
 from app.handlers.menu import show_main
-from app.services import billing, subscription_service
+from app.services import billing, happ_crypto, subscription_service
 from app.utils import safe_edit
 from config import (
     APP_ANDROID_URL,
@@ -216,10 +216,12 @@ DEVICES: dict[str, dict] = {
 # --- Helpers --------------------------------------------------------------
 
 async def _active_sub_url(telegram_id: int) -> str | None:
-    """Return the connection URL of an active subscription, else None."""
+    """Return the user-facing connection link of an active subscription, else
+    None. The raw subscription URL is wrapped into a Happ crypt link
+    (``happ://crypt4/…``) so the real address stays hidden from the user."""
     sub = await get_subscription(telegram_id)
     if sub is not None and sub["status"] == "active" and sub["subscription_url"]:
-        return sub["subscription_url"]
+        return happ_crypto.format_for_user(sub["subscription_url"])
     return None
 
 
