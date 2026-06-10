@@ -134,7 +134,7 @@ QR_CAPTION = "Ваш QR-код ELMA 🤍"
 # a tap-to-copy code block; the screens have no "activate" button — the user
 # copies the key and pastes it into the app ("＋" → "Вставить из буфера").
 
-_KEY_HINT = "👆 Нажми на ключ выше — он скопируется"
+_KEY_HINT = "👆 Разверни ключ выше и нажми на него — он скопируется"
 
 DEVICES: dict[str, dict] = {
     "ios": {
@@ -389,7 +389,7 @@ async def cb_device(call: CallbackQuery) -> None:
     happ_link = happ_crypto.format_for_user(raw_url)
     key_block = (
         "🔑 Твой ключ:\n"
-        f"<code>{html.escape(happ_link)}</code>\n"
+        f"<blockquote expandable><code>{html.escape(happ_link)}</code></blockquote>\n"
         f"{_KEY_HINT}"
     )
 
