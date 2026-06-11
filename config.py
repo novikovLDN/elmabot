@@ -4,6 +4,7 @@ No dictionaries of tariffs / countries / multipliers — this is the *lite*
 build: one product, one server, one payment flow.
 """
 import os
+import hashlib
 
 
 def _get_str(name: str, default: str | None = None) -> str:
@@ -106,6 +107,25 @@ PLATEGA_FAILED_URL = _get_str("PLATEGA_FAILED_URL", "")
 WEBHOOK_PORT = _get_int("PORT", _get_int("WEBHOOK_PORT", 8080))
 
 PAYMENTS_ENABLED = bool(PLATEGA_MERCHANT_ID and PLATEGA_SECRET)
+
+# --- Transport: webhook vs polling ---
+# Public base URL of this service (https). Railway exposes a generated domain via
+# $RAILWAY_PUBLIC_DOMAIN; an explicit WEBHOOK_BASE_URL overrides it. When set, the
+# bot runs fully on webhooks (Telegram + Platega on the same aiohttp server / port);
+# when empty, it falls back to long polling (handy for local dev).
+_railway_domain = _get_str("RAILWAY_PUBLIC_DOMAIN", "")
+WEBHOOK_BASE_URL = _get_str(
+    "WEBHOOK_BASE_URL", f"https://{_railway_domain}" if _railway_domain else ""
+).rstrip("/")
+# Path Telegram delivers updates to (kept separate from /platega/webhook).
+WEBHOOK_PATH = "/" + _get_str("WEBHOOK_PATH", "webhook/telegram").lstrip("/")
+# Secret token Telegram echoes back in X-Telegram-Bot-Api-Secret-Token so we can
+# reject forged requests. Defaults to a stable value derived from the bot token.
+TELEGRAM_WEBHOOK_SECRET = _get_str("TELEGRAM_WEBHOOK_SECRET", "") or hashlib.sha256(
+    BOT_TOKEN.encode()
+).hexdigest()
+
+USE_WEBHOOK = bool(WEBHOOK_BASE_URL)
 
 # --- Scheduler tuning ---
 REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)

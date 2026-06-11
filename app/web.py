@@ -10,7 +10,8 @@ Platega retries non-2xx responses (up to 3 times, 5 min apart), so:
 """
 import logging
 
-from aiogram import Bot
+from aiogram import Bot, Dispatcher
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 
 import config
@@ -77,19 +78,33 @@ async def _platega_webhook(request: web.Request) -> web.Response:
     return web.Response(text="ok")
 
 
-def build_app(bot: Bot) -> web.Application:
+def build_app(bot: Bot, dp: Dispatcher | None = None) -> web.Application:
+    """Build the aiohttp app. When ``dp`` is given, Telegram updates are served
+    on ``config.WEBHOOK_PATH`` alongside the Platega callback (same port)."""
     app = web.Application()
     app["bot"] = bot
     app.router.add_get("/", _health)
     app.router.add_post("/platega/webhook", _platega_webhook)
+    if dp is not None:
+        SimpleRequestHandler(
+            dispatcher=dp,
+            bot=bot,
+            secret_token=config.TELEGRAM_WEBHOOK_SECRET,
+        ).register(app, path=config.WEBHOOK_PATH)
+        setup_application(app, dp, bot=bot)
     return app
 
 
-async def start_webhook_server(bot: Bot) -> web.AppRunner:
-    """Start the webhook server; returns the runner so it can be cleaned up."""
-    runner = web.AppRunner(build_app(bot))
+async def start_server(bot: Bot, dp: Dispatcher | None = None) -> web.AppRunner:
+    """Start the HTTP server; returns the runner so it can be cleaned up.
+
+    Always serves ``/`` and ``/platega/webhook``; with ``dp`` it also serves the
+    Telegram webhook endpoint.
+    """
+    runner = web.AppRunner(build_app(bot, dp))
     await runner.setup()
     site = web.TCPSite(runner, host="0.0.0.0", port=config.WEBHOOK_PORT)
     await site.start()
-    logger.info("Webhook server listening on :%d (/platega/webhook)", config.WEBHOOK_PORT)
+    routes = "/platega/webhook" + (f" + {config.WEBHOOK_PATH}" if dp else "")
+    logger.info("HTTP server listening on :%d (%s)", config.WEBHOOK_PORT, routes)
     return runner

@@ -60,7 +60,7 @@ Python 3.11+. Один процесс, фоновые `asyncio`-таски — �
 ## Структура
 
 ```
-main.py                  запуск: pool + bot + scheduler (3 loop'а)
+main.py                  запуск: pool + bot (webhook/polling) + scheduler (3 loop'а)
 config.py                все env-vars и константы
 app/tariffs.py           каталог тарифов (1/3/6/12 мес)
 database/                core (pool/init/helpers), users, subscriptions
@@ -106,8 +106,17 @@ python main.py
 | `PLATEGA_MERCHANT_ID` / `PLATEGA_SECRET` | креды Platega; пусто = оплата выключена |
 | `PLATEGA_API_URL` | база API Platega (default `https://app.platega.io`) |
 | `PLATEGA_RETURN_URL` / `PLATEGA_FAILED_URL` | редиректы браузера после оплаты (опц.) |
-| `WEBHOOK_PORT` / `PORT` | порт webhook-сервера (PaaS обычно задаёт `PORT`) |
+| `WEBHOOK_PORT` / `PORT` | порт HTTP-сервера (PaaS обычно задаёт `PORT`) |
+| `WEBHOOK_BASE_URL` | публичный https-URL сервиса → бот работает на webhook (иначе polling). На Railway берётся из `RAILWAY_PUBLIC_DOMAIN` автоматически |
+| `WEBHOOK_PATH` | путь для апдейтов Telegram (default `webhook/telegram`) |
+| `TELEGRAM_WEBHOOK_SECRET` | секрет проверки апдейтов Telegram (default — из `BOT_TOKEN`) |
 
+> **Транспорт.** Если задан `WEBHOOK_BASE_URL` (или есть `RAILWAY_PUBLIC_DOMAIN`),
+> бот поднимает один aiohttp-сервер на `$PORT` и принимает **и** апдейты Telegram
+> (`/webhook/telegram`), **и** колбэки Platega (`/platega/webhook`). При старте
+> вызывается `bot.set_webhook(...)`. Без переменной — обычный long polling
+> (удобно локально).
+>
 > Платежи Platega: задайте в ЛК Platega (Настройки → Callback URLs) адрес
 > `https://<публичный-хост>/platega/webhook` (только HTTPS, валидный
 > сертификат). Бот должен быть доступен по публичному домену.

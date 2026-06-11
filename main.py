@@ -16,7 +16,7 @@ from app.services.notifications import (
     offer_loop,
     reminder_loop,
 )
-from app.web import start_webhook_server
+from app.web import start_server
 from database import close_db, init_db
 
 
@@ -62,22 +62,35 @@ async def main() -> None:
         asyncio.create_task(offer_loop(bot), name="offer_loop"),
     ]
 
-    # Webhook server for Platega payment callbacks (only when configured).
-    webhook_runner = None
-    if config.PAYMENTS_ENABLED:
-        webhook_runner = await start_webhook_server(bot)
-    else:
-        logger.info("Platega not configured — payments disabled, no webhook server")
-
-    logger.info("Bot starting (polling)…")
+    runner = None
     try:
-        await dp.start_polling(bot)
+        if config.USE_WEBHOOK:
+            # Full webhook mode: Telegram + Platega share one aiohttp server/port.
+            webhook_url = config.WEBHOOK_BASE_URL + config.WEBHOOK_PATH
+            await bot.set_webhook(
+                url=webhook_url,
+                secret_token=config.TELEGRAM_WEBHOOK_SECRET,
+                allowed_updates=dp.resolve_used_update_types(),
+                drop_pending_updates=True,
+            )
+            runner = await start_server(bot, dp)
+            logger.info("Bot started (webhook) at %s", webhook_url)
+            await asyncio.Event().wait()  # serve until cancelled
+        else:
+            # Polling mode (local dev): drop any stale webhook first.
+            await bot.delete_webhook(drop_pending_updates=True)
+            if config.PAYMENTS_ENABLED:
+                runner = await start_server(bot)  # Platega callback only
+            else:
+                logger.info("Polling mode, payments off — no HTTP server")
+            logger.info("Bot starting (polling)…")
+            await dp.start_polling(bot)
     finally:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        if webhook_runner is not None:
-            await webhook_runner.cleanup()
+        if runner is not None:
+            await runner.cleanup()
         await platega.close()
         await remnawave.close()
         await bot.session.close()
