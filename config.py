@@ -92,6 +92,21 @@ APP_ANDROIDTV_URL = _get_str(
     "https://play.google.com/store/apps/details?id=com.happproxy",
 )
 
+# --- Platega payments (SBP / card via app.platega.io) ---
+# Credentials from the Platega dashboard (Настройки). When MERCHANT_ID/SECRET are
+# empty, payments stay a placeholder and no webhook server is started.
+PLATEGA_MERCHANT_ID = _get_str("PLATEGA_MERCHANT_ID", "")
+PLATEGA_SECRET = _get_str("PLATEGA_SECRET", "")
+PLATEGA_API_URL = _get_str("PLATEGA_API_URL", "https://app.platega.io").rstrip("/")
+# Browser redirects after the hosted payment page (optional). Default both to the
+# bot so the user lands back in Telegram. Empty -> Platega's own result pages.
+PLATEGA_RETURN_URL = _get_str("PLATEGA_RETURN_URL", "")
+PLATEGA_FAILED_URL = _get_str("PLATEGA_FAILED_URL", "")
+# Port the webhook HTTP server binds to (Railway/most PaaS inject $PORT).
+WEBHOOK_PORT = _get_int("PORT", _get_int("WEBHOOK_PORT", 8080))
+
+PAYMENTS_ENABLED = bool(PLATEGA_MERCHANT_ID and PLATEGA_SECRET)
+
 # --- Scheduler tuning ---
 REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)
 EXPIRY_INTERVAL_SECONDS = _get_int("EXPIRY_INTERVAL_SECONDS", 600)

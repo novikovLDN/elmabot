@@ -1,0 +1,103 @@
+"""Thin async client over the Platega payment API (httpx).
+
+Flow: create a transaction -> redirect the user to the hosted payment page ->
+Platega calls our webhook with the final status. See ``app/web.py`` for the
+callback side.
+
+Docs: https://docs.platega.io/ (base ``https://app.platega.io``). Auth is two
+headers, ``X-MerchantId`` and ``X-Secret``; the very same headers are sent back
+on the webhook, so verifying a callback is a constant-time compare of those.
+"""
+import hmac
+import logging
+
+import httpx
+
+import config
+
+logger = logging.getLogger(__name__)
+
+# paymentMethod codes (PaymentMethodInt in the spec).
+METHOD_SBP = 2          # СБП (QR-код)
+METHOD_CARD = 11        # Карточный эквайринг
+
+# PaymentStatus enum.
+STATUS_PENDING = "PENDING"
+STATUS_CONFIRMED = "CONFIRMED"   # success
+STATUS_CANCELED = "CANCELED"     # failure
+STATUS_CHARGEBACKED = "CHARGEBACKED"
+
+_TIMEOUT = httpx.Timeout(20.0)
+
+_client: httpx.AsyncClient | None = None
+
+
+def _headers() -> dict[str, str]:
+    return {
+        "X-MerchantId": config.PLATEGA_MERCHANT_ID,
+        "X-Secret": config.PLATEGA_SECRET,
+    }
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None or _client.is_closed:
+        if not config.PAYMENTS_ENABLED:
+            raise RuntimeError("PLATEGA_MERCHANT_ID / PLATEGA_SECRET are not set")
+        _client = httpx.AsyncClient(
+            base_url=config.PLATEGA_API_URL,
+            headers=_headers(),
+            timeout=_TIMEOUT,
+        )
+    return _client
+
+
+async def close() -> None:
+    global _client
+    if _client is not None and not _client.is_closed:
+        await _client.aclose()
+        _client = None
+
+
+async def create_transaction(
+    *,
+    method: int,
+    amount_rub: float,
+    description: str,
+    payload: str | None = None,
+) -> dict:
+    """Create a payment with a fixed method. Returns the parsed JSON, which
+    includes ``transactionId`` and ``redirect`` (the payment URL)."""
+    body: dict = {
+        "paymentMethod": method,
+        "paymentDetails": {"amount": amount_rub, "currency": "RUB"},
+        "description": description,
+    }
+    if config.PLATEGA_RETURN_URL:
+        body["return"] = config.PLATEGA_RETURN_URL
+    if config.PLATEGA_FAILED_URL:
+        body["failedUrl"] = config.PLATEGA_FAILED_URL
+    if payload:
+        body["payload"] = payload
+
+    resp = await _get_client().post("/transaction/process", json=body)
+    resp.raise_for_status()
+    return resp.json()
+
+
+async def get_status(transaction_id: str) -> str | None:
+    """Current status of a transaction, or None if not found."""
+    resp = await _get_client().get(f"/transaction/{transaction_id}")
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    return resp.json().get("status")
+
+
+def verify_callback(merchant_id: str | None, secret: str | None) -> bool:
+    """Constant-time check that a webhook carries our own credentials."""
+    if not merchant_id or not secret:
+        return False
+    return hmac.compare_digest(merchant_id, config.PLATEGA_MERCHANT_ID) and hmac.compare_digest(
+        secret, config.PLATEGA_SECRET
+    )

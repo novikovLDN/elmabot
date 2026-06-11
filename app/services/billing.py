@@ -10,6 +10,7 @@ import secrets
 
 import asyncpg
 from aiogram import Bot
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 import config
 from app.tariffs import Tariff, get_tariff
@@ -56,6 +57,28 @@ async def complete_purchase(
     if first_purchase:
         await _reward_referrer(bot, user_id)
     return sub
+
+
+_PURCHASE_OK_TEXT = (
+    "🌐 <b>Подписка ELMA подтверждена</b>\n\n"
+    "Твой доступ активирован ☁️\n"
+    "Теперь цифровое пространство ELMA поддерживает стабильное подключение "
+    "для всего, что важно тебе — без зависаний и неожиданных обрывов ⚡\n\n"
+    "🫧 До 5 устройств одновременно\n"
+    "🛜 Максимальная скорость и стабильность\n"
+    "💎 Доступ ко всем функциям сервиса\n\n"
+    "Наслаждайся интернетом, который наконец перестал раздражать"
+)
+
+
+async def notify_purchase_activated(bot: Bot, user_id: int) -> None:
+    """Confirmation message after a subscription purchase (Stars or Platega)."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📲 Подключиться", callback_data="dev:menu")
+    kb.button(text="👥 Пригласить друга", callback_data="menu:referral")
+    kb.button(text="👤 Личный кабинет", callback_data="menu:cabinet")
+    kb.adjust(1)
+    await safe_send(bot, user_id, _PURCHASE_OK_TEXT, reply_markup=kb.as_markup())
 
 
 async def _reward_referrer(bot: Bot, buyer_id: int) -> None:

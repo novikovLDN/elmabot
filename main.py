@@ -10,12 +10,13 @@ import config
 from aiogram.types import BotCommand
 
 from app.handlers import get_routers
-from app.services import remnawave
+from app.services import platega, remnawave
 from app.services.notifications import (
     expiry_cleanup_loop,
     offer_loop,
     reminder_loop,
 )
+from app.web import start_webhook_server
 from database import close_db, init_db
 
 
@@ -61,6 +62,13 @@ async def main() -> None:
         asyncio.create_task(offer_loop(bot), name="offer_loop"),
     ]
 
+    # Webhook server for Platega payment callbacks (only when configured).
+    webhook_runner = None
+    if config.PAYMENTS_ENABLED:
+        webhook_runner = await start_webhook_server(bot)
+    else:
+        logger.info("Platega not configured — payments disabled, no webhook server")
+
     logger.info("Bot starting (polling)…")
     try:
         await dp.start_polling(bot)
@@ -68,6 +76,9 @@ async def main() -> None:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        if webhook_runner is not None:
+            await webhook_runner.cleanup()
+        await platega.close()
         await remnawave.close()
         await bot.session.close()
         await close_db()

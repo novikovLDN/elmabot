@@ -37,9 +37,13 @@
   активации триал/покупки, выручка за день/всего по всем платёжным системам),
   поиск по `telegram_id`/`@username`, карточка пользователя с гибкой выдачей
   доступа (`1 мес 10 дней`, `12 часов`, `90 мин`…) и отзывом доступа.
-- 💳 Тарифы 1 / 3 / 6 / 12 мес (`/buy`). **Приём платежей ещё не подключён** —
-  экран выбора тарифа работает, кнопка «Оплатить» — заглушка; точка
-  подключения провайдера: `purchase.cb_pay` + `billing.complete_purchase`.
+- 💳 Тарифы 1 / 3 / 6 / 12 мес (`/buy`) с оплатой через **Platega** (СБП / карта).
+  `purchase.cb_method` создаёт транзакцию (`app/services/platega.py`), отдаёт
+  кнопку-ссылку «Оплатить»; Platega подтверждает оплату webhook'ом на
+  `/platega/webhook` (`app/web.py`, aiohttp в том же процессе) → провижининг
+  через `billing.complete_purchase` (идемпотентно). Без `PLATEGA_MERCHANT_ID/
+  SECRET` оплата выключена (кнопки → «скоро подключим», webhook-сервер не
+  поднимается). Оплата Telegram Stars (`successful_payment`) тоже поддержана.
 - 👥 Реферальная программа (`/invite`): +7 дней за друга, который **купил**
   подписку (не триал).
 - 🎁 Персональные скидки: −10% после триала (1 день), −20% в день окончания,
@@ -99,6 +103,14 @@ python main.py
 | `DISCOUNT_TRIAL_END_PCT` / `DISCOUNT_SUB_END_PCT` / `DISCOUNT_REACTIVATION_PCT` | скидки в % (default 10/20/20) |
 | `REACTIVATION_AFTER_DAYS` | через сколько дней после истечения слать оффер реактивации (default 3) |
 | `APP_IOS_URL` / `APP_ANDROID_URL` / `APP_MACOS_URL` / `APP_WINDOWS_URL` / `APP_ANDROIDTV_URL` | ссылки на скачивание клиента на экранах подключения (по умолчанию — публичный Happ) |
+| `PLATEGA_MERCHANT_ID` / `PLATEGA_SECRET` | креды Platega; пусто = оплата выключена |
+| `PLATEGA_API_URL` | база API Platega (default `https://app.platega.io`) |
+| `PLATEGA_RETURN_URL` / `PLATEGA_FAILED_URL` | редиректы браузера после оплаты (опц.) |
+| `WEBHOOK_PORT` / `PORT` | порт webhook-сервера (PaaS обычно задаёт `PORT`) |
+
+> Платежи Platega: задайте в ЛК Platega (Настройки → Callback URLs) адрес
+> `https://<публичный-хост>/platega/webhook` (только HTTPS, валидный
+> сертификат). Бот должен быть доступен по публичному домену.
 
 ## Деплой
 

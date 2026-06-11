@@ -76,19 +76,39 @@ async def clear_panel_uuid(telegram_id: int) -> None:
 # --- Payments --------------------------------------------------------------
 
 async def create_pending_payment(
-    telegram_id: int, invoice_id: str, amount: int
+    telegram_id: int,
+    invoice_id: str,
+    amount: int,
+    *,
+    provider: str = "unknown",
+    tariff_code: str | None = None,
 ) -> None:
-    """Journal a payment as 'pending' at invoice-creation time (§5.3)."""
+    """Journal a payment as 'pending' at invoice-creation time (§5.3).
+
+    ``tariff_code`` lets an async provider callback (Platega webhook) recover
+    what was bought from just the transaction id.
+    """
     pool = get_pool()
     await pool.execute(
         """
-        INSERT INTO payments (telegram_id, invoice_id, amount_kopecks, status)
-        VALUES ($1, $2, $3, 'pending')
+        INSERT INTO payments (telegram_id, invoice_id, amount_kopecks, status,
+                              provider, tariff_code)
+        VALUES ($1, $2, $3, 'pending', $4, $5)
         ON CONFLICT (invoice_id) DO NOTHING
         """,
         telegram_id,
         invoice_id,
         amount,
+        provider,
+        tariff_code,
+    )
+
+
+async def get_payment(invoice_id: str) -> asyncpg.Record | None:
+    """Full payment row by invoice id (used by the Platega webhook)."""
+    pool = get_pool()
+    return await pool.fetchrow(
+        "SELECT * FROM payments WHERE invoice_id = $1", invoice_id
     )
 
 
