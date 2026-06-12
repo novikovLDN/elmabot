@@ -6,6 +6,7 @@ connected, the only changes are inside ``cb_method`` (create invoice) and
 ``on_paid`` (already routes through ``billing.complete_purchase``).
 """
 import logging
+from datetime import timedelta
 
 import httpx
 from aiogram import F, Router
@@ -24,6 +25,8 @@ from database import (
     get_user,
     is_payment_paid,
     mark_payment_refunded,
+    set_offer,
+    utcnow,
 )
 
 # Our pay:<method>:<code> buttons -> Platega paymentMethod codes.
@@ -77,6 +80,33 @@ async def cb_buy(call: CallbackQuery) -> None:
     text, markup = await _tariffs_view(call.from_user.id)
     await safe_edit(call.message, text, reply_markup=markup)
     await call.answer()
+
+
+@router.callback_query(F.data.startswith("promo:"))
+async def cb_promo(call: CallbackQuery) -> None:
+    """User tapped a 'Купить со скидкой' button from a broadcast: set the offer
+    (applies to *all* tariffs) and open the buy screen with the discount."""
+    try:
+        _, pct_s, days_s = call.data.split(":")
+        pct, days = int(pct_s), int(days_s)
+    except ValueError:
+        await call.answer()
+        return
+    if not (0 < pct < 100) or days <= 0:
+        await call.answer()
+        return
+    await set_offer(
+        call.from_user.id, "promo", pct, utcnow() + timedelta(days=days)
+    )
+    text, markup = await _tariffs_view(call.from_user.id)
+    # The source may be a photo broadcast (no editable text) -> send a fresh msg.
+    await call.message.answer(text, reply_markup=markup)
+    await call.answer(f"Скидка −{pct}% активирована!")
+
+
+@router.callback_query(F.data == "chan:soon")
+async def cb_channel_soon(call: CallbackQuery) -> None:
+    await call.answer("Канал скоро откроется ✨", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("buy:tariff:"))
@@ -211,6 +241,11 @@ async def on_paid(message: Message) -> None:
     if tariff is None:
         tariff = tariffs.TARIFFS[0]  # defensive fallback
 
+    # Store the charged amount as rubles×100 (kopecks), like every other provider,
+    # so dashboard revenue stays correct (sp.total_amount is the star count).
+    user = await get_user(user_id)
+    amount_kopecks = discounts.apply(tariff.price_rub, discounts.active_offer(user)) * 100
+
     # Provision first; mark paid only on success — refund on failure so the rule
     # "paid -> served OR refunded" always holds.
     try:
@@ -219,7 +254,7 @@ async def on_paid(message: Message) -> None:
             user_id,
             tariff,
             invoice_id=invoice_id,
-            amount_paid=sp.total_amount,
+            amount_paid=amount_kopecks,
         )
     except Exception:  # noqa: BLE001
         logger.exception("Provisioning failed after payment by %s; refunding", user_id)

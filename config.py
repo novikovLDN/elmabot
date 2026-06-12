@@ -131,6 +131,11 @@ USE_WEBHOOK = bool(WEBHOOK_BASE_URL)
 REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)
 EXPIRY_INTERVAL_SECONDS = _get_int("EXPIRY_INTERVAL_SECONDS", 600)
 
+# --- Channel ---
+# Public channel link for the "Перейти в канал" broadcast button. Empty = the
+# button shows a "скоро" stub (channel not created yet).
+CHANNEL_URL = _get_str("CHANNEL_URL", "")
+
 # --- Broadcast (admin fan-out) ---
 # Telegram throttles bulk sends to ~30 msg/s to *different* users before it
 # returns 429/RetryAfter. We pace strictly below that and cap in-flight sends so

@@ -15,25 +15,40 @@ from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.format import fmt_dt, fmt_rub, subscription_text
 from app.keyboards import (
-    admin_broadcast_confirm,
+    admin_broadcast_builder,
     admin_broadcast_segments,
     admin_dashboard_actions,
     admin_grant_cancel,
     admin_menu,
+    admin_pager,
     admin_user_actions,
+    broadcast_user_markup,
 )
 from app.services import broadcaster, subscription_service
+from app.tariffs import get_tariff
 from app.utils import safe_edit, safe_send
-from config import ADMIN_TELEGRAM_ID, SUPPORT_USERNAME
+from config import ADMIN_TELEGRAM_ID, REFERRAL_BONUS_DAYS, SUPPORT_USERNAME
 from database import (
+    ACTIVITY_WINDOWS,
+    REVENUE_WINDOWS,
+    SEGMENTS,
+    activity_windows,
     find_user_by_username,
     get_subscription,
     get_user,
     payment_history,
+    payments_count,
+    payments_page,
     recipients,
+    referral_leaderboard,
+    referral_leaderboard_count,
+    referral_stats,
+    revenue_windows,
+    segment_count,
     revoke_subscription,
     stats,
 )
@@ -76,6 +91,23 @@ class GrantAccess(StatesGroup):
 
 class Broadcast(StatesGroup):
     waiting_message = State()
+    waiting_discount_pct = State()
+    waiting_discount_days = State()
+
+
+class RefFind(StatesGroup):
+    waiting_query = State()
+
+
+PAGE_SIZE = 10
+
+_PROVIDER_LABEL = {"sbp": "СБП", "card": "Карта", "stars": "Stars", "unknown": "—"}
+_STATUS_LABEL = {
+    "paid": "🟢 Успешно",
+    "failed": "🔴 Ошибка",
+    "pending": "🟡 Ожидает",
+    "refunded": "↩️ Возврат",
+}
 
 
 # --- Flexible duration parsing (admin grant) -------------------------------
@@ -172,23 +204,186 @@ async def cb_admin_home(call: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data == "admin:stats")
 async def cb_stats(call: CallbackQuery) -> None:
     s = await stats()
+    act = await activity_windows()
+    rev = await revenue_windows()
+
+    # New users / trial activations per window (24h / 7d / 30d).
+    activity_lines = []
+    for label, hours in ACTIVITY_WINDOWS:
+        activity_lines.append(
+            f"• {label}: 👥 {act[f'signup_{hours}']} · 🆓 {act[f'trial_{hours}']}"
+        )
+
+    # Revenue per window across all providers (true rubles).
+    revenue_lines = []
+    for label, days in REVENUE_WINDOWS:
+        revenue_lines.append(
+            f"• {label}: <b>{fmt_rub(rev[f'rev_{days}'])}</b> ({rev[f'cnt_{days}']} шт.)"
+        )
+
     text = (
         "📊 <b>Дашборд ELMA</b>\n\n"
         "👥 <b>Пользователи</b>\n"
         f"• Новые сегодня: <b>{s['users_today']}</b>\n"
         f"• Всего: <b>{s['users_total']}</b> (на связи: {s['users_reachable']})\n\n"
+        "📈 <b>Приходят / активируют триал</b> (👥 новые · 🆓 триал)\n"
+        + "\n".join(activity_lines) + "\n\n"
         "🚀 <b>Активации подписки</b> (вкл. триал)\n"
         f"• Всего активаций: <b>{s['activated_total']}</b>\n"
-        f"• 🆓 Триал: <b>{s['trials_used']}</b>\n"
+        f"• 🆓 Триал всего: <b>{s['trials_used']}</b>\n"
         f"• 💳 Купили: <b>{s['buyers']}</b>\n"
         f"• ✅ Активны сейчас: <b>{s['subs_active']}</b>\n\n"
-        "💰 <b>Финансы</b> (все платёжные системы)\n"
-        f"• Заработано сегодня: <b>{fmt_rub(s['revenue_today'])}</b>\n"
-        f"• Всего: <b>{fmt_rub(s['revenue_total'])}</b>\n"
-        f"• Платежей: <b>{s['payments_paid']}</b>"
+        "💰 <b>Выручка по периодам</b> (все платёжные системы)\n"
+        + "\n".join(revenue_lines) + "\n"
+        f"• <b>Всего:</b> <b>{fmt_rub(rev['rev_total'])}</b> ({rev['cnt_total']} платежей)"
     )
     await safe_edit(call.message, text, reply_markup=admin_dashboard_actions())
     await call.answer()
+
+
+# --- Helpers ---------------------------------------------------------------
+
+def _who(username: str | None, tg_id: int) -> str:
+    return f"@{username}" if username else f"id{tg_id}"
+
+
+async def _resolve_user(query: str):
+    """Look up a user by telegram_id or @username (shared by the find screens)."""
+    query = query.strip()
+    if query.lstrip("-").isdigit():
+        return await get_user(int(query))
+    if query.startswith("@") or query.isalnum():
+        return await find_user_by_username(query)
+    return None
+
+
+def _back_kb(*buttons: tuple[str, str]) -> InlineKeyboardBuilder:
+    kb = InlineKeyboardBuilder()
+    for text, cb in buttons:
+        kb.button(text=text, callback_data=cb)
+    kb.adjust(1)
+    return kb
+
+
+# --- Payments tab ----------------------------------------------------------
+
+@router.callback_query(F.data.startswith("admin:pay:"))
+async def cb_payments(call: CallbackQuery) -> None:
+    page = max(0, int(call.data.rsplit(":", 1)[1]))
+    total = await payments_count()
+    offset = page * PAGE_SIZE
+    rows = await payments_page(offset, PAGE_SIZE)
+
+    if not rows:
+        text = "💳 <b>Платежи</b>\n\nПока нет платежей."
+    else:
+        blocks = [f"💳 <b>Платежи</b> · {offset + 1}–{offset + len(rows)} из {total}"]
+        for r in rows:
+            status = _STATUS_LABEL.get(r["status"], r["status"])
+            provider = _PROVIDER_LABEL.get(r["provider"], r["provider"] or "—")
+            tariff = get_tariff(r["tariff_code"]) if r["tariff_code"] else None
+            term = tariff.title if tariff else "—"
+            who = _who(r["username"], r["telegram_id"])
+            when = fmt_dt(r["paid_at"] or r["created_at"])
+            block = (
+                f"{status} · <b>{fmt_rub(r['amount_kopecks'])}</b> · {provider} · {term}\n"
+                f"{html.escape(who)} · <code>{r['telegram_id']}</code> · {when}"
+            )
+            if r["status"] == "failed" and r["fail_reason"]:
+                block += f"\n🔴 <i>{html.escape(r['fail_reason'])}</i>"
+            blocks.append(block)
+        text = "\n\n".join(blocks)
+
+    await safe_edit(
+        call.message,
+        text,
+        reply_markup=admin_pager(
+            "admin:pay", page, has_prev=page > 0, has_next=offset + PAGE_SIZE < total
+        ),
+    )
+    await call.answer()
+
+
+# --- Referrals tab ---------------------------------------------------------
+
+def _ref_block(r) -> str:
+    earned = r["purchased"] * REFERRAL_BONUS_DAYS
+    return (
+        f"{html.escape(_who(r['username'], r['referrer_id']))} · "
+        f"<code>{r['referrer_id']}</code>\n"
+        f"  👥 приглашено: <b>{r['invited']}</b> · 💳 оплатили: "
+        f"<b>{r['purchased']}</b> · 🎁 заработал: <b>{earned} дн.</b>"
+    )
+
+
+@router.callback_query(F.data.startswith("admin:ref:"))
+async def cb_referrals(call: CallbackQuery, state: FSMContext) -> None:
+    await state.clear()
+    page = max(0, int(call.data.rsplit(":", 1)[1]))
+    total = await referral_leaderboard_count()
+    offset = page * PAGE_SIZE
+    rows = await referral_leaderboard(offset, PAGE_SIZE)
+
+    if not rows:
+        text = "🫂 <b>Рефералы</b>\n\nПока никто никого не пригласил."
+    else:
+        head = (
+            f"🫂 <b>Реферальная статистика</b> · {offset + 1}–{offset + len(rows)} из {total}\n"
+            f"<i>+{REFERRAL_BONUS_DAYS} дн. за каждого оплатившего друга</i>"
+        )
+        text = head + "\n\n" + "\n\n".join(_ref_block(r) for r in rows)
+
+    await safe_edit(
+        call.message,
+        text,
+        reply_markup=admin_pager(
+            "admin:ref",
+            page,
+            has_prev=page > 0,
+            has_next=offset + PAGE_SIZE < total,
+            extra=[("🔍 Найти пользователя", "admin:reffind")],
+        ),
+    )
+    await call.answer()
+
+
+@router.callback_query(F.data == "admin:reffind")
+async def cb_ref_find(call: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(RefFind.waiting_query)
+    await call.message.edit_text(
+        "🔍 <b>Реферальная статистика пользователя</b>\n\n"
+        "Пришлите <b>telegram_id</b> или <b>@username</b> — покажу только его "
+        "реферальную статистику.\n\n"
+        "<i>Это отдельный поиск: основной поиск пользователя в дашборде он не "
+        "затрагивает.</i>",
+        parse_mode="HTML",
+        reply_markup=_back_kb(("⬅️ К рефералам", "admin:ref:0")).as_markup(),
+    )
+    await call.answer()
+
+
+@router.message(StateFilter(RefFind.waiting_query))
+async def on_ref_find(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    user = await _resolve_user(message.text or "")
+    back = _back_kb(
+        ("⬅️ К рефералам", "admin:ref:0"), ("🏠 Админка", "admin:home")
+    ).as_markup()
+    if user is None:
+        await message.answer("Пользователь не найден.", reply_markup=back)
+        return
+    rs = await referral_stats(user["telegram_id"])
+    earned = rs["purchased"] * REFERRAL_BONUS_DAYS
+    await message.answer(
+        "🫂 <b>Реферальная статистика</b>\n\n"
+        f"{html.escape(_who(user['username'], user['telegram_id']))} · "
+        f"<code>{user['telegram_id']}</code>\n\n"
+        f"👥 Приглашено: <b>{rs['invited']}</b>\n"
+        f"💳 Оплатили: <b>{rs['purchased']}</b>\n"
+        f"🎁 Заработал: <b>{earned} дн.</b>",
+        parse_mode="HTML",
+        reply_markup=back,
+    )
 
 
 # --- Find user -------------------------------------------------------------
@@ -326,8 +521,9 @@ async def cb_history(call: CallbackQuery) -> None:
         return
     lines = ["🧾 <b>История платежей</b>", ""]
     for r in rows:
+        status = _STATUS_LABEL.get(r["status"], r["status"])
         lines.append(
-            f"{fmt_dt(r['created_at'])} — {r['amount_kopecks']}⭐ — {r['status']}"
+            f"{fmt_dt(r['created_at'])} — {fmt_rub(r['amount_kopecks'])} — {status}"
         )
     await call.message.edit_text(
         "\n".join(lines), parse_mode="HTML", reply_markup=admin_user_actions(target)
@@ -341,7 +537,11 @@ async def cb_history(call: CallbackQuery) -> None:
 async def cb_broadcast(call: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
     await call.message.edit_text(
-        "📢 Выберите сегмент рассылки:", reply_markup=admin_broadcast_segments()
+        "📢 <b>Рассылка</b>\n\nВыберите сегмент получателей 👇\n\n"
+        "<i>На следующем шаге пришлёте сообщение и при желании добавите кнопки "
+        "(скидка / канал).</i>",
+        parse_mode="HTML",
+        reply_markup=admin_broadcast_segments(),
     )
     await call.answer()
 
@@ -349,19 +549,55 @@ async def cb_broadcast(call: CallbackQuery, state: FSMContext) -> None:
 @router.callback_query(F.data.startswith("bcast:") & ~(F.data == "bcast:send"))
 async def cb_segment(call: CallbackQuery, state: FSMContext) -> None:
     segment = call.data.split(":")[1]
-    await state.update_data(segment=segment)
+    if segment not in SEGMENTS:
+        await call.answer()
+        return
+    label = SEGMENTS[segment][0]
+    count = await segment_count(segment)
+    await state.update_data(
+        segment=segment, disc_pct=None, disc_days=None, channel=False
+    )
     await state.set_state(Broadcast.waiting_message)
     await call.message.edit_text(
-        f"📢 Сегмент: <b>{segment}</b>\n\n{BROADCAST_HELP}",
+        f"📢 Сегмент: <b>{label}</b> · получателей: <b>{count}</b>\n\n{BROADCAST_HELP}",
         parse_mode="HTML",
     )
     await call.answer()
 
 
+async def _builder_view(state: FSMContext) -> tuple[str, object]:
+    """Text + keyboard for the compose step (after the message is captured)."""
+    data = await state.get_data()
+    label = SEGMENTS.get(data["segment"], (data["segment"],))[0]
+    count = await segment_count(data["segment"])
+    lines = [
+        "📢 <b>Готово к отправке</b>",
+        f"Сегмент: <b>{label}</b> · получателей: <b>{count}</b>",
+        "",
+    ]
+    if data.get("disc_pct"):
+        lines.append(
+            f"🔥 Кнопка скидки: <b>−{data['disc_pct']}%</b> на {data['disc_days']} дн."
+        )
+    if data.get("channel"):
+        lines.append("📣 Кнопка «Перейти в канал»: <b>вкл.</b>")
+    lines.append("")
+    lines.append(
+        "<i>Добавьте кнопки к сообщению (по желанию) и нажмите «Отправить». "
+        "Скидка применится ко всем тарифам у того, кто нажмёт кнопку.</i>"
+    )
+    markup = admin_broadcast_builder(
+        disc_pct=data.get("disc_pct"),
+        disc_days=data.get("disc_days"),
+        channel=data.get("channel", False),
+    )
+    return "\n".join(lines), markup
+
+
 @router.message(StateFilter(Broadcast.waiting_message))
 async def on_broadcast_message(message: Message, state: FSMContext) -> None:
     """Capture the broadcast content, render an HTML preview (which also
-    validates the markup), and ask for confirmation."""
+    validates the markup), then open the button builder."""
     photo_id = message.photo[-1].file_id if message.photo else None
     text = (message.caption if photo_id else message.text) or ""
 
@@ -391,15 +627,59 @@ async def on_broadcast_message(message: Message, state: FSMContext) -> None:
         return
 
     await state.update_data(photo_id=photo_id, text=text)
-    data = await state.get_data()
-    count = len(await recipients(data["segment"]))
-    await message.answer(
-        "👆 Так увидят получатели.\n\n"
-        f"Сегмент: <b>{data['segment']}</b> · получателей: <b>{count}</b>.\n"
-        "Отправить рассылку?",
+    await state.set_state(None)  # button builder is callback-driven
+    body, markup = await _builder_view(state)
+    await message.answer("👆 Так увидят получатели.\n\n" + body, reply_markup=markup)
+
+
+@router.callback_query(F.data == "bcastbtn:disc")
+async def cb_btn_discount(call: CallbackQuery, state: FSMContext) -> None:
+    await state.set_state(Broadcast.waiting_discount_pct)
+    await call.message.edit_text(
+        "💸 <b>Кнопка «Купить со скидкой»</b>\n\n"
+        "Введите <b>размер скидки в процентах</b> (1–99).\n"
+        "Например: <code>20</code>\n\n"
+        "<i>Скидка применится ко всем тарифам у пользователя, который нажмёт "
+        "кнопку.</i>",
         parse_mode="HTML",
-        reply_markup=admin_broadcast_confirm(),
     )
+    await call.answer()
+
+
+@router.message(StateFilter(Broadcast.waiting_discount_pct))
+async def on_discount_pct(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip().rstrip("%")
+    if not raw.isdigit() or not (0 < int(raw) < 100):
+        await message.answer("⚠️ Нужно целое число 1–99. Попробуйте ещё раз.")
+        return
+    await state.update_data(disc_pct=int(raw))
+    await state.set_state(Broadcast.waiting_discount_days)
+    await message.answer(
+        "📅 Теперь введите, <b>на сколько дней</b> действует скидка (1–365).\n"
+        "Например: <code>3</code>",
+        parse_mode="HTML",
+    )
+
+
+@router.message(StateFilter(Broadcast.waiting_discount_days))
+async def on_discount_days(message: Message, state: FSMContext) -> None:
+    raw = (message.text or "").strip()
+    if not raw.isdigit() or not (0 < int(raw) <= 365):
+        await message.answer("⚠️ Нужно целое число 1–365. Попробуйте ещё раз.")
+        return
+    await state.update_data(disc_days=int(raw))
+    await state.set_state(None)
+    body, markup = await _builder_view(state)
+    await message.answer(body, reply_markup=markup)
+
+
+@router.callback_query(F.data == "bcastbtn:chan")
+async def cb_btn_channel(call: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    await state.update_data(channel=not data.get("channel", False))
+    body, markup = await _builder_view(state)
+    await safe_edit(call.message, body, reply_markup=markup)
+    await call.answer()
 
 
 @router.callback_query(F.data == "bcast:send")
@@ -409,6 +689,9 @@ async def cb_send_broadcast(call: CallbackQuery, state: FSMContext) -> None:
     if "segment" not in data or "text" not in data:
         await call.answer("Нет данных рассылки", show_alert=True)
         return
+    markup = broadcast_user_markup(
+        data.get("disc_pct"), data.get("disc_days"), data.get("channel", False)
+    )
     await call.message.edit_text("📤 Рассылка запущена…")
     await call.answer()
     asyncio.create_task(
@@ -418,12 +701,18 @@ async def cb_send_broadcast(call: CallbackQuery, state: FSMContext) -> None:
             data.get("photo_id"),
             data["text"],
             call.from_user.id,
+            markup,
         )
     )
 
 
 async def _run_broadcast(
-    bot: Bot, segment: str, photo_id: str | None, text: str, admin_id: int
+    bot: Bot,
+    segment: str,
+    photo_id: str | None,
+    text: str,
+    admin_id: int,
+    markup=None,
 ) -> None:
     ids = await recipients(segment)
     total = len(ids)
@@ -431,10 +720,13 @@ async def _run_broadcast(
     async def send_one(uid: int) -> None:
         if photo_id:
             await bot.send_photo(
-                uid, photo_id, caption=text or None, parse_mode="HTML"
+                uid, photo_id, caption=text or None, parse_mode="HTML",
+                reply_markup=markup,
             )
         else:
-            await bot.send_message(uid, text, parse_mode="HTML")
+            await bot.send_message(
+                uid, text, parse_mode="HTML", reply_markup=markup
+            )
 
     async def progress(res: broadcaster.BroadcastResult) -> None:
         await safe_send(

@@ -174,11 +174,25 @@ async def mark_payment_paid(
         """
         INSERT INTO payments (telegram_id, invoice_id, amount_kopecks, status, paid_at)
         VALUES ($1, $2, $3, 'paid', NOW())
-        ON CONFLICT (invoice_id) DO UPDATE SET status = 'paid', paid_at = NOW()
+        ON CONFLICT (invoice_id) DO UPDATE
+            SET status = 'paid', paid_at = NOW(), fail_reason = NULL
         """,
         telegram_id,
         invoice_id,
         amount or 0,
+    )
+
+
+async def mark_payment_failed(invoice_id: str, reason: str) -> None:
+    """Record a failed/cancelled payment with the reason for the admin tab."""
+    pool = get_pool()
+    await pool.execute(
+        """
+        UPDATE payments SET status = 'failed', fail_reason = $2
+        WHERE invoice_id = $1 AND status <> 'paid'
+        """,
+        invoice_id,
+        reason[:500],
     )
 
 
@@ -353,31 +367,137 @@ async def payment_history(telegram_id: int, limit: int = 10) -> list[asyncpg.Rec
     )
 
 
+async def payments_count() -> int:
+    pool = get_pool()
+    return await pool.fetchval("SELECT COUNT(*) FROM payments")
+
+
+async def payments_page(offset: int, limit: int) -> list[asyncpg.Record]:
+    """One page of payments (newest first) joined with the buyer's username, for
+    the admin Payments tab."""
+    pool = get_pool()
+    return await pool.fetch(
+        """
+        SELECT p.telegram_id, u.username, p.amount_kopecks, p.provider,
+               p.status, p.tariff_code, p.fail_reason, p.created_at, p.paid_at
+        FROM payments p
+        LEFT JOIN users u ON u.telegram_id = p.telegram_id
+        ORDER BY p.created_at DESC
+        OFFSET $1 LIMIT $2
+        """,
+        offset,
+        limit,
+    )
+
+
+# Revenue windows shown on the dashboard: label -> day count.
+REVENUE_WINDOWS: list[tuple[str, int]] = [
+    ("3 дня", 3),
+    ("7 дней", 7),
+    ("14 дней", 14),
+    ("30 дней", 30),
+    ("3 месяца", 90),
+    ("6 месяцев", 180),
+    ("1 год", 365),
+]
+
+
+async def revenue_windows() -> dict:
+    """Paid revenue (kopecks) and purchase counts per time window, across ALL
+    providers. Amounts are true rubles ×100 (see billing: every provider stores
+    the charged ruble price in ``amount_kopecks``)."""
+    pool = get_pool()
+    parts = []
+    for _, days in REVENUE_WINDOWS:
+        parts.append(
+            f"COALESCE(SUM(amount_kopecks) FILTER "
+            f"(WHERE paid_at >= now() - interval '{days} days'), 0) AS rev_{days}"
+        )
+        parts.append(
+            f"COUNT(*) FILTER "
+            f"(WHERE paid_at >= now() - interval '{days} days') AS cnt_{days}"
+        )
+    parts.append("COALESCE(SUM(amount_kopecks), 0) AS rev_total")
+    parts.append("COUNT(*) AS cnt_total")
+    row = await pool.fetchrow(
+        f"SELECT {', '.join(parts)} FROM payments WHERE status = 'paid'"
+    )
+    return dict(row)
+
+
+# Activity windows for the dashboard: label -> hours.
+ACTIVITY_WINDOWS: list[tuple[str, int]] = [
+    ("24 часа", 24),
+    ("7 дней", 24 * 7),
+    ("30 дней", 24 * 30),
+]
+
+
+async def activity_windows() -> dict:
+    """New signups and trial activations per window (24h / 7d / 30d)."""
+    pool = get_pool()
+    parts = []
+    for _, hours in ACTIVITY_WINDOWS:
+        parts.append(
+            f"COUNT(*) FILTER (WHERE created_at >= now() - interval '{hours} hours') "
+            f"AS signup_{hours}"
+        )
+        parts.append(
+            f"COUNT(*) FILTER (WHERE trial_used_at >= now() - interval '{hours} hours') "
+            f"AS trial_{hours}"
+        )
+    row = await pool.fetchrow(f"SELECT {', '.join(parts)} FROM users")
+    return dict(row)
+
+
 # --- Broadcast segments ----------------------------------------------------
+
+# Broadcast segments: code -> (human label, SQL WHERE over `users u`).
+# All filtered to reachable users. "bought" = a paid payment exists; a paid
+# purchase always leaves a subscriptions row, so "no sub at all" implies no buy.
+_PAID_EXISTS = "EXISTS (SELECT 1 FROM payments p WHERE p.telegram_id = u.telegram_id AND p.status = 'paid')"
+_SUB_EXISTS = "EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id)"
+_ACTIVE_SUB = "EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id AND s.status = 'active')"
+
+SEGMENTS: dict[str, tuple[str, str]] = {
+    "all": ("Все", "TRUE"),
+    "active": ("Активная подписка", _ACTIVE_SUB),
+    "cold": (
+        "Холодные (без триала и подписки)",
+        f"u.trial_used_at IS NULL AND NOT {_SUB_EXISTS}",
+    ),
+    "trial_no_buy": (
+        "Триал без покупки",
+        f"u.trial_used_at IS NOT NULL AND NOT {_PAID_EXISTS}",
+    ),
+    "trial_ended_3d": (
+        "Триал истёк 3+ дней назад, без покупки",
+        f"u.trial_used_at IS NOT NULL AND NOT {_PAID_EXISTS} "
+        "AND u.trial_expires_at < now() - interval '3 days'",
+    ),
+    "never_sub": ("Без подписок вообще", f"NOT {_SUB_EXISTS}"),
+}
+
 
 async def recipients(segment: str) -> list[int]:
     """Return reachable telegram_ids for a broadcast segment."""
-    pool = get_pool()
-    if segment == "all":
-        rows = await pool.fetch(
-            "SELECT telegram_id FROM users WHERE is_reachable"
-        )
-    elif segment == "active":
-        rows = await pool.fetch(
-            """
-            SELECT u.telegram_id FROM users u
-            JOIN subscriptions s ON s.telegram_id = u.telegram_id
-            WHERE u.is_reachable AND s.status = 'active'
-            """
-        )
-    elif segment == "no_sub":
-        rows = await pool.fetch(
-            """
-            SELECT u.telegram_id FROM users u
-            LEFT JOIN subscriptions s ON s.telegram_id = u.telegram_id
-            WHERE u.is_reachable AND (s.telegram_id IS NULL OR s.status <> 'active')
-            """
-        )
-    else:
+    entry = SEGMENTS.get(segment)
+    if entry is None:
         raise ValueError(f"unknown segment {segment!r}")
+    where = entry[1]
+    pool = get_pool()
+    rows = await pool.fetch(
+        f"SELECT u.telegram_id FROM users u WHERE u.is_reachable AND ({where})"
+    )
     return [r["telegram_id"] for r in rows]
+
+
+async def segment_count(segment: str) -> int:
+    """Count of recipients in a segment (cheap preview, no id list)."""
+    entry = SEGMENTS.get(segment)
+    if entry is None:
+        raise ValueError(f"unknown segment {segment!r}")
+    pool = get_pool()
+    return await pool.fetchval(
+        f"SELECT COUNT(*) FROM users u WHERE u.is_reachable AND ({entry[1]})"
+    )

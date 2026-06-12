@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS payments (
 );
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'unknown';
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS tariff_code TEXT;
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS fail_reason TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_subs_expiry
     ON subscriptions(expires_at) WHERE status = 'active';

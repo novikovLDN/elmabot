@@ -189,6 +189,8 @@ def referral_keyboard(share_url: str) -> InlineKeyboardMarkup:
 def admin_menu() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="📊 Дашборд", callback_data="admin:stats")
+    kb.button(text="💳 Платежи", callback_data="admin:pay:0")
+    kb.button(text="🫂 Рефералы", callback_data="admin:ref:0")
     kb.button(text="👤 Найти пользователя", callback_data="admin:find")
     kb.button(text="📢 Рассылка", callback_data="admin:broadcast")
     kb.adjust(1)
@@ -198,9 +200,33 @@ def admin_menu() -> InlineKeyboardMarkup:
 def admin_dashboard_actions() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="🔄 Обновить", callback_data="admin:stats")
+    kb.button(text="💳 Платежи", callback_data="admin:pay:0")
+    kb.button(text="🫂 Рефералы", callback_data="admin:ref:0")
     kb.button(text="👤 Найти пользователя", callback_data="admin:find")
     kb.button(text="⬅️ Админка", callback_data="admin:home")
     kb.adjust(1)
+    return kb.as_markup()
+
+
+def admin_pager(prefix: str, page: int, *, has_prev: bool, has_next: bool, extra=None) -> InlineKeyboardMarkup:
+    """Left/right pager used by the Payments and Referrals tabs. ``prefix`` is the
+    callback stem (e.g. ``admin:pay``); ``extra`` is a list of (text, cb) rows
+    added above the navigation."""
+    kb = InlineKeyboardBuilder()
+    for text, cb in (extra or []):
+        kb.button(text=text, callback_data=cb)
+    if has_prev:
+        kb.button(text="⬅️ Назад", callback_data=f"{prefix}:{page - 1}")
+    if has_next:
+        kb.button(text="Вперёд ➡️", callback_data=f"{prefix}:{page + 1}")
+    kb.button(text="🏠 Админка", callback_data="admin:home")
+    # one row for nav arrows, the rest stacked
+    nav = (1 if has_prev else 0) + (1 if has_next else 0)
+    layout = [1] * len(extra or [])
+    if nav:
+        layout.append(nav)
+    layout.append(1)
+    kb.adjust(*layout)
     return kb.as_markup()
 
 
@@ -221,18 +247,60 @@ def admin_grant_cancel(telegram_id: int) -> InlineKeyboardMarkup:
 
 
 def admin_broadcast_segments() -> InlineKeyboardMarkup:
+    """One button per segment, labelled from the DB segment registry."""
+    from database import SEGMENTS
+
     kb = InlineKeyboardBuilder()
-    kb.button(text="Все", callback_data="bcast:all")
-    kb.button(text="Активные", callback_data="bcast:active")
-    kb.button(text="Без подписки", callback_data="bcast:no_sub")
+    for code, (label, _sql) in SEGMENTS.items():
+        kb.button(text=label, callback_data=f"bcast:{code}")
     kb.button(text="⬅️ Отмена", callback_data="admin:home")
     kb.adjust(1)
     return kb.as_markup()
 
 
-def admin_broadcast_confirm() -> InlineKeyboardMarkup:
+def admin_broadcast_builder(
+    *, disc_pct: int | None = None, disc_days: int | None = None, channel: bool = False
+) -> InlineKeyboardMarkup:
+    """Compose-step keyboard: optionally attach buttons, then send."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="✅ Отправить", callback_data="bcast:send")
+    if disc_pct:
+        kb.button(
+            text=f"✏️ Скидка: −{disc_pct}% / {disc_days} дн.",
+            callback_data="bcastbtn:disc",
+        )
+    else:
+        kb.button(text="💸 + Кнопка «Купить со скидкой»", callback_data="bcastbtn:disc")
+    kb.button(
+        text=("✅ Канал прикреплён" if channel else "📣 + Кнопка «Перейти в канал»"),
+        callback_data="bcastbtn:chan",
+    )
+    kb.button(text="🚀 Отправить рассылку", callback_data="bcast:send")
     kb.button(text="⬅️ Отмена", callback_data="admin:home")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def broadcast_user_markup(
+    disc_pct: int | None, disc_days: int | None, channel: bool
+) -> InlineKeyboardMarkup | None:
+    """The inline buttons attached to the message recipients receive."""
+    from config import CHANNEL_URL
+
+    kb = InlineKeyboardBuilder()
+    has_any = False
+    if disc_pct and disc_days:
+        kb.button(
+            text=f"🔥 Купить со скидкой −{disc_pct}%",
+            callback_data=f"promo:{disc_pct}:{disc_days}",
+        )
+        has_any = True
+    if channel:
+        if CHANNEL_URL:
+            kb.button(text="📣 Перейти в канал", url=CHANNEL_URL)
+        else:
+            kb.button(text="📣 Перейти в канал", callback_data="chan:soon")
+        has_any = True
+    if not has_any:
+        return None
     kb.adjust(1)
     return kb.as_markup()

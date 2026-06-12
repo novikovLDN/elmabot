@@ -160,6 +160,35 @@ async def referral_stats(referrer_id: int) -> dict:
     return dict(row)
 
 
+async def referral_leaderboard_count() -> int:
+    """Number of users who invited at least one friend (for pagination)."""
+    pool = get_pool()
+    return await pool.fetchval(
+        "SELECT COUNT(DISTINCT referrer_id) FROM referrals"
+    )
+
+
+async def referral_leaderboard(offset: int, limit: int) -> list[asyncpg.Record]:
+    """One page of referrers with invited / purchased counts (biggest impact
+    first), joined with their username, for the admin Referrals tab."""
+    pool = get_pool()
+    return await pool.fetch(
+        """
+        SELECT r.referrer_id,
+               u.username,
+               COUNT(*)                                      AS invited,
+               COUNT(*) FILTER (WHERE r.status = 'credited') AS purchased
+        FROM referrals r
+        LEFT JOIN users u ON u.telegram_id = r.referrer_id
+        GROUP BY r.referrer_id, u.username
+        ORDER BY purchased DESC, invited DESC, r.referrer_id
+        OFFSET $1 LIMIT $2
+        """,
+        offset,
+        limit,
+    )
+
+
 # --- Personal offers / discounts ------------------------------------------
 
 async def set_offer(telegram_id: int, code: str, pct: int, expires_at) -> None:
