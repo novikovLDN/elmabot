@@ -12,7 +12,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.format import fmt_date
 from app.keyboards import cabinet_keyboard, main_menu_keyboard
-from app.utils import safe_edit
+from app.utils import safe_edit, send_screen, show_screen
 from config import (
     DEVICE_LIMIT,
     PRIVACY_POLICY_URL,
@@ -208,13 +208,13 @@ async def _cabinet_view(uid: int):
 @router.message(Command("account"))
 async def cmd_account(message: Message) -> None:
     text, markup = await _cabinet_view(message.from_user.id)
-    await message.answer(text, reply_markup=markup)
+    await send_screen(message.bot, message.chat.id, "cabinet", text, reply_markup=markup)
 
 
 @router.callback_query(F.data == "menu:cabinet")
 async def cb_cabinet(call: CallbackQuery) -> None:
     text, markup = await _cabinet_view(call.from_user.id)
-    await safe_edit(call.message, text, reply_markup=markup)
+    await show_screen(call.message, "cabinet", text, reply_markup=markup)
     await call.answer()
 
 

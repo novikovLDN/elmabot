@@ -34,7 +34,7 @@ from app.keyboards import (
 )
 from app.handlers.menu import show_main
 from app.services import billing, happ_crypto, incy_crypto, subscription_service
-from app.utils import safe_edit
+from app.utils import safe_edit, send_screen, show_screen
 from config import (
     APP_ANDROID_URL,
     APP_ANDROIDTV_URL,
@@ -337,7 +337,7 @@ async def cb_claim(call: CallbackQuery) -> None:
             await safe_edit(call.message, TRIAL_USED, reply_markup=buy_keyboard())
             return
         text = SCREEN_2_PAID if current["source"] != "trial" else SCREEN_2_TRIAL
-        await safe_edit(call.message, text, reply_markup=devices_keyboard())
+        await show_screen(call.message, "devices", text, reply_markup=devices_keyboard())
         return
 
     # Trial newly activated -> welcome notification, then device selection.
@@ -345,19 +345,24 @@ async def cb_claim(call: CallbackQuery) -> None:
     # Tell the inviter their friend joined (bonus comes on first purchase).
     await billing.notify_referrer_on_trial(call.bot, user_id)
     await safe_edit(call.message, TRIAL_WELCOME)
-    await call.message.answer(SCREEN_2_TRIAL, reply_markup=devices_keyboard())
+    await send_screen(
+        call.bot, call.message.chat.id, "devices", SCREEN_2_TRIAL,
+        reply_markup=devices_keyboard(),
+    )
 
 
 @router.message(Command("connect"))
 async def cmd_connect(message: Message) -> None:
     text = await _device_select_text(message.from_user.id)
-    await message.answer(text, reply_markup=devices_keyboard())
+    await send_screen(
+        message.bot, message.chat.id, "devices", text, reply_markup=devices_keyboard()
+    )
 
 
 @router.callback_query(F.data == "dev:menu")
 async def cb_devices(call: CallbackQuery) -> None:
     text = await _device_select_text(call.from_user.id)
-    await safe_edit(call.message, text, reply_markup=devices_keyboard())
+    await show_screen(call.message, "devices", text, reply_markup=devices_keyboard())
     await call.answer()
 
 

@@ -11,8 +11,10 @@ Use :func:`app.utils.show_screen` (callbacks) and :func:`app.utils.send_screen`
 
 # screen key -> photo file_id (populated as the admin provides them)
 SCREEN_IMAGES: dict[str, str] = {
-    # "onb_welcome": "AgACAgIAAx...",
-    # "menu_main":   "AgACAgIAAx...",
+    # 👤 Личный кабинет
+    "cabinet": "AgACAgQAAxkBAAKdp2orzSZpDobx7J4m5sbMf--KVnyeAAIxDWsbbFlgUUyw3wuaKd_oAQADAgADeQADPAQ",
+    # 🫧 ELMA активирован — экран выбора устройства
+    "devices": "AgACAgQAAxkBAAKdq2orzVbXhIztj1r7BJsKyVsNNEwrAAIyDWsbbFlgUekFWRgF2ieaAQADAgADeQADPAQ",
 }
 
 

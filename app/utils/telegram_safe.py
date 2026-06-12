@@ -59,6 +59,17 @@ async def safe_edit(
     reply_markup: InlineKeyboardMarkup | None = None,
     **kw,
 ) -> Message | bool | None:
+    # A photo/media message can't be turned into a text message by editing, so
+    # navigating *away* from a photo screen means delete-and-resend. This keeps
+    # every existing safe_edit-based handler correct without changes.
+    if message.photo or message.video or message.animation or message.document:
+        try:
+            await message.delete()
+        except TelegramBadRequest:
+            pass
+        return await safe_send(
+            message.bot, message.chat.id, text, reply_markup=reply_markup
+        )
     try:
         return await message.edit_text(
             text, parse_mode="HTML", reply_markup=reply_markup, **kw
