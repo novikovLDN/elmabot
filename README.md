@@ -51,6 +51,12 @@
 - 🔗 Выдача подписки через панель **Remnawave** (`subscription_service`).
 - ⏳ Напоминания 24ч/3ч, авто-очистка истёкших, рассылка офферов.
 - 🛠 Админка: статистика, выдать/отозвать доступ, рассылка по сегментам.
+- 📢 Рассылка (`app/services/broadcaster.py`): фото с подписью или текст с
+  HTML-разметкой, превью перед отправкой (валидирует теги), строгий темп
+  `BROADCAST_RATE` (25/с, под лимитом Telegram ~30/с) с ограничением in-flight
+  и глобальным back-off на `RetryAfter` — рассчитано на 50k+ получателей без
+  тайм-аутов и без блокировки других корутин. Заблокировавшие бота помечаются
+  `unreachable`. Инструкция по форматированию показывается админу прямо в боте.
 
 ## Стек
 
@@ -110,6 +116,7 @@ python main.py
 | `WEBHOOK_BASE_URL` | публичный https-URL сервиса → бот работает на webhook (иначе polling). На Railway берётся из `RAILWAY_PUBLIC_DOMAIN` автоматически |
 | `WEBHOOK_PATH` | путь для апдейтов Telegram (default `webhook/telegram`) |
 | `TELEGRAM_WEBHOOK_SECRET` | секрет проверки апдейтов Telegram (default — из `BOT_TOKEN`) |
+| `BROADCAST_RATE` / `BROADCAST_CONCURRENCY` | темп рассылки (msg/s) и лимит одновременных отправок (default 25 / 20) |
 
 > **Транспорт.** Если задан `WEBHOOK_BASE_URL` (или есть `RAILWAY_PUBLIC_DOMAIN`),
 > бот поднимает один aiohttp-сервер на `$PORT` и принимает **и** апдейты Telegram

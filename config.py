@@ -131,6 +131,13 @@ USE_WEBHOOK = bool(WEBHOOK_BASE_URL)
 REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)
 EXPIRY_INTERVAL_SECONDS = _get_int("EXPIRY_INTERVAL_SECONDS", 600)
 
+# --- Broadcast (admin fan-out) ---
+# Telegram throttles bulk sends to ~30 msg/s to *different* users before it
+# returns 429/RetryAfter. We pace strictly below that and cap in-flight sends so
+# a 50k broadcast drips out steadily without flooding or starving other tasks.
+BROADCAST_RATE = _get_int("BROADCAST_RATE", 25)          # messages per second
+BROADCAST_CONCURRENCY = _get_int("BROADCAST_CONCURRENCY", 20)  # max in-flight
+
 # --- Support / contacts ---
 SUPPORT_USERNAME = _get_str("SUPPORT_USERNAME", "elma_supboperator").lstrip("@")
 SUPPORT_URL = f"https://t.me/{SUPPORT_USERNAME}"

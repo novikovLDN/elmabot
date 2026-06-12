@@ -4,12 +4,13 @@ Access is gated by a router-level filter — only ADMIN_TELEGRAM_ID reaches any
 handler here; everyone else falls through to the other routers.
 """
 import asyncio
+import html
 import logging
 import re
 from datetime import timedelta
 
 from aiogram import Bot, F, Router
-from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -24,14 +25,13 @@ from app.keyboards import (
     admin_menu,
     admin_user_actions,
 )
-from app.services import subscription_service
+from app.services import broadcaster, subscription_service
 from app.utils import safe_edit, safe_send
 from config import ADMIN_TELEGRAM_ID, SUPPORT_USERNAME
 from database import (
     find_user_by_username,
     get_subscription,
     get_user,
-    mark_unreachable,
     payment_history,
     recipients,
     revoke_subscription,
@@ -44,10 +44,26 @@ router = Router(name="admin")
 router.message.filter(F.from_user.id == ADMIN_TELEGRAM_ID)
 router.callback_query.filter(F.from_user.id == ADMIN_TELEGRAM_ID)
 
-# Broadcast tuning (§9): stay under Telegram's ~30 msg/s.
-BROADCAST_CONCURRENCY = 15
-BROADCAST_BATCH = 200
-BROADCAST_PAUSE = 2.0
+# Instruction shown to the admin when composing a broadcast. Tags are written
+# escaped so they render literally (the admin sees the actual tags to type).
+BROADCAST_HELP = (
+    "📋 <b>Как оформить рассылку</b>\n\n"
+    "• <b>Фото с текстом:</b> прикрепите фото и напишите текст в подписи под ним.\n"
+    "• <b>Только текст:</b> просто отправьте сообщение.\n\n"
+    "<b>Форматирование (HTML):</b>\n"
+    "<code>&lt;b&gt;жирный&lt;/b&gt;</code>\n"
+    "<code>&lt;i&gt;курсив&lt;/i&gt;</code>\n"
+    "<code>&lt;u&gt;подчёркнутый&lt;/u&gt;</code>\n"
+    "<code>&lt;s&gt;зачёркнутый&lt;/s&gt;</code>\n"
+    "<code>&lt;tg-spoiler&gt;спойлер&lt;/tg-spoiler&gt;</code>\n"
+    "<code>&lt;code&gt;моноширинный&lt;/code&gt;</code>\n"
+    "<code>&lt;a href=\"https://site.ru\"&gt;ссылка&lt;/a&gt;</code>\n"
+    "<code>&lt;blockquote&gt;цитата&lt;/blockquote&gt;</code>\n\n"
+    "⚠️ Пишите теги <b>текстом</b>, а не через меню форматирования Telegram.\n"
+    "Символы <code>&lt;</code> <code>&gt;</code> <code>&amp;</code> вне тегов "
+    "экранируйте: <code>&amp;lt;</code> <code>&amp;gt;</code> <code>&amp;amp;</code>.\n\n"
+    "После отправки я покажу превью — проверьте, как увидят пользователи."
+)
 
 
 class FindUser(StatesGroup):
@@ -336,8 +352,7 @@ async def cb_segment(call: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(segment=segment)
     await state.set_state(Broadcast.waiting_message)
     await call.message.edit_text(
-        f"Сегмент: <b>{segment}</b>\n\n"
-        "Пришлите сообщение (текст или фото с подписью), которое нужно разослать.",
+        f"📢 Сегмент: <b>{segment}</b>\n\n{BROADCAST_HELP}",
         parse_mode="HTML",
     )
     await call.answer()
@@ -345,11 +360,42 @@ async def cb_segment(call: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(StateFilter(Broadcast.waiting_message))
 async def on_broadcast_message(message: Message, state: FSMContext) -> None:
-    await state.update_data(src_chat=message.chat.id, src_msg=message.message_id)
+    """Capture the broadcast content, render an HTML preview (which also
+    validates the markup), and ask for confirmation."""
+    photo_id = message.photo[-1].file_id if message.photo else None
+    text = (message.caption if photo_id else message.text) or ""
+
+    if not photo_id and not text.strip():
+        await message.answer(
+            "⚠️ Пустое сообщение. Пришлите текст или фото с подписью.\n\n"
+            + BROADCAST_HELP
+        )
+        return
+
+    # Preview = exactly what recipients will get. A bad HTML tag raises here
+    # (shown to the admin) instead of failing for 50k users.
+    try:
+        if photo_id:
+            await message.bot.send_photo(
+                message.chat.id, photo_id, caption=text or None, parse_mode="HTML"
+            )
+        else:
+            await message.bot.send_message(message.chat.id, text, parse_mode="HTML")
+    except TelegramBadRequest as exc:
+        await message.answer(
+            "❌ <b>Ошибка в HTML-разметке:</b>\n"
+            f"<code>{html.escape(str(exc))}</code>\n\n"
+            "Исправьте теги и пришлите сообщение заново.",
+            parse_mode="HTML",
+        )
+        return
+
+    await state.update_data(photo_id=photo_id, text=text)
     data = await state.get_data()
     count = len(await recipients(data["segment"]))
     await message.answer(
-        f"Получателей в сегменте <b>{data['segment']}</b>: <b>{count}</b>.\n"
+        "👆 Так увидят получатели.\n\n"
+        f"Сегмент: <b>{data['segment']}</b> · получателей: <b>{count}</b>.\n"
         "Отправить рассылку?",
         parse_mode="HTML",
         reply_markup=admin_broadcast_confirm(),
@@ -360,7 +406,7 @@ async def on_broadcast_message(message: Message, state: FSMContext) -> None:
 async def cb_send_broadcast(call: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     await state.clear()
-    if "segment" not in data or "src_msg" not in data:
+    if "segment" not in data or "text" not in data:
         await call.answer("Нет данных рассылки", show_alert=True)
         return
     await call.message.edit_text("📤 Рассылка запущена…")
@@ -369,57 +415,46 @@ async def cb_send_broadcast(call: CallbackQuery, state: FSMContext) -> None:
         _run_broadcast(
             call.bot,
             data["segment"],
-            data["src_chat"],
-            data["src_msg"],
+            data.get("photo_id"),
+            data["text"],
             call.from_user.id,
         )
     )
 
 
 async def _run_broadcast(
-    bot: Bot, segment: str, src_chat: int, src_msg: int, admin_id: int
+    bot: Bot, segment: str, photo_id: str | None, text: str, admin_id: int
 ) -> None:
     ids = await recipients(segment)
-    sem = asyncio.Semaphore(BROADCAST_CONCURRENCY)
-    sent = 0
-    failed = 0
+    total = len(ids)
 
-    async def _one(uid: int) -> bool:
-        async with sem:
-            try:
-                await bot.copy_message(
-                    chat_id=uid, from_chat_id=src_chat, message_id=src_msg
-                )
-                return True
-            except TelegramRetryAfter as exc:
-                await asyncio.sleep(exc.retry_after)
-                try:
-                    await bot.copy_message(
-                        chat_id=uid, from_chat_id=src_chat, message_id=src_msg
-                    )
-                    return True
-                except Exception:  # noqa: BLE001
-                    return False
-            except TelegramForbiddenError:
-                await mark_unreachable(uid)
-                return False
-            except Exception:  # noqa: BLE001
-                logger.exception("Broadcast send failed for %s", uid)
-                return False
+    async def send_one(uid: int) -> None:
+        if photo_id:
+            await bot.send_photo(
+                uid, photo_id, caption=text or None, parse_mode="HTML"
+            )
+        else:
+            await bot.send_message(uid, text, parse_mode="HTML")
 
-    for i in range(0, len(ids), BROADCAST_BATCH):
-        batch = ids[i : i + BROADCAST_BATCH]
-        results = await asyncio.gather(
-            *(_one(uid) for uid in batch), return_exceptions=True
+    async def progress(res: broadcaster.BroadcastResult) -> None:
+        await safe_send(
+            bot,
+            admin_id,
+            f"📤 Рассылка: {res.processed}/{total} "
+            f"(✅ {res.sent} · 🚫 {res.blocked} · ⚠️ {res.failed})",
         )
-        for r in results:
-            if r is True:
-                sent += 1
-            else:
-                failed += 1
-        await asyncio.sleep(BROADCAST_PAUSE)
 
-    logger.info("Broadcast '%s' done: %d sent, %d failed", segment, sent, failed)
+    res = await broadcaster.broadcast(ids, send_one, progress=progress)
+    logger.info(
+        "Broadcast '%s' done: %d sent, %d blocked, %d failed",
+        segment, res.sent, res.blocked, res.failed,
+    )
     await safe_send(
-        bot, admin_id, f"✅ Рассылка завершена.\nОтправлено: {sent}\nОшибок: {failed}"
+        bot,
+        admin_id,
+        "✅ <b>Рассылка завершена</b>\n\n"
+        f"Всего: {total}\n"
+        f"Доставлено: {res.sent}\n"
+        f"Заблокировали бота: {res.blocked}\n"
+        f"Ошибки: {res.failed}",
     )
