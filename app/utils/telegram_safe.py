@@ -71,3 +71,57 @@ async def safe_edit(
     except TelegramForbiddenError:
         await mark_unreachable(message.chat.id)
     return None
+
+
+async def send_screen(
+    bot: Bot,
+    chat_id: int,
+    key: str,
+    text: str,
+    *,
+    reply_markup: InlineKeyboardMarkup | None = None,
+) -> Message | None:
+    """Send a screen as a photo+caption when an image is configured for ``key``
+    (see :mod:`app.screens`), otherwise as a plain text message. Falls back to
+    text if the photo send fails (e.g. a stale file_id)."""
+    from app.screens import screen_image
+
+    file_id = screen_image(key)
+    if file_id:
+        try:
+            return await bot.send_photo(
+                chat_id,
+                file_id,
+                caption=text,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+        except TelegramForbiddenError:
+            await mark_unreachable(chat_id)
+            return None
+        except TelegramBadRequest:
+            logger.exception("send_screen photo failed for %r; sending text", key)
+    return await safe_send(bot, chat_id, text, reply_markup=reply_markup)
+
+
+async def show_screen(
+    call_message: Message,
+    key: str,
+    text: str,
+    *,
+    reply_markup: InlineKeyboardMarkup | None = None,
+) -> Message | bool | None:
+    """Render a screen in response to a callback. Text screens are edited in
+    place; photo screens replace the message (text<->photo can't be edited in
+    place), so the old message is deleted and a fresh photo is sent."""
+    from app.screens import screen_image
+
+    if not screen_image(key):
+        return await safe_edit(call_message, text, reply_markup=reply_markup)
+    try:
+        await call_message.delete()
+    except TelegramBadRequest:
+        pass
+    return await send_screen(
+        call_message.bot, call_message.chat.id, key, text, reply_markup=reply_markup
+    )

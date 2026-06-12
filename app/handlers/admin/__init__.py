@@ -199,6 +199,29 @@ async def cb_admin_home(call: CallbackQuery, state: FSMContext) -> None:
     await call.answer()
 
 
+# --- file_id helper --------------------------------------------------------
+# An admin sends media to the bot (outside any flow) and gets its file_id back,
+# to wire as a screen photo. StateFilter(None) keeps it clear of the broadcast
+# compose step, which has its own photo handling.
+
+@router.message(StateFilter(None), F.photo | F.document | F.video | F.animation)
+async def admin_media_file_id(message: Message) -> None:
+    if message.photo:
+        kind, file_id = "фото", message.photo[-1].file_id
+    elif message.document:
+        kind, file_id = "документ", message.document.file_id
+    elif message.video:
+        kind, file_id = "видео", message.video.file_id
+    else:
+        kind, file_id = "анимация", message.animation.file_id
+    logger.info("Admin %s media file_id (%s): %s", message.from_user.id, kind, file_id)
+    await message.answer(
+        f"🖼 <b>file_id ({kind}):</b>\n<code>{file_id}</code>\n\n"
+        "Пришли мне его вместе с названием экрана — подключу фото к этому экрану.",
+        parse_mode="HTML",
+    )
+
+
 # --- Stats -----------------------------------------------------------------
 
 @router.callback_query(F.data == "admin:stats")
