@@ -1,7 +1,7 @@
 """Admin dashboard: stats, find user (grant/revoke/history), broadcast.
 
-Access is gated by a router-level filter — only ADMIN_TELEGRAM_ID reaches any
-handler here; everyone else falls through to the other routers.
+Access is gated by a router-level filter — only ADMIN_IDS reach any handler
+here; everyone else falls through to the other routers.
 """
 import asyncio
 import html
@@ -31,7 +31,7 @@ from app.keyboards import (
 from app.services import broadcaster, subscription_service
 from app.tariffs import get_tariff
 from app.utils import safe_edit, safe_send
-from config import ADMIN_TELEGRAM_ID, REFERRAL_BONUS_DAYS, SUPPORT_USERNAME
+from config import ADMIN_IDS, REFERRAL_BONUS_DAYS, SUPPORT_USERNAME
 from database import (
     ACTIVITY_WINDOWS,
     REVENUE_WINDOWS,
@@ -56,8 +56,8 @@ from database import (
 logger = logging.getLogger(__name__)
 
 router = Router(name="admin")
-router.message.filter(F.from_user.id == ADMIN_TELEGRAM_ID)
-router.callback_query.filter(F.from_user.id == ADMIN_TELEGRAM_ID)
+router.message.filter(F.from_user.id.in_(ADMIN_IDS))
+router.callback_query.filter(F.from_user.id.in_(ADMIN_IDS))
 
 # Instruction shown to the admin when composing a broadcast. Tags are written
 # escaped so they render literally (the admin sees the actual tags to type).

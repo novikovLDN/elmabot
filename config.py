@@ -29,6 +29,23 @@ def _get_int(name: str, default: int | None = None) -> int:
 # --- Telegram ---
 BOT_TOKEN = _get_str("BOT_TOKEN", "")
 ADMIN_TELEGRAM_ID = _get_int("ADMIN_TELEGRAM_ID", 0)
+# Extra admins: a second id via ADMIN_TELEGRAM_ID_2, and/or a comma-separated
+# list via ADMIN_TELEGRAM_IDS. ADMIN_IDS is the full set used to gate /admin.
+_ADMIN_ID_2 = _get_int("ADMIN_TELEGRAM_ID_2", 0)
+_ADMIN_IDS_RAW = _get_str("ADMIN_TELEGRAM_IDS", "")
+ADMIN_IDS = frozenset(
+    i
+    for i in (
+        ADMIN_TELEGRAM_ID,
+        _ADMIN_ID_2,
+        *(
+            int(p.strip())
+            for p in _ADMIN_IDS_RAW.replace(";", ",").split(",")
+            if p.strip().lstrip("-").isdigit()
+        ),
+    )
+    if i
+)
 
 # --- Database ---
 DATABASE_URL = _get_str("DATABASE_URL", "")
