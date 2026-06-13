@@ -16,7 +16,6 @@ subscription row (whose ``subscription_url`` powers "Активировать" /
 import html
 import io
 import logging
-from urllib.parse import quote
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject, CommandStart
@@ -33,7 +32,7 @@ from app.keyboards import (
     welcome_keyboard,
 )
 from app.handlers.menu import show_main
-from app.services import billing, happ_crypto, incy_crypto, subscription_service
+from app.services import billing, happ_crypto, subscription_service
 from app.utils import safe_edit, send_screen, show_screen
 from config import (
     APP_ANDROID_URL,
@@ -41,7 +40,6 @@ from config import (
     APP_IOS_URL,
     APP_MACOS_URL,
     APP_WINDOWS_URL,
-    CONNECT_PAGE_URL,
     TRIAL_DAYS,
 )
 from database import (
@@ -130,86 +128,87 @@ QR_CAPTION = "Ваш QR-код ELMA 🤍"
 
 # --- Device instruction screens (3-8) -------------------------------------
 #
-# The subscription key is injected into ``{key}`` by ``cb_device`` and shown as
-# a tap-to-copy code block; the screens have no "activate" button — the user
-# copies the key and pastes it into the app ("＋" → "Вставить из буфера").
+# No deep-link button: the screen gives a clear step-by-step guide and the key
+# as an expandable quote (injected into ``{key}`` by ``cb_device``). The user
+# pastes it into Happ/Incy ("＋" in the top-right → "Вставить из буфера"), then
+# taps "✅ Готово" to return to the main menu.
 
-_KEY_HINT = "👆 Разверни ключ выше и нажми на него — он скопируется"
+# Shared import guide for phones/desktops (Happ & Incy have the same flow).
+def _clipboard_steps(download_step: str) -> str:
+    return (
+        "Приложения <b>Happ</b> и <b>Incy</b> устроены одинаково — "
+        "подойдёт любое из них.\n\n"
+        f"{download_step}\n"
+        "2️⃣ Нажми на ключ в цитате ниже — он развернётся и <b>скопируется</b>\n"
+        "3️⃣ Открой приложение и нажми <b>«＋»</b> в правом верхнем углу\n"
+        "4️⃣ Выбери <b>«Вставить из буфера»</b> "
+        "(в англ. версии — <i>Import from clipboard</i>)\n"
+        "5️⃣ Профиль добавится сам — выбери сервер и нажми "
+        "<b>«Подключиться»</b> 🚀\n\n"
+        "{key}"
+    )
+
 
 DEVICES: dict[str, dict] = {
     "ios": {
         "download_url": APP_IOS_URL,
         "download_label": "📥 Скачать приложение",
-        "text": (
-            "📄 <b>Подключение на iOS</b>\n\n"
-            "{key}\n\n"
-            "1. Нажми «📥 Скачать приложение» и установи Happ или Incy\n"
-            "2. Открой приложение → справа вверху нажми «＋»\n"
-            "3. Выбери «Вставить из буфера» — ключ добавится сам\n"
-            "4. Выбери сервер и нажми «Подключиться» 🚀"
+        "text": "📲 <b>Подключение · iOS</b>\n\n"
+        + _clipboard_steps(
+            "1️⃣ Установи приложение кнопкой <b>«📥 Скачать приложение»</b> ниже"
         ),
     },
     "android": {
         "download_url": APP_ANDROID_URL,
         "download_label": "📥 Скачать приложение",
-        "text": (
-            "📄 <b>Подключение на Android</b>\n\n"
-            "{key}\n\n"
-            "1. Нажми «📥 Скачать приложение» и установи Happ или Incy\n"
-            "2. Открой приложение → справа вверху нажми «＋»\n"
-            "3. Выбери «Вставить из буфера» — ключ добавится сам\n"
-            "4. Выбери сервер и нажми «Подключиться» 🚀"
+        "text": "🤖 <b>Подключение · Android</b>\n\n"
+        + _clipboard_steps(
+            "1️⃣ Установи приложение кнопкой <b>«📥 Скачать приложение»</b> ниже"
         ),
     },
     "macos": {
         "download_url": APP_MACOS_URL,
         "download_label": "📥 Скачать приложение",
-        "text": (
-            "📄 <b>Подключение на MacOS</b>\n\n"
-            "{key}\n\n"
-            "1. Нажми «📥 Скачать приложение» и установи Happ или Incy\n"
-            "2. Открой приложение → справа вверху нажми «＋»\n"
-            "3. Выбери «Вставить из буфера» — ключ добавится сам\n"
-            "4. Выбери сервер и нажми «Подключиться» 🚀"
+        "text": "🖥 <b>Подключение · macOS</b>\n\n"
+        + _clipboard_steps(
+            "1️⃣ Установи приложение кнопкой <b>«📥 Скачать приложение»</b> ниже"
         ),
     },
     "windows": {
         "download_url": APP_WINDOWS_URL,
         "download_label": "📥 Скачать программу",
-        "text": (
-            "📄 <b>Подключение на Windows</b>\n\n"
-            "{key}\n\n"
-            "1. Нажми «📥 Скачать программу», установи\n"
-            "   и запусти Happ от имени администратора\n"
-            "2. В приложении справа вверху нажми «＋»\n"
-            "3. Выбери «Вставить из буфера» — ключ добавится сам\n"
-            "4. Выбери сервер и нажми «Подключиться» 🚀"
+        "text": "💻 <b>Подключение · Windows</b>\n\n"
+        + _clipboard_steps(
+            "1️⃣ Скачай программу кнопкой ниже и запусти "
+            "<b>от имени администратора</b>"
         ),
     },
     "androidtv": {
-        "download_url": None,
-        "download_label": "",
+        "download_url": APP_ANDROIDTV_URL,
+        "download_label": "📥 Скачать приложение",
         "text": (
-            "📄 <b>Подключение на Android TV</b>\n\n"
-            "{key}\n\n"
-            "1. Установи Happ через Google Play на TV\n"
-            "2. Открой Happ → Управление → Импорт с телефона\n"
-            "   (англ: Control → Import config from phone)\n"
-            "3. На телефоне открой «📤 Поделиться» → «⤵️ QR-код»\n"
-            "4. Наведи камеру телефона на экран TV\n"
-            "5. Готово! Нажми «Подключиться» 🚀"
+            "📺 <b>Подключение · Android TV</b>\n\n"
+            "1️⃣ Установи <b>Happ</b> из Google Play на телевизоре\n"
+            "2️⃣ Открой Happ → <b>Управление</b> → <b>Импорт с телефона</b>\n"
+            "   (в англ. версии — <i>Control → Import config from phone</i>)\n"
+            "3️⃣ В этом боте на телефоне открой "
+            "<b>«📤 Поделиться»</b> → <b>«⤵️ QR-код»</b>\n"
+            "4️⃣ Наведи камеру телевизора на QR-код с телефона\n"
+            "5️⃣ Выбери сервер и нажми <b>«Подключиться»</b> 🚀\n\n"
+            "{key}"
         ),
     },
     "appletv": {
         "download_url": None,
         "download_label": "",
         "text": (
-            "📄 <b>Подключение на Apple TV</b>\n\n"
-            "{key}\n\n"
-            "1. Открой Happ или Incy на iOS / Android\n"
-            "2. Сканируй QR-код с экрана TV\n"
-            "3. Выбери конфигурацию и подтверди\n"
-            "4. Готово! Нажми «Подключиться» 🚀"
+            "📺 <b>Подключение · Apple TV</b>\n\n"
+            "1️⃣ Установи <b>Happ</b> или <b>Incy</b> на iPhone/iPad "
+            "и добавь профиль (как в инструкции для iOS)\n"
+            "2️⃣ На Apple TV установи то же приложение из App Store\n"
+            "3️⃣ Войди тем же аккаунтом или импортируй профиль по QR-коду\n"
+            "4️⃣ Выбери сервер и нажми <b>«Подключиться»</b> 🚀\n\n"
+            "{key}"
         ),
     },
 }
@@ -390,22 +389,12 @@ async def cb_device(call: CallbackQuery) -> None:
         await call.answer()
         return
 
-    # Happ crypt key — shown as text (manual paste) and behind the Happ button.
+    # Happ crypt key, shown as an expandable tap-to-copy quote for manual import.
     happ_link = happ_crypto.format_for_user(raw_url)
     key_block = (
-        "🔑 Твой ключ:\n"
-        f"<blockquote expandable><code>{html.escape(happ_link)}</code></blockquote>\n"
-        f"{_KEY_HINT}"
+        "🔑 <b>Твой ключ доступа</b>\n"
+        f"<blockquote expandable><code>{html.escape(happ_link)}</code></blockquote>"
     )
-
-    # Branded connect page deep-links (key in #fragment). Happ link always;
-    # Incy link only when the Node encoder is available.
-    connect_url = connect_incy_url = None
-    if CONNECT_PAGE_URL:
-        connect_url = f"{CONNECT_PAGE_URL}#{quote(happ_link, safe='')}"
-        incy_link = await incy_crypto.to_incy_link(raw_url)
-        if incy_link:
-            connect_incy_url = f"{CONNECT_PAGE_URL}#{quote(incy_link, safe='')}"
 
     await safe_edit(
         call.message,
@@ -413,8 +402,6 @@ async def cb_device(call: CallbackQuery) -> None:
         reply_markup=device_keyboard(
             download_url=device["download_url"],
             download_label=device["download_label"],
-            connect_url=connect_url,
-            connect_incy_url=connect_incy_url,
         ),
     )
     await call.answer()
