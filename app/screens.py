@@ -19,5 +19,15 @@ SCREEN_IMAGES: dict[str, str] = {
 
 
 def screen_image(key: str) -> str | None:
-    """file_id for a screen, or None if no photo is configured."""
+    """file_id for a screen, or None if no photo applies.
+
+    The photos are Elma-specific (file_ids belong to Elma's uploads), so only
+    the Elma brand renders screens with images; any other BRAND_NAME serves them
+    text-only.
+    """
+    import config
+    from app.brand import DEFAULT_BRAND
+
+    if config.BRAND_NAME.upper() != DEFAULT_BRAND:
+        return None
     return SCREEN_IMAGES.get(key) or None
