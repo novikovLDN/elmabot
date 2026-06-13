@@ -30,7 +30,7 @@ from app.keyboards import (
 )
 from app.services import broadcaster, subscription_service
 from app.tariffs import get_tariff
-from app.utils import safe_edit, safe_send
+from app.utils import convert_tg_emoji, safe_edit, safe_send
 from config import ADMIN_IDS, REFERRAL_BONUS_DAYS, SUPPORT_USERNAME
 from database import (
     ACTIVITY_WINDOWS,
@@ -623,6 +623,9 @@ async def on_broadcast_message(message: Message, state: FSMContext) -> None:
     validates the markup), then open the button builder."""
     photo_id = message.photo[-1].file_id if message.photo else None
     text = (message.caption if photo_id else message.text) or ""
+    # Convert ![🎁](tg://emoji?id=…) -> <tg-emoji> entities (custom emoji need the
+    # bot to own Fragment usernames, else the preview below surfaces the error).
+    text = convert_tg_emoji(text)
 
     if not photo_id and not text.strip():
         await message.answer(
