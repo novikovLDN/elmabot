@@ -28,6 +28,10 @@ def _get_int(name: str, default: int | None = None) -> int:
 
 # --- Telegram ---
 BOT_TOKEN = _get_str("BOT_TOKEN", "")
+# Product brand name. Screens hard-code the default ("ELMA"); set BRAND_NAME to
+# rebrand a deployment — a request middleware rewrites the brand token in every
+# outgoing message. Default keeps the original bot byte-for-byte unchanged.
+BRAND_NAME = _get_str("BRAND_NAME", "ELMA").strip() or "ELMA"
 ADMIN_TELEGRAM_ID = _get_int("ADMIN_TELEGRAM_ID", 0)
 # Extra admins: a second id via ADMIN_TELEGRAM_ID_2, and/or a comma-separated
 # list via ADMIN_TELEGRAM_IDS. ADMIN_IDS is the full set used to gate /admin.

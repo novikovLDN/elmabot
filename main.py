@@ -9,6 +9,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 import config
 from aiogram.types import BotCommand
 
+from app.brand import install_brand
 from app.handlers import get_routers
 from app.services import platega, remnawave
 from app.services.notifications import (
@@ -37,13 +38,14 @@ async def main() -> None:
         token=config.BOT_TOKEN,
         default=DefaultBotProperties(parse_mode="HTML"),
     )
+    install_brand(bot)  # rewrites the brand token in outgoing messages if rebranded
     dp = Dispatcher(storage=MemoryStorage())
     for router in get_routers():
         dp.include_router(router)
 
     await bot.set_my_commands(
         [
-            BotCommand(command="start", description="Запустить ELMA"),
+            BotCommand(command="start", description=f"Запустить {config.BRAND_NAME}"),
             BotCommand(command="menu", description="Главное меню"),
             BotCommand(command="connect", description="Подключиться"),
             BotCommand(command="buy", description="Купить / продлить подписку"),
