@@ -417,6 +417,7 @@ async def cb_find(call: CallbackQuery, state: FSMContext) -> None:
     await call.message.edit_text(
         "👤 Пришлите <b>telegram_id</b> или <b>@username</b> пользователя.",
         parse_mode="HTML",
+        reply_markup=_back_kb(("⬅️ Админка", "admin:home")).as_markup(),
     )
     await call.answer()
 
@@ -483,10 +484,16 @@ async def on_grant_duration(message: Message, state: FSMContext) -> None:
     target = data.get("target")
     delta = parse_duration(message.text or "")
     if target is None or delta is None:
+        back = (
+            admin_grant_cancel(target)
+            if target is not None
+            else _back_kb(("⬅️ Админка", "admin:home")).as_markup()
+        )
         await message.answer(
             "Не понял срок. Примеры: <code>1 мес 10 дней</code>, <code>30</code>, "
             "<code>12 часов</code>, <code>90 мин</code>.",
             parse_mode="HTML",
+            reply_markup=back,
         )
         return
     await state.clear()
@@ -584,6 +591,7 @@ async def cb_segment(call: CallbackQuery, state: FSMContext) -> None:
     await call.message.edit_text(
         f"📢 Сегмент: <b>{label}</b> · получателей: <b>{count}</b>\n\n{BROADCAST_HELP}",
         parse_mode="HTML",
+        reply_markup=_back_kb(("⬅️ К сегментам", "admin:broadcast")).as_markup(),
     )
     await call.answer()
 
@@ -630,7 +638,8 @@ async def on_broadcast_message(message: Message, state: FSMContext) -> None:
     if not photo_id and not text.strip():
         await message.answer(
             "⚠️ Пустое сообщение. Пришлите текст или фото с подписью.\n\n"
-            + BROADCAST_HELP
+            + BROADCAST_HELP,
+            reply_markup=_back_kb(("⬅️ К сегментам", "admin:broadcast")).as_markup(),
         )
         return
 
@@ -649,6 +658,7 @@ async def on_broadcast_message(message: Message, state: FSMContext) -> None:
             f"<code>{html.escape(str(exc))}</code>\n\n"
             "Исправьте теги и пришлите сообщение заново.",
             parse_mode="HTML",
+            reply_markup=_back_kb(("⬅️ К сегментам", "admin:broadcast")).as_markup(),
         )
         return
 
@@ -668,7 +678,21 @@ async def cb_btn_discount(call: CallbackQuery, state: FSMContext) -> None:
         "<i>Скидка применится ко всем тарифам у пользователя, который нажмёт "
         "кнопку.</i>",
         parse_mode="HTML",
+        reply_markup=_back_kb(("⬅️ Назад", "bcastbtn:back")).as_markup(),
     )
+    await call.answer()
+
+
+@router.callback_query(F.data == "bcastbtn:back")
+async def cb_bcast_compose(call: CallbackQuery, state: FSMContext) -> None:
+    """Return to the broadcast compose/builder step from a discount sub-prompt."""
+    data = await state.get_data()
+    if "segment" not in data or "text" not in data:
+        await cb_broadcast(call, state)  # nothing composed yet → segment list
+        return
+    await state.set_state(None)
+    body, markup = await _builder_view(state)
+    await safe_edit(call.message, body, reply_markup=markup)
     await call.answer()
 
 
@@ -676,7 +700,10 @@ async def cb_btn_discount(call: CallbackQuery, state: FSMContext) -> None:
 async def on_discount_pct(message: Message, state: FSMContext) -> None:
     raw = (message.text or "").strip().rstrip("%")
     if not raw.isdigit() or not (0 < int(raw) < 100):
-        await message.answer("⚠️ Нужно целое число 1–99. Попробуйте ещё раз.")
+        await message.answer(
+            "⚠️ Нужно целое число 1–99. Попробуйте ещё раз.",
+            reply_markup=_back_kb(("⬅️ Назад", "bcastbtn:back")).as_markup(),
+        )
         return
     await state.update_data(disc_pct=int(raw))
     await state.set_state(Broadcast.waiting_discount_days)
@@ -684,6 +711,7 @@ async def on_discount_pct(message: Message, state: FSMContext) -> None:
         "📅 Теперь введите, <b>на сколько дней</b> действует скидка (1–365).\n"
         "Например: <code>3</code>",
         parse_mode="HTML",
+        reply_markup=_back_kb(("⬅️ Назад", "bcastbtn:back")).as_markup(),
     )
 
 
@@ -691,7 +719,10 @@ async def on_discount_pct(message: Message, state: FSMContext) -> None:
 async def on_discount_days(message: Message, state: FSMContext) -> None:
     raw = (message.text or "").strip()
     if not raw.isdigit() or not (0 < int(raw) <= 365):
-        await message.answer("⚠️ Нужно целое число 1–365. Попробуйте ещё раз.")
+        await message.answer(
+            "⚠️ Нужно целое число 1–365. Попробуйте ещё раз.",
+            reply_markup=_back_kb(("⬅️ Назад", "bcastbtn:back")).as_markup(),
+        )
         return
     await state.update_data(disc_days=int(raw))
     await state.set_state(None)
@@ -775,4 +806,5 @@ async def _run_broadcast(
         f"Доставлено: {res.sent}\n"
         f"Заблокировали бота: {res.blocked}\n"
         f"Ошибки: {res.failed}",
+        reply_markup=_back_kb(("🏠 Админка", "admin:home")).as_markup(),
     )
