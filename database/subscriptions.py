@@ -479,6 +479,38 @@ SEGMENTS: dict[str, tuple[str, str]] = {
 }
 
 
+# Per-day "expires in N days" buckets over active subscriptions, for targeted
+# renewal campaigns. Bucket N covers subscriptions whose expiry falls in the
+# (now + N-1 days, now + N days] window, so each active sub lands in exactly one
+# bucket. Extend EXPIRY_DAY_BUCKETS to add more days ("…и прочее").
+EXPIRY_DAY_BUCKETS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7)
+
+
+def _expires_in_days_sql(n: int) -> str:
+    return (
+        "EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id "
+        "AND s.status = 'active' "
+        f"AND s.expires_at > now() + interval '{n - 1} days' "
+        f"AND s.expires_at <= now() + interval '{n} days')"
+    )
+
+
+def _days_word(n: int) -> str:
+    """Russian plural for 'день': 1 день, 2-4 дня, 5-7 дней."""
+    if n % 10 == 1 and n % 100 != 11:
+        return "день"
+    if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14):
+        return "дня"
+    return "дней"
+
+
+for _n in EXPIRY_DAY_BUCKETS:
+    SEGMENTS[f"exp_{_n}d"] = (
+        f"⏳ Истекает через {_n} {_days_word(_n)}",
+        _expires_in_days_sql(_n),
+    )
+
+
 async def recipients(segment: str) -> list[int]:
     """Return reachable telegram_ids for a broadcast segment."""
     entry = SEGMENTS.get(segment)
