@@ -241,19 +241,37 @@ def admin_grant_cancel(telegram_id: int) -> InlineKeyboardMarkup:
 
 def admin_broadcast_segments() -> InlineKeyboardMarkup:
     """One button per segment, labelled from the DB segment registry. The
-    per-day "expires in N days" buckets are packed two-per-row to stay compact."""
+    per-day buckets ("истекает через N" / "закончилась N назад") are packed
+    two-per-row to stay compact, with each family kept on its own rows."""
     from database import SEGMENTS
 
     kb = InlineKeyboardBuilder()
     rows: list[int] = []
-    day_buckets = 0
+    pending = 0  # day-bucket buttons waiting to fill the current pair
+    family: str | None = None
+
+    def flush() -> None:
+        nonlocal pending
+        if pending:
+            rows.append(pending)
+            pending = 0
+
     for code, (label, _sql) in SEGMENTS.items():
         kb.button(text=label, callback_data=f"bcast:{code}")
-        if code.startswith("exp_"):
-            day_buckets += 1
-        else:
+        fam = "exp" if code.startswith("exp_") else "expd" if code.startswith("expd_") else None
+        if fam is None:
+            flush()
+            family = None
             rows.append(1)
-    rows += [2] * (day_buckets // 2) + ([1] if day_buckets % 2 else [])
+            continue
+        if family is not None and fam != family:
+            flush()  # don't mix two families in one row
+        family = fam
+        pending += 1
+        if pending == 2:
+            rows.append(2)
+            pending = 0
+    flush()
     kb.button(text="⬅️ Отмена", callback_data="admin:home")
     rows.append(1)
     kb.adjust(*rows)

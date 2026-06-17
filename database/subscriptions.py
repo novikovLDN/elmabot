@@ -458,10 +458,22 @@ async def activity_windows() -> dict:
 _PAID_EXISTS = "EXISTS (SELECT 1 FROM payments p WHERE p.telegram_id = u.telegram_id AND p.status = 'paid')"
 _SUB_EXISTS = "EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id)"
 _ACTIVE_SUB = "EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id AND s.status = 'active')"
+# Active subscription split by source: 'trial' is the free trial, anything else
+# ('payment'/'admin'/'gift'/'referral') is real paid/granted access.
+_ACTIVE_PAID = (
+    "EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id "
+    "AND s.status = 'active' AND s.source <> 'trial')"
+)
+_ACTIVE_TRIAL = (
+    "EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id "
+    "AND s.status = 'active' AND s.source = 'trial')"
+)
 
 SEGMENTS: dict[str, tuple[str, str]] = {
     "all": ("Все", "TRUE"),
-    "active": ("Активная подписка", _ACTIVE_SUB),
+    "active": ("Активная подписка (все)", _ACTIVE_SUB),
+    "active_paid": ("💳 Платная подписка (активная)", _ACTIVE_PAID),
+    "active_trial": ("🆓 Триал (активный)", _ACTIVE_TRIAL),
     "cold": (
         "Холодные (без триала и подписки)",
         f"u.trial_used_at IS NULL AND NOT {_SUB_EXISTS}",
@@ -486,12 +498,28 @@ SEGMENTS: dict[str, tuple[str, str]] = {
 EXPIRY_DAY_BUCKETS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7)
 
 
+# Per-day "expired N days ago" buckets over ended subscriptions, for win-back
+# campaigns. Bucket N covers subscriptions whose expiry fell in the
+# (now - N days, now - N-1 days] window. Keyed on status = 'expired' (one row per
+# user, so renewed users move forward and never match here).
+EXPIRED_DAY_BUCKETS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7)
+
+
 def _expires_in_days_sql(n: int) -> str:
     return (
         "EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id "
         "AND s.status = 'active' "
         f"AND s.expires_at > now() + interval '{n - 1} days' "
         f"AND s.expires_at <= now() + interval '{n} days')"
+    )
+
+
+def _expired_days_ago_sql(n: int) -> str:
+    return (
+        "EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id "
+        "AND s.status = 'expired' "
+        f"AND s.expires_at > now() - interval '{n} days' "
+        f"AND s.expires_at <= now() - interval '{n - 1} days')"
     )
 
 
@@ -508,6 +536,12 @@ for _n in EXPIRY_DAY_BUCKETS:
     SEGMENTS[f"exp_{_n}d"] = (
         f"⏳ Истекает через {_n} {_days_word(_n)}",
         _expires_in_days_sql(_n),
+    )
+
+for _n in EXPIRED_DAY_BUCKETS:
+    SEGMENTS[f"expd_{_n}d"] = (
+        f"🔚 Закончилась {_n} {_days_word(_n)} назад",
+        _expired_days_ago_sql(_n),
     )
 
 
