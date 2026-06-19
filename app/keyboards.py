@@ -279,7 +279,11 @@ def admin_broadcast_segments() -> InlineKeyboardMarkup:
 
 
 def admin_broadcast_builder(
-    *, disc_pct: int | None = None, disc_days: int | None = None, channel: bool = False
+    *,
+    disc_pct: int | None = None,
+    disc_days: int | None = None,
+    channel: bool = False,
+    referral: bool = False,
 ) -> InlineKeyboardMarkup:
     """Compose-step keyboard: optionally attach buttons, then send."""
     kb = InlineKeyboardBuilder()
@@ -294,6 +298,14 @@ def admin_broadcast_builder(
         text=("✅ Канал прикреплён" if channel else "📣 + Кнопка «Перейти в канал»"),
         callback_data="bcastbtn:chan",
     )
+    kb.button(
+        text=(
+            "✅ Кнопка «Пригласить друга»"
+            if referral
+            else "🫂 + Кнопка «Пригласить друга»"
+        ),
+        callback_data="bcastbtn:ref",
+    )
     kb.button(text="🚀 Отправить рассылку", callback_data="bcast:send")
     kb.button(text="⬅️ Отмена", callback_data="admin:home")
     kb.adjust(1)
@@ -301,7 +313,7 @@ def admin_broadcast_builder(
 
 
 def broadcast_user_markup(
-    disc_pct: int | None, disc_days: int | None, channel: bool
+    disc_pct: int | None, disc_days: int | None, channel: bool, referral: bool = False
 ) -> InlineKeyboardMarkup | None:
     """The inline buttons attached to the message recipients receive."""
     from config import CHANNEL_URL
@@ -319,6 +331,9 @@ def broadcast_user_markup(
             kb.button(text="📣 Перейти в канал", url=CHANNEL_URL)
         else:
             kb.button(text="📣 Перейти в канал", callback_data="chan:soon")
+        has_any = True
+    if referral:
+        kb.button(text="🫂 Пригласить друга", callback_data="menu:referral")
         has_any = True
     if not has_any:
         return None

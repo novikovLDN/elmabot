@@ -585,7 +585,7 @@ async def cb_segment(call: CallbackQuery, state: FSMContext) -> None:
     label = SEGMENTS[segment][0]
     count = await segment_count(segment)
     await state.update_data(
-        segment=segment, disc_pct=None, disc_days=None, channel=False
+        segment=segment, disc_pct=None, disc_days=None, channel=False, referral=False
     )
     await state.set_state(Broadcast.waiting_message)
     await call.message.edit_text(
@@ -612,6 +612,8 @@ async def _builder_view(state: FSMContext) -> tuple[str, object]:
         )
     if data.get("channel"):
         lines.append("📣 Кнопка «Перейти в канал»: <b>вкл.</b>")
+    if data.get("referral"):
+        lines.append("🫂 Кнопка «Пригласить друга»: <b>вкл.</b>")
     lines.append("")
     lines.append(
         "<i>Добавьте кнопки к сообщению (по желанию) и нажмите «Отправить». "
@@ -621,6 +623,7 @@ async def _builder_view(state: FSMContext) -> tuple[str, object]:
         disc_pct=data.get("disc_pct"),
         disc_days=data.get("disc_days"),
         channel=data.get("channel", False),
+        referral=data.get("referral", False),
     )
     return "\n".join(lines), markup
 
@@ -739,6 +742,15 @@ async def cb_btn_channel(call: CallbackQuery, state: FSMContext) -> None:
     await call.answer()
 
 
+@router.callback_query(F.data == "bcastbtn:ref")
+async def cb_btn_referral(call: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    await state.update_data(referral=not data.get("referral", False))
+    body, markup = await _builder_view(state)
+    await safe_edit(call.message, body, reply_markup=markup)
+    await call.answer()
+
+
 @router.callback_query(F.data == "bcast:send")
 async def cb_send_broadcast(call: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
@@ -747,7 +759,10 @@ async def cb_send_broadcast(call: CallbackQuery, state: FSMContext) -> None:
         await call.answer("Нет данных рассылки", show_alert=True)
         return
     markup = broadcast_user_markup(
-        data.get("disc_pct"), data.get("disc_days"), data.get("channel", False)
+        data.get("disc_pct"),
+        data.get("disc_days"),
+        data.get("channel", False),
+        data.get("referral", False),
     )
     await call.message.edit_text("📤 Рассылка запущена…")
     await call.answer()
