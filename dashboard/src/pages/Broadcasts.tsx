@@ -6,11 +6,11 @@ import { fmtNum } from "@/lib/format";
 import { useEventStream } from "@/lib/ws";
 import { PageLoader } from "@/components/Spinner";
 
-const GROUPS = ["База", "Триал-воронка", "Истекает скоро", "Закончилась"] as const;
+const GROUPS = ["База", "Триал-воронка", "Продление", "Возврат"] as const;
 function groupOf(key: string): (typeof GROUPS)[number] {
-  if (key.startsWith("exp_")) return "Истекает скоро";
-  if (key.startsWith("expd_")) return "Закончилась";
-  if (key.includes("trial")) return "Триал-воронка";
+  if (key.startsWith("exp_in_")) return "Продление";
+  if (key.startsWith("expd_") || key === "paid_lapsed") return "Возврат";
+  if (key.includes("trial") || key === "cold") return "Триал-воронка";
   return "База";
 }
 

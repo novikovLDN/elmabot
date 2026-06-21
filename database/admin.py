@@ -192,6 +192,23 @@ async def user_detail(telegram_id: int) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+async def user_payments(telegram_id: int, limit: int = 50) -> list[asyncpg.Record]:
+    """Full payment history for a user with provider/tariff/status (user card)."""
+    pool = get_pool()
+    return await pool.fetch(
+        """
+        SELECT amount_kopecks, provider, status, tariff_code, fail_reason,
+               created_at, paid_at
+        FROM payments
+        WHERE telegram_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2
+        """,
+        telegram_id,
+        limit,
+    )
+
+
 # --- Subscription health (dashboard) -------------------------------------
 
 

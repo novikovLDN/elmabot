@@ -32,13 +32,6 @@ export default function Settings() {
       <h1 className="text-2xl font-bold tracking-tight">Настройки</h1>
 
       <div className="card card-pad space-y-3">
-        <div className="label">Аккаунт</div>
-        <Row k="Админ" v={d.admin.username ? "@" + d.admin.username : String(d.admin.telegram_id)} />
-        <Row k="Telegram ID" v={String(d.admin.telegram_id)} />
-        <button onClick={logout} className="btn-secondary mt-1"><LogOut className="h-4 w-4" /> Выйти</button>
-      </div>
-
-      <div className="card card-pad space-y-3">
         <div className="label">Сервис</div>
         <Row k="Бренд" v={d.brand} />
         <Row k="Триал" v={`${d.trial_days} дн.`} />
@@ -100,6 +93,10 @@ export default function Settings() {
           </div>
         )}
       </div>
+
+      <button onClick={logout} className="btn-secondary w-full">
+        <LogOut className="h-4 w-4" /> Выйти из консоли
+      </button>
     </div>
   );
 }

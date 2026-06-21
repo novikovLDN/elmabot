@@ -40,7 +40,7 @@ async def user(request: web.Request) -> web.Response:
     return json_ok(
         {
             "user": detail,
-            "payments": await database.payment_history(tg, 20),
+            "payments": await database.user_payments(tg, 50),
             "referral": await database.referral_stats(tg),
         }
     )

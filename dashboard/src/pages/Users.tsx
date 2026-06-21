@@ -11,6 +11,9 @@ import { toast } from "@/store/toast";
 const PAY_STATUS: Record<string, string> = {
   paid: "badge-success", failed: "badge-danger", pending: "badge-warning", refunded: "badge-muted",
 };
+const PAY_LABEL: Record<string, string> = {
+  paid: "успех", failed: "ошибка", pending: "ожидает", refunded: "возврат",
+};
 
 function subBadge(row: { sub_status: string | null; sub_source: string | null }) {
   if (row.sub_status !== "active") return <span className="badge-muted">нет</span>;
@@ -165,15 +168,20 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
               </div>
               <div className="card divide-y divide-border-subtle overflow-hidden text-sm">
                 {payments.map((p, i) => (
-                  <div key={i} className="flex items-center justify-between px-3.5 py-2.5">
-                    <div>
-                      <div className="font-semibold">{fmtRub(Number(p.amount_kopecks))}</div>
-                      <div className="text-xs text-fg-subtle">
+                  <div key={i} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">{fmtRub(Number(p.amount_kopecks))}</span>
+                        {p.tariff_code ? <span className="badge-muted">{String(p.tariff_code)}</span> : null}
+                      </div>
+                      <div className="truncate text-xs text-fg-subtle">
                         {fmtDateTime(p.created_at as string)}
-                        {p.provider ? ` · ${String(p.provider)}` : ""}
+                        {p.provider && p.provider !== "unknown" ? ` · ${String(p.provider)}` : ""}
                       </div>
                     </div>
-                    <span className={PAY_STATUS[String(p.status)] ?? "badge-muted"}>{String(p.status)}</span>
+                    <span className={PAY_STATUS[String(p.status)] ?? "badge-muted"}>
+                      {PAY_LABEL[String(p.status)] ?? String(p.status)}
+                    </span>
                   </div>
                 ))}
                 {payments.length === 0 && <div className="px-3.5 py-4 text-fg-subtle">Платежей нет</div>}

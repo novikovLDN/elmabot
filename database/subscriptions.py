@@ -493,80 +493,62 @@ _ACTIVE_TRIAL = (
     "AND s.status = 'active' AND s.source = 'trial')"
 )
 
+# Curated broadcast segments — each targets a distinct, actionable audience
+# (no overlaps). All implicitly filtered to reachable users in recipients().
+_ACTIVE_TRIAL_ENDING_1D = (
+    "EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id "
+    "AND s.status = 'active' AND s.source = 'trial' "
+    "AND s.expires_at > now() AND s.expires_at <= now() + interval '1 day')"
+)
+
+
+def _paid_expiring_within(days: int) -> str:
+    return (
+        "EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id "
+        "AND s.status = 'active' AND s.source <> 'trial' "
+        f"AND s.expires_at > now() AND s.expires_at <= now() + interval '{days} days')"
+    )
+
+
+def _expired_within(days: int) -> str:
+    return (
+        "EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id "
+        f"AND s.status = 'expired' AND s.expires_at > now() - interval '{days} days')"
+    )
+
+
 SEGMENTS: dict[str, tuple[str, str]] = {
-    "all": ("Все", "TRUE"),
+    # --- База ---
+    "all": ("Все пользователи", "TRUE"),
     "active": ("Активная подписка (все)", _ACTIVE_SUB),
-    "active_paid": ("💳 Платная подписка (активная)", _ACTIVE_PAID),
+    "active_paid": ("💳 Платная (активная)", _ACTIVE_PAID),
     "active_trial": ("🆓 Триал (активный)", _ACTIVE_TRIAL),
-    "cold": (
-        "Холодные (без триала и подписки)",
-        f"u.trial_used_at IS NULL AND NOT {_SUB_EXISTS}",
-    ),
+    "paid_ever": ("💎 Покупали хоть раз", _PAID_EXISTS),
+    # --- Триал-воронка (конверсия) ---
+    "trial_ending_1d": ("⏳ Триал кончается ≤24ч", _ACTIVE_TRIAL_ENDING_1D),
     "trial_no_buy": (
         "Триал без покупки",
         f"u.trial_used_at IS NOT NULL AND NOT {_PAID_EXISTS}",
     ),
-    "trial_ended_3d": (
-        "Триал истёк 3+ дней назад, без покупки",
+    "trial_expired_recent": (
+        "Триал истёк ≤3 дн, без покупки",
         f"u.trial_used_at IS NOT NULL AND NOT {_PAID_EXISTS} "
-        "AND u.trial_expires_at < now() - interval '3 days'",
+        "AND u.trial_expires_at > now() - interval '3 days' "
+        "AND u.trial_expires_at <= now()",
     ),
-    "never_sub": ("Без подписок вообще", f"NOT {_SUB_EXISTS}"),
+    "cold": (
+        "❄️ Холодные (без триала и покупок)",
+        f"u.trial_used_at IS NULL AND NOT {_SUB_EXISTS}",
+    ),
+    # --- Продление (платные, истекают скоро) ---
+    "exp_in_3d": ("🔔 Платная истекает ≤3 дней", _paid_expiring_within(3)),
+    "exp_in_7d": ("🔔 Платная истекает ≤7 дней", _paid_expiring_within(7)),
+    # --- Возврат (истёкшие) ---
+    "expd_3d": ("🔚 Истекла ≤3 дней назад", _expired_within(3)),
+    "expd_7d": ("🔚 Истекла ≤7 дней назад", _expired_within(7)),
+    "paid_lapsed": ("💔 Платили, сейчас не активны", f"{_PAID_EXISTS} AND NOT {_ACTIVE_SUB}"),
 }
 
-
-# Per-day "expires in N days" buckets over active subscriptions, for targeted
-# renewal campaigns. Bucket N covers subscriptions whose expiry falls in the
-# (now + N-1 days, now + N days] window, so each active sub lands in exactly one
-# bucket. Extend EXPIRY_DAY_BUCKETS to add more days ("…и прочее").
-EXPIRY_DAY_BUCKETS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7)
-
-
-# Per-day "expired N days ago" buckets over ended subscriptions, for win-back
-# campaigns. Bucket N covers subscriptions whose expiry fell in the
-# (now - N days, now - N-1 days] window. Keyed on status = 'expired' (one row per
-# user, so renewed users move forward and never match here).
-EXPIRED_DAY_BUCKETS: tuple[int, ...] = (1, 2, 3, 4, 5, 6, 7)
-
-
-def _expires_in_days_sql(n: int) -> str:
-    return (
-        "EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id "
-        "AND s.status = 'active' "
-        f"AND s.expires_at > now() + interval '{n - 1} days' "
-        f"AND s.expires_at <= now() + interval '{n} days')"
-    )
-
-
-def _expired_days_ago_sql(n: int) -> str:
-    return (
-        "EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id "
-        "AND s.status = 'expired' "
-        f"AND s.expires_at > now() - interval '{n} days' "
-        f"AND s.expires_at <= now() - interval '{n - 1} days')"
-    )
-
-
-def _days_word(n: int) -> str:
-    """Russian plural for 'день': 1 день, 2-4 дня, 5-7 дней."""
-    if n % 10 == 1 and n % 100 != 11:
-        return "день"
-    if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14):
-        return "дня"
-    return "дней"
-
-
-for _n in EXPIRY_DAY_BUCKETS:
-    SEGMENTS[f"exp_{_n}d"] = (
-        f"⏳ Истекает через {_n} {_days_word(_n)}",
-        _expires_in_days_sql(_n),
-    )
-
-for _n in EXPIRED_DAY_BUCKETS:
-    SEGMENTS[f"expd_{_n}d"] = (
-        f"🔚 Закончилась {_n} {_days_word(_n)} назад",
-        _expired_days_ago_sql(_n),
-    )
 
 
 async def recipients(segment: str) -> list[int]:

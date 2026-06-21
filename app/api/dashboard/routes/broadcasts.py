@@ -15,6 +15,7 @@ import logging
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiohttp import web
 
+import config
 import database
 from app.events import bus
 from app.services import broadcaster
@@ -64,13 +65,19 @@ async def test_self(request: web.Request) -> web.Response:
     text = str(body.get("text", "")).strip()
     if not text and not body.get("photo_file_id"):
         raise web.HTTPBadRequest(reason="empty message")
-    admin_id = int(request["admin"]["sub"])
-    markup = _markup(body.get("button_text"), body.get("button_url"))
-    try:
-        await _sender(bot, text, body.get("photo_file_id"), markup)(admin_id)
-    except Exception as exc:  # noqa: BLE001
-        raise web.HTTPBadRequest(reason=f"send failed: {exc}")
-    return json_ok({"ok": True})
+    # Preview goes to every configured admin, not just the one logged in.
+    send_one = _sender(bot, text, body.get("photo_file_id"),
+                       _markup(body.get("button_text"), body.get("button_url")))
+    sent = 0
+    for aid in config.ADMIN_IDS:
+        try:
+            await send_one(aid)
+            sent += 1
+        except Exception:  # noqa: BLE001 - one bad admin chat shouldn't fail the test
+            pass
+    if sent == 0:
+        raise web.HTTPBadRequest(reason="не удалось отправить тест ни одному админу")
+    return json_ok({"ok": True, "sent": sent})
 
 
 @routes.post("/broadcasts")
@@ -112,17 +119,18 @@ async def create(request: web.Request) -> web.Response:
             "Dashboard broadcast to %s done: sent=%d blocked=%d failed=%d",
             segment, res.sent, res.blocked, res.failed,
         )
-        # Notify the admin who started it, right in their bot DM.
+        # Notify every admin in their bot DM with the result.
         label = database.SEGMENTS.get(segment, (segment, ""))[0]
-        await safe_send(
-            bot, admin_id,
+        summary = (
             "✅ <b>Рассылка завершена</b>\n\n"
             f"Сегмент: <b>{label}</b>\n"
             f"Получателей: {total}\n"
             f"📨 Доставлено: {res.sent}\n"
             f"🚫 Заблокировали: {res.blocked}\n"
-            f"⚠️ Ошибок: {res.failed}",
+            f"⚠️ Ошибок: {res.failed}"
         )
+        for aid in config.ADMIN_IDS:
+            await safe_send(bot, aid, summary)
 
     asyncio.create_task(run())
     return json_ok({"ok": True, "segment": segment, "total": total}, status=202)

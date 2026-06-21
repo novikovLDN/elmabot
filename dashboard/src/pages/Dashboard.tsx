@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  Wallet, Users as UsersIcon, CreditCard, TrendingUp, Activity, Radio, Gift, Share2,
+  Wallet, Users as UsersIcon, CreditCard, TrendingUp, Activity, Radio, Gift, Share2, Clock,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { endpoints, type DailyPoint } from "@/lib/api";
@@ -15,6 +15,7 @@ import { AnimatedNum } from "@/components/AnimatedNum";
 import { cn } from "@/lib/cn";
 
 const DAY_OPTIONS = [7, 30, 90, 180] as const;
+const HOUR_DAY_OPTIONS = [1, 7, 30] as const;
 
 const METRICS = [
   { key: "revenue", label: "Доход", color: "#0EA5E9", fmt: fmtRub },
@@ -47,11 +48,17 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [days, setDays] = useState<number>(30);
   const [metric, setMetric] = useState<MetricKey>("revenue");
+  const [hourDays, setHourDays] = useState<number>(7);
+  const [hourMetric, setHourMetric] = useState<MetricKey>("new_users");
   const events = useEventStream();
 
   const ov = useQuery({ queryKey: ["stats", "overview"], queryFn: endpoints.overview, refetchInterval: 60_000 });
   const daily = useQuery({
     queryKey: ["stats", "daily", days], queryFn: () => endpoints.daily(days),
+    refetchInterval: 5 * 60_000, staleTime: 60_000,
+  });
+  const hourly = useQuery({
+    queryKey: ["stats", "hourly", hourDays], queryFn: () => endpoints.hourly(hourDays),
     refetchInterval: 5 * 60_000, staleTime: 60_000,
   });
   const providers = useQuery({ queryKey: ["stats", "providers"], queryFn: () => endpoints.providers(), refetchInterval: 5 * 60_000 });
@@ -127,6 +134,46 @@ export default function Dashboard() {
               <Area type="monotone" dataKey={metric as keyof DailyPoint} stroke={activeMetric.color}
                 strokeWidth={2} fill="url(#grad)" />
             </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Hourly activity (Moscow time) */}
+      <div className="card card-pad">
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-fg-subtle" />
+            <h2 className="font-semibold">Активность по часам · МСК</h2>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <SegPill options={["new_users", "payments", "revenue"] as MetricKey[]} value={hourMetric}
+              onChange={(v) => setHourMetric(v)}
+              render={(k) => METRICS.find((m) => m.key === k)!.label} />
+            <SegPill options={HOUR_DAY_OPTIONS} value={hourDays} onChange={setHourDays} render={(d) => `${d}д`} />
+          </div>
+        </div>
+        <p className="mb-3 text-xs text-fg-muted">
+          В какие часы приходят пользователи и платежи — видно пики и провалы.
+        </p>
+        <div className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={hourly.data?.series ?? []} margin={{ left: -14, right: 6, top: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#EEF0F4" vertical={false} />
+              <XAxis dataKey="hour" tickFormatter={(h) => `${h}`} tick={{ fontSize: 10, fill: "#94A3B8" }}
+                axisLine={false} tickLine={false} interval={1} />
+              <YAxis tickFormatter={(v) => fmtCompactInt(hourMetric === "revenue" ? v / 100 : v)}
+                tick={{ fontSize: 11, fill: "#94A3B8" }} axisLine={false} tickLine={false} width={44} />
+              <Tooltip
+                cursor={{ fill: "rgba(14,165,233,.06)" }}
+                contentStyle={{ borderRadius: 12, border: "1px solid #E5E7EB", fontSize: 12 }}
+                labelFormatter={(l) => `${l}:00–${Number(l) + 1}:00 МСК`}
+                formatter={(v: number) => {
+                  const m = METRICS.find((x) => x.key === hourMetric)!;
+                  return [m.fmt(v), m.label];
+                }} />
+              <Bar dataKey={hourMetric} radius={[5, 5, 0, 0]}
+                fill={METRICS.find((m) => m.key === hourMetric)!.color} />
+            </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
