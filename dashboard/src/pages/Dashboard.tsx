@@ -78,7 +78,9 @@ export default function Dashboard() {
       </div>
 
       {/* Hero KPIs */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="relative">
+        <div className="hero-glow pointer-events-none absolute -top-10 left-2 h-44 w-44 rounded-full" />
+      <div className="relative grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Доход всего" icon={Wallet} accent loading={ov.isLoading}
           value={<AnimatedNum value={u?.revenue_total ?? 0} fmt={fmtRub} />} hint={`Сегодня: ${fmtRub(u?.revenue_today)}`} />
         <StatCard label="Активные подписки" icon={Activity} loading={ov.isLoading}
@@ -87,6 +89,7 @@ export default function Dashboard() {
           value={<AnimatedNum value={u?.buyers ?? 0} fmt={fmtNum} />} hint={`Платежей: ${fmtNum(u?.payments_paid)}`} />
         <StatCard label="Пользователи" icon={UsersIcon} loading={ov.isLoading}
           value={<AnimatedNum value={u?.users_total ?? 0} fmt={fmtNum} />} hint={`Сегодня: +${fmtNum(u?.users_today)}`} />
+      </div>
       </div>
 
       {/* Daily chart */}

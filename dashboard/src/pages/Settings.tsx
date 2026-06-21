@@ -5,6 +5,7 @@ import { fmtDate, fmtNum } from "@/lib/format";
 import { logout } from "@/lib/auth";
 import { registerPasskey } from "@/lib/passkey";
 import { PageLoader, Spinner } from "@/components/Spinner";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { toast } from "@/store/toast";
 
 export default function Settings() {
@@ -88,9 +89,12 @@ export default function Settings() {
                   <div className="font-medium">{p.label ?? "Passkey"}</div>
                   <div className="text-xs text-fg-subtle">добавлен {fmtDate(p.created_at)}</div>
                 </div>
-                <button className="btn-ghost px-2 text-danger" onClick={() => delKey.mutate(p.credential_id)}>
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <ConfirmButton
+                  variant="secondary" className="px-2 text-danger" icon={Trash2}
+                  idleLabel="" confirmLabel="Удалить?"
+                  pending={delKey.isPending && delKey.variables === p.credential_id}
+                  onConfirm={() => delKey.mutate(p.credential_id)}
+                />
               </div>
             ))}
           </div>

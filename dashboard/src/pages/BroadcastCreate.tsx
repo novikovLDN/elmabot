@@ -5,6 +5,7 @@ import { ArrowLeft, Send, TestTube2 } from "lucide-react";
 import { endpoints, ApiError, type BroadcastPayload } from "@/lib/api";
 import { fmtNum } from "@/lib/format";
 import { Spinner } from "@/components/Spinner";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { toast } from "@/store/toast";
 
 export default function BroadcastCreate() {
@@ -17,7 +18,6 @@ export default function BroadcastCreate() {
   const [photo, setPhoto] = useState("");
   const [btnText, setBtnText] = useState("");
   const [btnUrl, setBtnUrl] = useState("");
-  const [confirm, setConfirm] = useState(false);
 
   const count = useMemo(
     () => segs.data?.find((s) => s.key === segment)?.count ?? 0,
@@ -85,18 +85,21 @@ export default function BroadcastCreate() {
           </div>
         </div>
 
+        <div className="rounded-xl bg-bg-elevated px-3 py-2 text-xs text-fg-muted">
+          💡 Сначала нажмите <b>«Тест админу»</b> — бот пришлёт вам в личку готовое
+          сообщение ровно в том виде, в котором его получат пользователи.
+        </div>
+
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <button className="btn-secondary" disabled={empty || test.isPending} onClick={() => test.mutate()}>
-            {test.isPending ? <Spinner className="h-4 w-4" /> : <TestTube2 className="h-4 w-4" />} Тест себе
+            {test.isPending ? <Spinner className="h-4 w-4" /> : <TestTube2 className="h-4 w-4" />} Тест админу
           </button>
-          <button
-            className={confirm ? "btn-danger ml-auto" : "btn-primary ml-auto"}
-            disabled={empty || send.isPending}
-            onClick={() => (confirm ? send.mutate() : setConfirm(true))}
-          >
-            {send.isPending ? <Spinner className="h-4 w-4 text-white" /> : <Send className="h-4 w-4" />}
-            {confirm ? `Точно отправить ${fmtNum(count)}?` : "Отправить"}
-          </button>
+          <ConfirmButton
+            className="ml-auto" variant="primary" icon={Send}
+            idleLabel="Отправить" confirmLabel={`Точно отправить ${fmtNum(count)}?`}
+            pending={send.isPending} disabled={empty}
+            onConfirm={() => send.mutate()}
+          />
         </div>
       </div>
     </div>

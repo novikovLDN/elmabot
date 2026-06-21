@@ -1,15 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
-import { Megaphone, Radio } from "lucide-react";
-import { endpoints } from "@/lib/api";
+import { Radio } from "lucide-react";
+import { endpoints, type Segment } from "@/lib/api";
 import { fmtNum } from "@/lib/format";
 import { useEventStream } from "@/lib/ws";
 import { PageLoader } from "@/components/Spinner";
+
+const GROUPS = ["База", "Триал-воронка", "Истекает скоро", "Закончилась"] as const;
+function groupOf(key: string): (typeof GROUPS)[number] {
+  if (key.startsWith("exp_")) return "Истекает скоро";
+  if (key.startsWith("expd_")) return "Закончилась";
+  if (key.includes("trial")) return "Триал-воронка";
+  return "База";
+}
 
 export default function Broadcasts() {
   const navigate = useNavigate();
   const segs = useQuery({ queryKey: ["broadcasts", "segments"], queryFn: endpoints.segments, refetchInterval: 5 * 60_000 });
   const events = useEventStream().filter((e) => e.type.startsWith("broadcast"));
+
+  const grouped = (segs.data ?? []).reduce<Record<string, Segment[]>>((acc, s) => {
+    (acc[groupOf(s.key)] ||= []).push(s);
+    return acc;
+  }, {});
 
   return (
     <div className="space-y-5">
@@ -35,23 +48,25 @@ export default function Broadcasts() {
         </div>
       )}
 
-      <div className="card overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-2.5 text-sm font-semibold">
-          <Megaphone className="h-4 w-4 text-fg-subtle" /> Сегменты аудитории
+      {segs.isLoading ? <PageLoader /> : (
+        <div className="space-y-5">
+          {GROUPS.filter((g) => grouped[g]?.length).map((g) => (
+            <div key={g}>
+              <div className="label mb-2 px-1">{g}</div>
+              <div className="card divide-y divide-border-subtle overflow-hidden">
+                {grouped[g].map((s) => (
+                  <button key={s.key}
+                    onClick={() => navigate(`/broadcasts/new?segment=${s.key}`)}
+                    className="flex w-full items-center justify-between px-4 py-3 text-left text-sm transition hover:bg-bg-elevated">
+                    <span className="font-medium">{s.label}</span>
+                    <span className="font-bold text-accent">{fmtNum(s.count)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
-        {segs.isLoading ? <PageLoader /> : (
-          <div className="divide-y divide-border-subtle">
-            {(segs.data ?? []).map((s) => (
-              <button key={s.key}
-                onClick={() => navigate(`/broadcasts/new?segment=${s.key}`)}
-                className="flex w-full items-center justify-between px-4 py-3 text-left text-sm transition hover:bg-bg-elevated">
-                <span className="font-medium">{s.label}</span>
-                <span className="badge-muted">{fmtNum(s.count)}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

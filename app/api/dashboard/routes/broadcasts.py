@@ -18,6 +18,7 @@ from aiohttp import web
 import database
 from app.events import bus
 from app.services import broadcaster
+from app.utils import safe_send
 
 from ..util import json_ok, read_json
 
@@ -110,6 +111,17 @@ async def create(request: web.Request) -> web.Response:
         logger.info(
             "Dashboard broadcast to %s done: sent=%d blocked=%d failed=%d",
             segment, res.sent, res.blocked, res.failed,
+        )
+        # Notify the admin who started it, right in their bot DM.
+        label = database.SEGMENTS.get(segment, (segment, ""))[0]
+        await safe_send(
+            bot, admin_id,
+            "✅ <b>Рассылка завершена</b>\n\n"
+            f"Сегмент: <b>{label}</b>\n"
+            f"Получателей: {total}\n"
+            f"📨 Доставлено: {res.sent}\n"
+            f"🚫 Заблокировали: {res.blocked}\n"
+            f"⚠️ Ошибок: {res.failed}",
         )
 
     asyncio.create_task(run())
