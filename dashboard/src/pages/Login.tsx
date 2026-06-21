@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Zap } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Fingerprint, Zap } from "lucide-react";
 import { endpoints, ApiError } from "@/lib/api";
 import { setToken } from "@/lib/auth";
+import { loginPasskey } from "@/lib/passkey";
 import { Spinner } from "@/components/Spinner";
 
 export default function Login({ onDone }: { onDone: () => void }) {
@@ -10,6 +12,20 @@ export default function Login({ onDone }: { onDone: () => void }) {
   const [advanced, setAdvanced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const passkey = useQuery({ queryKey: ["passkey-available"], queryFn: endpoints.passkeyAvailable });
+
+  async function passkeyLogin() {
+    setError("");
+    setBusy(true);
+    try {
+      await loginPasskey();
+      onDone();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : "Не удалось войти по ключу");
+      setBusy(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -77,6 +93,17 @@ export default function Login({ onDone }: { onDone: () => void }) {
         <button type="submit" disabled={busy || !password} className="btn-primary mt-5 w-full">
           {busy ? <Spinner className="h-4 w-4 text-white" /> : "Войти"}
         </button>
+
+        {passkey.data?.enabled && (
+          <>
+            <div className="my-4 flex items-center gap-3 text-[11px] uppercase tracking-wide text-fg-subtle">
+              <span className="h-px flex-1 bg-border" /> или <span className="h-px flex-1 bg-border" />
+            </div>
+            <button type="button" onClick={passkeyLogin} disabled={busy} className="btn-secondary w-full">
+              <Fingerprint className="h-4 w-4" /> Войти по Passkey
+            </button>
+          </>
+        )}
 
         <div className="mt-4 flex items-center justify-between text-xs text-fg-subtle">
           <button type="button" className="hover:text-fg" onClick={() => setAdvanced((v) => !v)}>

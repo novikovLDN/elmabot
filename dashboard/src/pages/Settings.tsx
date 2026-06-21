@@ -1,12 +1,27 @@
-import { useQuery } from "@tanstack/react-query";
-import { KeyRound, LogOut } from "lucide-react";
-import { endpoints } from "@/lib/api";
-import { fmtNum } from "@/lib/format";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Fingerprint, KeyRound, LogOut, Plus, Trash2 } from "lucide-react";
+import { endpoints, ApiError } from "@/lib/api";
+import { fmtDate, fmtNum } from "@/lib/format";
 import { logout } from "@/lib/auth";
-import { PageLoader } from "@/components/Spinner";
+import { registerPasskey } from "@/lib/passkey";
+import { PageLoader, Spinner } from "@/components/Spinner";
+import { toast } from "@/store/toast";
 
 export default function Settings() {
+  const qc = useQueryClient();
   const s = useQuery({ queryKey: ["settings"], queryFn: endpoints.settings });
+  const pk = useQuery({ queryKey: ["passkey-available"], queryFn: endpoints.passkeyAvailable });
+
+  const addKey = useMutation({
+    mutationFn: () => registerPasskey("Passkey"),
+    onSuccess: () => { toast.success("Passkey добавлен"); qc.invalidateQueries({ queryKey: ["settings"] }); qc.invalidateQueries({ queryKey: ["passkey-available"] }); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Не удалось добавить ключ"),
+  });
+  const delKey = useMutation({
+    mutationFn: (id: string) => endpoints.passkeyDelete(id),
+    onSuccess: () => { toast.success("Ключ удалён"); qc.invalidateQueries({ queryKey: ["settings"] }); },
+    onError: () => toast.error("Не удалось удалить"),
+  });
 
   if (s.isLoading || !s.data) return <PageLoader />;
   const d = s.data;
@@ -44,21 +59,38 @@ export default function Settings() {
       </div>
 
       <div className="card card-pad">
-        <div className="mb-2 flex items-center gap-2">
-          <KeyRound className="h-4 w-4 text-fg-subtle" />
-          <div className="label">Passkey / WebAuthn</div>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4 text-fg-subtle" />
+            <div className="label">Passkey / WebAuthn</div>
+          </div>
+          {pk.data?.available && (
+            <button className="btn-info px-3 py-1.5 text-xs" disabled={addKey.isPending} onClick={() => addKey.mutate()}>
+              {addKey.isPending ? <Spinner className="h-4 w-4 text-white" /> : <Plus className="h-4 w-4" />} Добавить
+            </button>
+          )}
         </div>
-        {d.passkeys.length === 0 ? (
+
+        {!pk.data?.available ? (
           <p className="text-sm text-fg-muted">
-            Ключей нет. Вход по Passkey появится в следующем обновлении — пока используйте пароль
-            (сброс — командой <span className="font-mono">/dashboard</span> в боте).
+            WebAuthn недоступен на сервере. Используйте пароль (сброс — командой{" "}
+            <span className="font-mono">/dashboard</span> в боте).
+          </p>
+        ) : d.passkeys.length === 0 ? (
+          <p className="flex items-center gap-2 text-sm text-fg-muted">
+            <Fingerprint className="h-4 w-4" /> Ключей нет — добавьте Passkey для быстрого входа.
           </p>
         ) : (
           <div className="divide-y divide-border-subtle text-sm">
             {d.passkeys.map((p) => (
-              <div key={p.credential_id} className="flex justify-between py-2">
-                <span className="font-medium">{p.label ?? "Passkey"}</span>
-                <span className="text-fg-subtle">{p.credential_id.slice(0, 12)}…</span>
+              <div key={p.credential_id} className="flex items-center justify-between py-2">
+                <div>
+                  <div className="font-medium">{p.label ?? "Passkey"}</div>
+                  <div className="text-xs text-fg-subtle">добавлен {fmtDate(p.created_at)}</div>
+                </div>
+                <button className="btn-ghost px-2 text-danger" onClick={() => delKey.mutate(p.credential_id)}>
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
             ))}
           </div>

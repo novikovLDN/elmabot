@@ -11,6 +11,7 @@ import { endpoints, type DailyPoint } from "@/lib/api";
 import { fmtRub, fmtNum, fmtCompactInt, dayLabel } from "@/lib/format";
 import { useEventStream } from "@/lib/ws";
 import { StatCard } from "@/components/StatCard";
+import { AnimatedNum } from "@/components/AnimatedNum";
 import { cn } from "@/lib/cn";
 
 const DAY_OPTIONS = [7, 30, 90, 180] as const;
@@ -79,13 +80,13 @@ export default function Dashboard() {
       {/* Hero KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Доход всего" icon={Wallet} accent loading={ov.isLoading}
-          value={fmtRub(u?.revenue_total)} hint={`Сегодня: ${fmtRub(u?.revenue_today)}`} />
+          value={<AnimatedNum value={u?.revenue_total ?? 0} fmt={fmtRub} />} hint={`Сегодня: ${fmtRub(u?.revenue_today)}`} />
         <StatCard label="Активные подписки" icon={Activity} loading={ov.isLoading}
-          value={fmtNum(h?.active_total)} hint={`Платных: ${fmtNum(h?.active_paid)} · триал: ${fmtNum(h?.active_trial)}`} />
+          value={<AnimatedNum value={h?.active_total ?? 0} fmt={fmtNum} />} hint={`Платных: ${fmtNum(h?.active_paid)} · триал: ${fmtNum(h?.active_trial)}`} />
         <StatCard label="Платящие" icon={CreditCard} loading={ov.isLoading}
-          value={fmtNum(u?.buyers)} hint={`Платежей: ${fmtNum(u?.payments_paid)}`} />
+          value={<AnimatedNum value={u?.buyers ?? 0} fmt={fmtNum} />} hint={`Платежей: ${fmtNum(u?.payments_paid)}`} />
         <StatCard label="Пользователи" icon={UsersIcon} loading={ov.isLoading}
-          value={fmtNum(u?.users_total)} hint={`Сегодня: +${fmtNum(u?.users_today)}`} />
+          value={<AnimatedNum value={u?.users_total ?? 0} fmt={fmtNum} />} hint={`Сегодня: +${fmtNum(u?.users_today)}`} />
       </div>
 
       {/* Daily chart */}

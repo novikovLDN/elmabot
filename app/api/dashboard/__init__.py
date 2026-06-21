@@ -13,7 +13,7 @@ from aiohttp import web
 
 import config
 
-from . import auth
+from . import auth, passkey
 from .routes import (
     audit,
     broadcasts,
@@ -55,6 +55,7 @@ def build_api(bot) -> web.Application:
     api = web.Application(middlewares=[_auth_middleware])
     api["bot"] = bot
     api.add_routes(auth.routes)
+    api.add_routes(passkey.routes)
     for module in (stats, users, payments, referrals, broadcasts, gifts, audit, settings):
         api.add_routes(module.routes)
     return api

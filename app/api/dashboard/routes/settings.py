@@ -8,9 +8,20 @@ import config
 import database
 from app import tariffs
 
-from ..util import json_ok
+from ..util import json_ok, read_json
 
 routes = web.RouteTableDef()
+
+
+@routes.post("/settings/passkeys/delete")
+async def delete_passkey(request: web.Request) -> web.Response:
+    admin_id = int(request["admin"]["sub"])
+    body = await read_json(request)
+    cid = str(body.get("credential_id", ""))
+    ok = await database.webauthn_delete(admin_id, cid)
+    if ok:
+        await database.log_audit(admin_id, "passkey_remove")
+    return json_ok({"ok": ok})
 
 
 @routes.get("/settings")

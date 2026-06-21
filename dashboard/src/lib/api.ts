@@ -130,6 +130,20 @@ export const endpoints = {
     api.post<{ token: string; telegram_id: number }>("/auth/setup", { token, password }),
   me: () => api.get<{ telegram_id: number; username: string | null }>("/auth/me"),
 
+  // passkey / webauthn
+  passkeyAvailable: () =>
+    api.get<{ available: boolean; enabled: boolean }>("/auth/passkey/available"),
+  passkeyRegisterBegin: () =>
+    api.post<Record<string, unknown>>("/auth/passkey/register/begin", {}),
+  passkeyRegisterComplete: (credential: unknown, label?: string) =>
+    api.post<{ ok: boolean }>("/auth/passkey/register/complete", { credential, label }),
+  passkeyLoginBegin: () =>
+    api.post<{ flow_id: string; options: Record<string, unknown> }>("/auth/passkey/login/begin", {}),
+  passkeyLoginComplete: (flow_id: string, credential: unknown) =>
+    api.post<{ token: string; telegram_id: number }>("/auth/passkey/login/complete", { flow_id, credential }),
+  passkeyDelete: (credential_id: string) =>
+    api.post<{ ok: boolean }>("/settings/passkeys/delete", { credential_id }),
+
   // stats
   overview: () => api.get<Overview>("/stats/overview"),
   daily: (days = 30) => api.get<Series<DailyPoint>>(`/stats/daily?days=${days}`),
