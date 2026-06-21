@@ -33,11 +33,10 @@ from app.keyboards import (
     welcome_keyboard,
 )
 from app.handlers.menu import show_main
-from app.services import billing, happ_crypto, incy_crypto, subscription_service
+from app.services import billing, happ_crypto, subscription_service
 from app.utils import convert_tg_emoji, safe_edit, send_screen, show_screen
 from config import (
     APP_ANDROID_URL,
-    APP_INCY_IOS_URL,
     APP_IOS_INTL_URL,
     APP_IOS_RU_URL,
     APP_MACOS_URL,
@@ -146,35 +145,26 @@ MANUAL_TEXT = (
     "{key}"
 )
 
-# Phone/desktop devices: Happ download buttons (label, url), whether the connect
-# screen offers an Incy import button, and an optional download-screen photo
-# (a key in app.screens). MacOS mirrors the Windows desktop flow.
+# Phone/desktop devices: Happ download buttons (label, url) and an optional
+# download-screen photo (a key in app.screens). MacOS mirrors the Windows flow.
 PHONE_DEVICES: dict[str, dict] = {
     "ios": {
         "downloads": [
             ("📲 Скачать Happ (Россия)", APP_IOS_RU_URL),
             ("📲 Скачать Happ (другой регион)", APP_IOS_INTL_URL),
         ],
-        "incy_download": APP_INCY_IOS_URL,  # "" → button hidden
-        "incy": True,
         "dl_photo": None,
     },
     "android": {
         "downloads": [("📲 Скачать Happ", APP_ANDROID_URL)],
-        "incy_download": "",
-        "incy": False,
         "dl_photo": "dl_android",
     },
     "macos": {
         "downloads": [("📲 Скачать Happ", APP_MACOS_URL)],
-        "incy_download": "",
-        "incy": False,
         "dl_photo": None,
     },
     "windows": {
         "downloads": [("📲 Скачать Happ", APP_WINDOWS_URL)],
-        "incy_download": "",
-        "incy": False,
         "dl_photo": None,
     },
 }
@@ -195,7 +185,7 @@ TV_DEVICES: dict[str, str] = {
     ),
     "appletv": (
         "📺 <b>Подключение · Apple TV</b>\n\n"
-        "1️⃣ Установи <b>Happ</b> или <b>Incy</b> на iPhone/iPad "
+        "1️⃣ Установи <b>Happ</b> на iPhone/iPad "
         "и добавь профиль (как в инструкции для iOS)\n"
         "2️⃣ На Apple TV установи то же приложение из App Store\n"
         "3️⃣ Войди тем же аккаунтом или импортируй профиль по QR-коду\n"
@@ -377,13 +367,6 @@ async def _happ_key(user_id: int) -> str | None:
     return happ_crypto.format_for_user(raw) if raw else None
 
 
-async def _incy_key(user_id: int) -> str | None:
-    """Incy deep link for the user's active subscription, or None (sidecar may
-    be unavailable). Computed lazily — it spawns a Node subprocess."""
-    raw = await _active_sub_raw(user_id)
-    return await incy_crypto.to_incy_link(raw) if raw else None
-
-
 async def _no_access(call: CallbackQuery) -> None:
     """Shown when a connection screen is reached without an active subscription."""
     kb = InlineKeyboardBuilder()
@@ -430,8 +413,6 @@ async def cb_download(call: CallbackQuery) -> None:
     for label, url in device["downloads"]:
         if url:
             kb.button(text=label, url=url)
-    if device["incy_download"]:
-        kb.button(text="📲 Скачать Incy", url=device["incy_download"])
     kb.button(text="➡️ Дальше", callback_data=f"cn:{key}")
     kb.button(text="🔙 Назад", callback_data="dev:menu")
     kb.adjust(1)
@@ -454,7 +435,6 @@ async def cb_connect(call: CallbackQuery) -> None:
     if not happ:
         await _no_access(call)
         return
-    incy = await _incy_key(call.from_user.id) if device["incy"] else None
 
     kb = InlineKeyboardBuilder()
     page = _connect_link(happ)
@@ -462,12 +442,6 @@ async def cb_connect(call: CallbackQuery) -> None:
         kb.button(text="🔑 Добавить VPN ключ", url=page)
     else:
         kb.button(text="🔑 Добавить VPN ключ", callback_data=f"addkey:{key}")
-    if device["incy"] and incy:
-        incy_page = _connect_link(incy)
-        if incy_page:
-            kb.button(text="💚 Добавить в Incy", url=incy_page)
-        else:
-            kb.button(text="💚 Добавить в Incy", callback_data=f"addincy:{key}")
     kb.button(text="✅ Готово", callback_data="onb:done")
     kb.button(text="📋 Установить вручную", callback_data=f"manual:{key}")
     kb.button(text="💬 Нужна помощь", url=SUPPORT_URL)
@@ -505,20 +479,6 @@ async def cb_addkey(call: CallbackQuery) -> None:
     await call.message.answer(
         "🔑 Нажми на ключ — он скопируется, затем вставь его в Happ:\n\n"
         f"<blockquote expandable><code>{html.escape(happ)}</code></blockquote>"
-    )
-    await call.answer("Ключ отправлен ниже 👇")
-
-
-@router.callback_query(F.data.startswith("addincy:"))
-async def cb_addincy(call: CallbackQuery) -> None:
-    """Connect-page fallback: reveal the Incy key as a tap-to-copy quote."""
-    incy = await _incy_key(call.from_user.id)
-    if not incy:
-        await call.answer("Ключ Incy недоступен", show_alert=True)
-        return
-    await call.message.answer(
-        "💚 Нажми на ключ — он скопируется, затем вставь его в Incy:\n\n"
-        f"<blockquote expandable><code>{html.escape(incy)}</code></blockquote>"
     )
     await call.answer("Ключ отправлен ниже 👇")
 

@@ -13,12 +13,10 @@ Reminder timeline (approved copy):
 """
 import asyncio
 import logging
-import math
 from datetime import timedelta
 
 from aiogram import Bot
 
-from app.format import fmt_date
 from config import (
     DISCOUNT_REACTIVATION_PCT,
     DISCOUNT_SUB_END_PCT,
@@ -30,30 +28,19 @@ from config import (
 from database import (
     due_reactivation_offers,
     due_reminders,
-    due_trial_1h_reminders,
     due_trial_end_offers,
     expired_active,
     mark_expired,
     mark_react_offer_sent,
     mark_reminder_sent,
-    mark_trial_1h_sent,
     mark_trial_offer_sent,
     set_offer,
     utcnow,
 )
 
 from . import subscription_service
-from ..keyboards import manage_sub_keyboard, offer_keyboard
+from ..keyboards import offer_keyboard
 from ..utils import safe_send
-
-
-def _days_word(n: int) -> str:
-    """Russian plural for 'день': 1 день, 2-4 дня, 5+ дней."""
-    if n % 10 == 1 and n % 100 != 11:
-        return "день"
-    if n % 10 in (2, 3, 4) and n % 100 not in (12, 13, 14):
-        return "дня"
-    return "дней"
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +49,9 @@ async def _send_3day(bot: Bot) -> None:
     rows = await due_reminders("reminder_24h_sent")  # column repurposed: 3 days
     for row in rows:
         text = (
-            "☁️ <b>ELMA напоминает</b>\n\n"
-            "Подписка заканчивается через 3 дня —\n"
-            f"до {fmt_date(row['expires_at'])}.\n\n"
-            "Продли сейчас — срок добавится\n"
-            "к текущему 🤍"
+            "⚡️ <b>Подписка заканчивается через 2 дня</b>\n\n"
+            "Продли сейчас — срок добавится к текущему.\n"
+            "Не теряй доступ 💎"
         )
         await safe_send(
             bot, row["telegram_id"], text,
@@ -94,27 +79,9 @@ async def _send_day_of(bot: Bot) -> None:
         logger.info("Sent %d day-of reminders", len(rows))
 
 
-async def _trial_1h_reminder(bot: Bot) -> None:
-    """One hour into the trial: nudge to renew early so access never lapses."""
-    rows = await due_trial_1h_reminders()
-    for row in rows:
-        uid = row["telegram_id"]
-        secs = (row["expires_at"] - utcnow()).total_seconds()
-        days = max(1, math.ceil(secs / 86400))
-        text = (
-            f"📅 <b>Ваша подписка ELMA VPN активна ещё {days} {_days_word(days)}</b>\n\n"
-            "Продлите заранее — и доступ не прервётся ни на секунду 🤍"
-        )
-        await safe_send(bot, uid, text, reply_markup=manage_sub_keyboard())
-        await mark_trial_1h_sent(uid)
-    if rows:
-        logger.info("Sent %d trial-1h reminders", len(rows))
-
-
 async def reminder_loop(bot: Bot) -> None:
     while True:
         try:
-            await _trial_1h_reminder(bot)
             await _send_3day(bot)
             await _send_day_of(bot)
         except Exception:  # noqa: BLE001 - keep the loop alive
