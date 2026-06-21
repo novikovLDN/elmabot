@@ -1,3 +1,12 @@
+# --- Stage 1: build the admin dashboard (React/Vite) ----------------------
+FROM node:20-alpine AS dashboard-build
+WORKDIR /dash
+COPY dashboard/package.json dashboard/package-lock.json* ./
+RUN npm install
+COPY dashboard/ ./
+RUN npm run build
+
+# --- Stage 2: Python runtime (bot + web server) ---------------------------
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -19,5 +28,8 @@ COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
 
 COPY . .
+
+# Built dashboard SPA -> served by the aiohttp server at /dashboard/.
+COPY --from=dashboard-build /dash/dist ./dashboard/dist
 
 CMD ["python", "main.py"]

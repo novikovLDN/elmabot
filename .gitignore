@@ -20,3 +20,10 @@ env/
 
 # Node sidecar deps (Incy crypt links)
 node_modules/
+
+# Dashboard frontend build artifacts
+dashboard/dist/
+dashboard/node_modules/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
