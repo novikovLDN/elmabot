@@ -374,7 +374,7 @@ async def cb_devices(call: CallbackQuery) -> None:
 async def _happ_key(user_id: int) -> str | None:
     """Happ deep link for the user's active subscription, or None."""
     raw = await _active_sub_raw(user_id)
-    return await happ_crypto.format_for_user(raw) if raw else None
+    return happ_crypto.format_for_user(raw) if raw else None
 
 
 async def _incy_key(user_id: int) -> str | None:
@@ -403,7 +403,7 @@ async def _show_tv_guide(call: CallbackQuery, key: str) -> None:
     if not raw:
         await _no_access(call)
         return
-    happ = await happ_crypto.format_for_user(raw)
+    happ = happ_crypto.format_for_user(raw)
     kb = InlineKeyboardBuilder()
     kb.button(text="📤 Поделиться", callback_data="share:open")
     kb.button(text="🔙 Назад", callback_data="dev:menu")
