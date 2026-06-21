@@ -82,6 +82,28 @@ async def cb_buy(call: CallbackQuery) -> None:
     await call.answer()
 
 
+SUB_MANAGE = (
+    "📦 <b>Управление подпиской</b>\n\n"
+    "Ваш текущий тариф:\n\n"
+    "⚡️ <b>Тариф: Plus</b>\n\n"
+    "🚀 Канал до 25 Гбит/с — YouTube 4K без тормозов\n"
+    "👨‍👩‍👧‍👦 Одна подписка на всю семью — до 5 устройств\n"
+    "➕ Подключение в одно нажатие\n\n"
+    "Выберите действие:"
+)
+
+
+@router.callback_query(F.data == "sub:manage")
+async def cb_sub_manage(call: CallbackQuery) -> None:
+    """Subscription-management screen — reached from the renewal reminder."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🔄 Продлить Plus", callback_data="menu:buy")
+    kb.button(text="🔙 Назад", callback_data="menu:main")
+    kb.adjust(1)
+    await safe_edit(call.message, SUB_MANAGE, reply_markup=kb.as_markup())
+    await call.answer()
+
+
 @router.callback_query(F.data.startswith("promo:"))
 async def cb_promo(call: CallbackQuery) -> None:
     """User tapped a 'Купить со скидкой' button from a broadcast: set the offer

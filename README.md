@@ -11,8 +11,14 @@
   `/buy` (купить/продлить), `/account` (личный кабинет), `/invite` (рефералка),
   `/gift` (подарить), `/help` (помощь), `/about` (о сервисе).
 - 🆓 Одноразовый бесплатный доступ на 2 дня (атомарная транзакция).
-- 📱 Пошаговые экраны подключения: iOS, Android, MacOS, Windows, Android TV,
-  Apple TV; «Поделиться» (ссылка) и QR-код для второго устройства.
+- 📱 Пошаговые экраны подключения: телефоны/десктопы (iOS, Android, MacOS,
+  Windows) идут по схеме «Скачать Happ → Дальше → экран импорта ключа» с
+  кнопкой «🔑 Добавить VPN ключ» (одно нажатие через `CONNECT_PAGE_URL`, иначе
+  копируемый ключ), «Установить вручную» и «Нужна помощь». Android TV / Apple TV
+  подключаются по QR с телефона. После «✅ Готово» мелькает премиум-⚡️ и
+  открывается главное меню. «Поделиться» (ссылка) и QR — для второго устройства.
+- ⏰ Через час после старта триала — напоминание «продлите заранее» с экраном
+  «📦 Управление подпиской» → тарифы.
 - 🔐 Подписка отдаётся как Happ crypto-link `happ://crypt4/…` (RSA-4096 + PKCS#1
   v1.5 публичным ключом Happ, чистый stdlib — `app/services/happ_crypto.py`).
   Реальный адрес подписки скрыт от пользователя; ссылку понимает только Happ
@@ -127,6 +133,8 @@ python main.py
 | `DISCOUNT_TRIAL_END_PCT` / `DISCOUNT_SUB_END_PCT` / `DISCOUNT_REACTIVATION_PCT` | скидки в % (default 10/20/20) |
 | `REACTIVATION_AFTER_DAYS` | через сколько дней после истечения слать оффер реактивации (default 3) |
 | `APP_IOS_URL` / `APP_ANDROID_URL` / `APP_MACOS_URL` / `APP_WINDOWS_URL` / `APP_ANDROIDTV_URL` | ссылки на скачивание клиента на экранах подключения (по умолчанию — публичный Happ) |
+| `APP_IOS_RU_URL` / `APP_IOS_INTL_URL` | ссылки Happ для iOS: Россия / другой регион (по умолчанию обе = `APP_IOS_URL`) |
+| `APP_INCY_IOS_URL` | ссылка на Incy для iOS; пусто = кнопка «Скачать Incy» скрыта |
 | `PLATEGA_MERCHANT_ID` / `PLATEGA_SECRET` | креды Platega; пусто = оплата выключена |
 | `PLATEGA_API_URL` | база API Platega (default `https://app.platega.io`) |
 | `PLATEGA_RETURN_URL` / `PLATEGA_FAILED_URL` | редиректы браузера после оплаты (опц.) |

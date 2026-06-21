@@ -13,9 +13,11 @@ The whole user-facing journey lives here as a chain of edited messages:
 Everything is stateless callback-data; the only state is the user's
 subscription row (whose ``subscription_url`` powers "Активировать" / share / QR).
 """
+import asyncio
 import html
 import io
 import logging
+from urllib.parse import quote
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject, CommandStart
@@ -25,21 +27,23 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from app.keyboards import (
     buy_keyboard,
     claim_keyboard,
-    device_keyboard,
     devices_keyboard,
     qr_close_keyboard,
     share_keyboard,
     welcome_keyboard,
 )
 from app.handlers.menu import show_main
-from app.services import billing, happ_crypto, subscription_service
-from app.utils import safe_edit, send_screen, show_screen
+from app.services import billing, happ_crypto, incy_crypto, subscription_service
+from app.utils import convert_tg_emoji, safe_edit, send_screen, show_screen
 from config import (
     APP_ANDROID_URL,
-    APP_ANDROIDTV_URL,
-    APP_IOS_URL,
+    APP_INCY_IOS_URL,
+    APP_IOS_INTL_URL,
+    APP_IOS_RU_URL,
     APP_MACOS_URL,
     APP_WINDOWS_URL,
+    CONNECT_PAGE_URL,
+    SUPPORT_URL,
     TRIAL_DAYS,
 )
 from database import (
@@ -69,36 +73,24 @@ WELCOME = (
 )
 
 SCREEN_1 = (
-    "☁️ <b>Подключение к ELMA почти завершено</b>\n\n"
-    "Ты входишь в пространство,\n"
-    "где сервисы открываются без ожидания,\n"
-    "а интернет больше не раздражает ⚡\n\n"
-    f"🎁 Тебе доступно {TRIAL_DAYS} дня бесплатного доступа"
+    "🌐 <b>Добро пожаловать в ELMA</b>\n\n"
+    "VPN, который не подводит.\n"
+    "Без блокировок. Без обрывов. Без нервов.\n\n"
+    f"🎁 Первые {TRIAL_DAYS} дня — бесплатно"
 )
 
 SCREEN_2_TRIAL = (
-    "🫧 <b>ELMA активирован</b>\n\n"
-    "Теперь тебе открыт гостевой режим 🫂\n\n"
-    f"В ближайшие {TRIAL_DAYS} дня почувствуй,\n"
-    "как работает интернет без помех ⚡\n\n"
-    "Подключи до 5 устройств 👇"
+    "✅ <b>ELMA активирована</b>\n\n"
+    f"У вас {TRIAL_DAYS} дня бесплатно. Без ограничений, без карты.\n\n"
+    "Выберите устройство — и мы проведём вас через установку "
+    "шаг за шагом 🚀"
 )
 
 SCREEN_2_PAID = (
-    "🫧 <b>ELMA активирован</b>\n\n"
-    "Добро пожаловать в Premium-доступ 🤍\n\n"
-    "Свободный интернет без ограничений\n"
-    "и лишних препятствий ⚡\n\n"
-    "Подключай до 5 устройств одновременно 👇"
-)
-
-TRIAL_WELCOME = (
-    "🌐 <b>Доступ к ELMA открыт</b>\n\n"
-    f"Пробный период на {TRIAL_DAYS} дня успешно активирован ☁️\n\n"
-    "Теперь ты можешь почувствовать,\n"
-    "каким должен быть интернет без зависаний, раздражения "
-    "и постоянных переподключений ⚡\n\n"
-    "Добро пожаловать в ELMA"
+    "✅ <b>ELMA активирована</b>\n\n"
+    "Premium-доступ открыт 🤍\n\n"
+    "Выберите устройство — и мы проведём вас через установку "
+    "шаг за шагом 🚀"
 )
 
 TRIAL_USED = (
@@ -126,92 +118,106 @@ SHARE = (
 QR_CAPTION = "Ваш QR-код ELMA 🤍"
 
 
-# --- Device instruction screens (3-8) -------------------------------------
+# --- Connection flow ------------------------------------------------------
 #
-# No deep-link button: the screen gives a clear step-by-step guide and the key
-# as an expandable quote (injected into ``{key}`` by ``cb_device``). The user
-# pastes it into Happ/Incy ("＋" in the top-right → "Вставить из буфера"), then
-# taps "✅ Готово" to return to the main menu.
+# Phones/desktops use a two-step flow:
+#   dl:<device>  → download screen ("Скачайте Happ" + store links + «Дальше»)
+#   cn:<device>  → connect screen  (photo + «Добавить VPN ключ» / вручную / help)
+# TV devices can't open a deep link, so dl:<device> shows a QR-import guide.
 
-# Shared import guide for phones/desktops (Happ & Incy have the same flow).
-def _clipboard_steps(download_step: str) -> str:
-    return (
-        "Приложения <b>Happ</b> и <b>Incy</b> устроены одинаково — "
-        "подойдёт любое из них.\n\n"
-        f"{download_step}\n"
-        "2️⃣ Нажми на ключ в цитате ниже — он развернётся и <b>скопируется</b>\n"
-        "3️⃣ Открой приложение и нажми <b>«＋»</b> в правом верхнем углу\n"
-        "4️⃣ Выбери <b>«Вставить из буфера»</b> "
-        "(в англ. версии — <i>Import from clipboard</i>)\n"
-        "5️⃣ Профиль добавится сам — выбери сервер и нажми "
-        "<b>«Подключиться»</b> 🚀\n\n"
-        "{key}"
-    )
+# Premium ⚡️ custom emoji flashed after «Готово», just before the main menu.
+PREMIUM_BOLT = "![⚡️](tg://emoji?id=5456140674028019486)"
 
+DOWNLOAD_TEXT = (
+    "📲 <b>Скачайте Happ</b> — это бесплатно и займёт минуту\n\n"
+    "Уже есть? Жми «Дальше» 👇"
+)
 
-DEVICES: dict[str, dict] = {
+CONNECT_TEXT = (
+    "🌐 <b>Подключитесь в одно нажатие</b>\n\n"
+    "Нажмите кнопку ниже — ключ добавится автоматически."
+)
+
+MANUAL_TEXT = (
+    "<b>Ручная установка — 3 простых шага</b>\n\n"
+    "1. Нажмите на ключ ниже — он скопируется\n"
+    "2. Откройте Happ\n"
+    "3. Вставьте из буфера (📋)\n\n"
+    "{key}"
+)
+
+# Phone/desktop devices: Happ download buttons (label, url), whether the connect
+# screen offers an Incy import button, and an optional download-screen photo
+# (a key in app.screens). MacOS mirrors the Windows desktop flow.
+PHONE_DEVICES: dict[str, dict] = {
     "ios": {
-        "download_url": APP_IOS_URL,
-        "download_label": "📥 Скачать приложение",
-        "text": "📲 <b>Подключение · iOS</b>\n\n"
-        + _clipboard_steps(
-            "1️⃣ Установи приложение кнопкой <b>«📥 Скачать приложение»</b> ниже"
-        ),
+        "downloads": [
+            ("📲 Скачать Happ (Россия)", APP_IOS_RU_URL),
+            ("📲 Скачать Happ (другой регион)", APP_IOS_INTL_URL),
+        ],
+        "incy_download": APP_INCY_IOS_URL,  # "" → button hidden
+        "incy": True,
+        "dl_photo": None,
     },
     "android": {
-        "download_url": APP_ANDROID_URL,
-        "download_label": "📥 Скачать приложение",
-        "text": "🤖 <b>Подключение · Android</b>\n\n"
-        + _clipboard_steps(
-            "1️⃣ Установи приложение кнопкой <b>«📥 Скачать приложение»</b> ниже"
-        ),
+        "downloads": [("📲 Скачать Happ", APP_ANDROID_URL)],
+        "incy_download": "",
+        "incy": False,
+        "dl_photo": "dl_android",
     },
     "macos": {
-        "download_url": APP_MACOS_URL,
-        "download_label": "📥 Скачать приложение",
-        "text": "🖥 <b>Подключение · macOS</b>\n\n"
-        + _clipboard_steps(
-            "1️⃣ Установи приложение кнопкой <b>«📥 Скачать приложение»</b> ниже"
-        ),
+        "downloads": [("📲 Скачать Happ", APP_MACOS_URL)],
+        "incy_download": "",
+        "incy": False,
+        "dl_photo": None,
     },
     "windows": {
-        "download_url": APP_WINDOWS_URL,
-        "download_label": "📥 Скачать программу",
-        "text": "💻 <b>Подключение · Windows</b>\n\n"
-        + _clipboard_steps(
-            "1️⃣ Скачай программу кнопкой ниже и запусти "
-            "<b>от имени администратора</b>"
-        ),
-    },
-    "androidtv": {
-        "download_url": APP_ANDROIDTV_URL,
-        "download_label": "📥 Скачать приложение",
-        "text": (
-            "📺 <b>Подключение · Android TV</b>\n\n"
-            "1️⃣ Установи <b>Happ</b> из Google Play на телевизоре\n"
-            "2️⃣ Открой Happ → <b>Управление</b> → <b>Импорт с телефона</b>\n"
-            "   (в англ. версии — <i>Control → Import config from phone</i>)\n"
-            "3️⃣ В этом боте на телефоне открой "
-            "<b>«📤 Поделиться»</b> → <b>«⤵️ QR-код»</b>\n"
-            "4️⃣ Наведи камеру телевизора на QR-код с телефона\n"
-            "5️⃣ Выбери сервер и нажми <b>«Подключиться»</b> 🚀\n\n"
-            "{key}"
-        ),
-    },
-    "appletv": {
-        "download_url": None,
-        "download_label": "",
-        "text": (
-            "📺 <b>Подключение · Apple TV</b>\n\n"
-            "1️⃣ Установи <b>Happ</b> или <b>Incy</b> на iPhone/iPad "
-            "и добавь профиль (как в инструкции для iOS)\n"
-            "2️⃣ На Apple TV установи то же приложение из App Store\n"
-            "3️⃣ Войди тем же аккаунтом или импортируй профиль по QR-коду\n"
-            "4️⃣ Выбери сервер и нажми <b>«Подключиться»</b> 🚀\n\n"
-            "{key}"
-        ),
+        "downloads": [("📲 Скачать Happ", APP_WINDOWS_URL)],
+        "incy_download": "",
+        "incy": False,
+        "dl_photo": None,
     },
 }
+
+# TV devices keep the QR-import guide (a TV has no Happ deep link). {key} is the
+# expandable copyable access key.
+TV_DEVICES: dict[str, str] = {
+    "androidtv": (
+        "📺 <b>Подключение · Android TV</b>\n\n"
+        "1️⃣ Установи <b>Happ</b> из Google Play на телевизоре\n"
+        "2️⃣ Открой Happ → <b>Управление</b> → <b>Импорт с телефона</b>\n"
+        "   (в англ. версии — <i>Control → Import config from phone</i>)\n"
+        "3️⃣ В этом боте на телефоне открой "
+        "<b>«📤 Поделиться»</b> → <b>«⤵️ QR-код»</b>\n"
+        "4️⃣ Наведи камеру телевизора на QR-код с телефона\n"
+        "5️⃣ Выбери сервер и нажми <b>«Подключиться»</b> 🚀\n\n"
+        "{key}"
+    ),
+    "appletv": (
+        "📺 <b>Подключение · Apple TV</b>\n\n"
+        "1️⃣ Установи <b>Happ</b> или <b>Incy</b> на iPhone/iPad "
+        "и добавь профиль (как в инструкции для iOS)\n"
+        "2️⃣ На Apple TV установи то же приложение из App Store\n"
+        "3️⃣ Войди тем же аккаунтом или импортируй профиль по QR-коду\n"
+        "4️⃣ Выбери сервер и нажми <b>«Подключиться»</b> 🚀\n\n"
+        "{key}"
+    ),
+}
+
+
+def _connect_link(deeplink: str | None) -> str | None:
+    """https landing-page URL that auto-opens the app (key in the #fragment, so
+    it never reaches the web server), or None if no connect page is configured."""
+    if not CONNECT_PAGE_URL or not deeplink:
+        return None
+    return f"{CONNECT_PAGE_URL}#{quote(deeplink, safe='')}"
+
+
+def _key_block(happ_link: str) -> str:
+    return (
+        "🔑 <b>Твой ключ доступа</b>\n"
+        f"<blockquote expandable><code>{html.escape(happ_link)}</code></blockquote>"
+    )
 
 
 # --- Helpers --------------------------------------------------------------
@@ -339,14 +345,12 @@ async def cb_claim(call: CallbackQuery) -> None:
         await show_screen(call.message, "devices", text, reply_markup=devices_keyboard())
         return
 
-    # Trial newly activated -> welcome notification, then device selection.
+    # Trial newly activated -> straight to device selection.
     logger.info("Trial activated for %s", user_id)
     # Tell the inviter their friend joined (bonus comes on first purchase).
     await billing.notify_referrer_on_trial(call.bot, user_id)
-    await safe_edit(call.message, TRIAL_WELCOME)
-    await send_screen(
-        call.bot, call.message.chat.id, "devices", SCREEN_2_TRIAL,
-        reply_markup=devices_keyboard(),
+    await show_screen(
+        call.message, "devices", SCREEN_2_TRIAL, reply_markup=devices_keyboard()
     )
 
 
@@ -365,46 +369,182 @@ async def cb_devices(call: CallbackQuery) -> None:
     await call.answer()
 
 
-# --- Screens 3-8: device instructions -------------------------------------
+# --- Connection: download → connect → done --------------------------------
 
-@router.callback_query(F.data.startswith("dev:"))
-async def cb_device(call: CallbackQuery) -> None:
+async def _happ_key(user_id: int) -> str | None:
+    """Happ deep link for the user's active subscription, or None."""
+    raw = await _active_sub_raw(user_id)
+    return await happ_crypto.format_for_user(raw) if raw else None
+
+
+async def _incy_key(user_id: int) -> str | None:
+    """Incy deep link for the user's active subscription, or None (sidecar may
+    be unavailable). Computed lazily — it spawns a Node subprocess."""
+    raw = await _active_sub_raw(user_id)
+    return await incy_crypto.to_incy_link(raw) if raw else None
+
+
+async def _no_access(call: CallbackQuery) -> None:
+    """Shown when a connection screen is reached without an active subscription."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text="💳 Купить подписку", callback_data="menu:buy")
+    kb.button(text="🏠 Главное меню", callback_data="menu:main")
+    kb.adjust(1)
+    await safe_edit(
+        call.message,
+        "🔒 Доступ не активен.\n\nОформи подписку, чтобы получить ключ 👇",
+        reply_markup=kb.as_markup(),
+    )
+    await call.answer()
+
+
+async def _show_tv_guide(call: CallbackQuery, key: str) -> None:
+    raw = await _active_sub_raw(call.from_user.id)
+    if not raw:
+        await _no_access(call)
+        return
+    happ = await happ_crypto.format_for_user(raw)
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📤 Поделиться", callback_data="share:open")
+    kb.button(text="🔙 Назад", callback_data="dev:menu")
+    kb.adjust(1)
+    await safe_edit(
+        call.message, TV_DEVICES[key].format(key=_key_block(happ)),
+        reply_markup=kb.as_markup(),
+    )
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("dl:"))
+async def cb_download(call: CallbackQuery) -> None:
+    """Step 1: download screen. TV devices fall through to the QR-import guide."""
     key = call.data.split(":", 1)[1]
-    device = DEVICES.get(key)
+    if key in TV_DEVICES:
+        await _show_tv_guide(call, key)
+        return
+    device = PHONE_DEVICES.get(key)
     if device is None:
         await call.answer()
         return
-    raw_url = await _active_sub_raw(call.from_user.id)
-    if not raw_url:
-        # Reachable from the main menu without an active subscription.
-        kb = InlineKeyboardBuilder()
-        kb.button(text="💳 Купить подписку", callback_data="menu:buy")
-        kb.button(text="🏠 Главное меню", callback_data="menu:main")
-        kb.adjust(1)
-        await safe_edit(
-            call.message,
-            "🔒 Доступ не активен.\n\nОформи подписку, чтобы получить ключ 👇",
-            reply_markup=kb.as_markup(),
-        )
+    kb = InlineKeyboardBuilder()
+    for label, url in device["downloads"]:
+        if url:
+            kb.button(text=label, url=url)
+    if device["incy_download"]:
+        kb.button(text="📲 Скачать Incy", url=device["incy_download"])
+    kb.button(text="➡️ Дальше", callback_data=f"cn:{key}")
+    kb.button(text="🔙 Назад", callback_data="dev:menu")
+    kb.adjust(1)
+    if device["dl_photo"]:
+        await show_screen(call.message, device["dl_photo"], DOWNLOAD_TEXT, reply_markup=kb.as_markup())
+    else:
+        await safe_edit(call.message, DOWNLOAD_TEXT, reply_markup=kb.as_markup())
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("cn:"))
+async def cb_connect(call: CallbackQuery) -> None:
+    """Step 2: connect screen — one-tap key import (or copyable-key fallback)."""
+    key = call.data.split(":", 1)[1]
+    device = PHONE_DEVICES.get(key)
+    if device is None:
         await call.answer()
         return
+    happ = await _happ_key(call.from_user.id)
+    if not happ:
+        await _no_access(call)
+        return
+    incy = await _incy_key(call.from_user.id) if device["incy"] else None
 
-    # Happ crypt key, shown as an expandable tap-to-copy quote for manual import.
-    happ_link = happ_crypto.format_for_user(raw_url)
-    key_block = (
-        "🔑 <b>Твой ключ доступа</b>\n"
-        f"<blockquote expandable><code>{html.escape(happ_link)}</code></blockquote>"
-    )
+    kb = InlineKeyboardBuilder()
+    page = _connect_link(happ)
+    if page:
+        kb.button(text="🔑 Добавить VPN ключ", url=page)
+    else:
+        kb.button(text="🔑 Добавить VPN ключ", callback_data=f"addkey:{key}")
+    if device["incy"] and incy:
+        incy_page = _connect_link(incy)
+        if incy_page:
+            kb.button(text="💚 Добавить в Incy", url=incy_page)
+        else:
+            kb.button(text="💚 Добавить в Incy", callback_data=f"addincy:{key}")
+    kb.button(text="✅ Готово", callback_data="onb:done")
+    kb.button(text="📋 Установить вручную", callback_data=f"manual:{key}")
+    kb.button(text="💬 Нужна помощь", url=SUPPORT_URL)
+    kb.button(text="🔙 Назад", callback_data=f"dl:{key}")
+    kb.adjust(1)
+    await show_screen(call.message, "connect", CONNECT_TEXT, reply_markup=kb.as_markup())
+    await call.answer()
 
+
+@router.callback_query(F.data.startswith("manual:"))
+async def cb_manual(call: CallbackQuery) -> None:
+    key = call.data.split(":", 1)[1]
+    happ = await _happ_key(call.from_user.id)
+    if not happ:
+        await _no_access(call)
+        return
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Готово", callback_data="onb:done")
+    kb.button(text="🔙 Назад", callback_data=f"cn:{key}")
+    kb.adjust(1)
     await safe_edit(
-        call.message,
-        device["text"].format(key=key_block),
-        reply_markup=device_keyboard(
-            download_url=device["download_url"],
-            download_label=device["download_label"],
-        ),
+        call.message, MANUAL_TEXT.format(key=_key_block(happ)),
+        reply_markup=kb.as_markup(),
     )
     await call.answer()
+
+
+@router.callback_query(F.data.startswith("addkey:"))
+async def cb_addkey(call: CallbackQuery) -> None:
+    """Connect-page fallback: reveal the Happ key as a tap-to-copy quote."""
+    happ = await _happ_key(call.from_user.id)
+    if not happ:
+        await call.answer("Сначала забери доступ", show_alert=True)
+        return
+    await call.message.answer(
+        "🔑 Нажми на ключ — он скопируется, затем вставь его в Happ:\n\n"
+        f"<blockquote expandable><code>{html.escape(happ)}</code></blockquote>"
+    )
+    await call.answer("Ключ отправлен ниже 👇")
+
+
+@router.callback_query(F.data.startswith("addincy:"))
+async def cb_addincy(call: CallbackQuery) -> None:
+    """Connect-page fallback: reveal the Incy key as a tap-to-copy quote."""
+    incy = await _incy_key(call.from_user.id)
+    if not incy:
+        await call.answer("Ключ Incy недоступен", show_alert=True)
+        return
+    await call.message.answer(
+        "💚 Нажми на ключ — он скопируется, затем вставь его в Incy:\n\n"
+        f"<blockquote expandable><code>{html.escape(incy)}</code></blockquote>"
+    )
+    await call.answer("Ключ отправлен ниже 👇")
+
+
+@router.callback_query(F.data == "onb:done")
+async def cb_done(call: CallbackQuery) -> None:
+    """Flash a premium ⚡️ for 2s, then open the main menu."""
+    await call.answer()
+    try:
+        await call.message.delete()
+    except Exception:  # noqa: BLE001 - message may be too old
+        pass
+    bolt = None
+    try:
+        bolt = await call.message.bot.send_message(
+            call.message.chat.id, convert_tg_emoji(PREMIUM_BOLT), parse_mode="HTML"
+        )
+    except Exception:  # noqa: BLE001 - custom emoji may be unavailable to the bot
+        logger.debug("premium bolt send failed", exc_info=True)
+    await asyncio.sleep(2)
+    if bolt is not None:
+        try:
+            await bolt.delete()
+        except Exception:  # noqa: BLE001
+            pass
+    await show_main(call.message, call.from_user.id)
 
 
 # --- Screen 9: share ------------------------------------------------------

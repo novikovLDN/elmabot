@@ -15,6 +15,10 @@ SCREEN_IMAGES: dict[str, str] = {
     "cabinet": "AgACAgQAAxkBAAKdp2orzSZpDobx7J4m5sbMf--KVnyeAAIxDWsbbFlgUUyw3wuaKd_oAQADAgADeQADPAQ",
     # 🫧 ELMA активирован — экран выбора устройства
     "devices": "AgACAgQAAxkBAAKdq2orzVbXhIztj1r7BJsKyVsNNEwrAAIyDWsbbFlgUekFWRgF2ieaAQADAgADeQADPAQ",
+    # 🌐 Подключитесь в одно нажатие — экран импорта ключа (общий для устройств)
+    "connect": "AgACAgIAAxkBAAEEsxJqN6Xqh717eC9BIS0tNUKpeH85kQACQRprGxiswEmHMO1mDqO4VgEAAwIAA3kAAzwE",
+    # 📲 Скачайте Happ — экран загрузки для Android
+    "dl_android": "AgACAgIAAxkBAAEEsyRqN6qqU9EdWDXtoxeki674VJtnZAACqRtrG-wUwEmVOepDyczjwAEAAwIAA3kAAzwE",
 }
 
 

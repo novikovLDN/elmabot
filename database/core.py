@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     reminder_24h_sent BOOLEAN DEFAULT FALSE,
     reminder_3h_sent  BOOLEAN DEFAULT FALSE,
     react_offer_sent  BOOLEAN DEFAULT FALSE,
+    trial_1h_sent     BOOLEAN DEFAULT FALSE,
     created_at        TIMESTAMPTZ DEFAULT NOW(),
     activated_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -97,6 +98,7 @@ ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS vless_uuid       TEXT;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS subscription_url TEXT;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS created_at       TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS react_offer_sent BOOLEAN DEFAULT FALSE;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS trial_1h_sent    BOOLEAN DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS payments (
     id             BIGSERIAL PRIMARY KEY,

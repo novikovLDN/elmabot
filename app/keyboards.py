@@ -79,43 +79,24 @@ def welcome_keyboard() -> InlineKeyboardMarkup:
 def claim_keyboard() -> InlineKeyboardMarkup:
     """Screen 1 — claim the free trial."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="🎁 Забрать доступ", callback_data="onb:claim")
+    kb.button(text="🎁 Забрать бесплатный доступ", callback_data="onb:claim")
     kb.adjust(1)
     return kb.as_markup()
 
 
 def devices_keyboard() -> InlineKeyboardMarkup:
-    """Screen 2 — choose a device to connect."""
+    """Screen 2 — choose a device to connect. Each device opens its download
+    step (``dl:<key>``); TV devices keep their QR-import instructions."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="📱 iOS", callback_data="dev:ios")
-    kb.button(text="🤖 Android", callback_data="dev:android")
-    kb.button(text="🖥 MacOS", callback_data="dev:macos")
-    kb.button(text="💻 Windows", callback_data="dev:windows")
-    kb.button(text="📺 Android TV", callback_data="dev:androidtv")
-    kb.button(text="🍎 Apple TV", callback_data="dev:appletv")
+    kb.button(text="📱 iOS", callback_data="dl:ios")
+    kb.button(text="🤖 Android", callback_data="dl:android")
+    kb.button(text="🖥 MacOS", callback_data="dl:macos")
+    kb.button(text="💻 Windows", callback_data="dl:windows")
+    kb.button(text="📺 Android TV", callback_data="dl:androidtv")
+    kb.button(text="🍎 Apple TV", callback_data="dl:appletv")
     kb.button(text="📤 Поделиться", callback_data="share:open")
     kb.button(text="🔙 Назад", callback_data="menu:main")
     kb.adjust(2, 2, 2, 1, 1)
-    return kb.as_markup()
-
-
-def device_keyboard(
-    *,
-    download_url: str | None,
-    download_label: str,
-) -> InlineKeyboardMarkup:
-    """A single device instruction screen (screens 3-8).
-
-    The user follows the on-screen steps and pastes the key (shown as an
-    expandable quote in the message) into Happ/Incy by hand — no deep-link
-    button. Buttons: download the app, back to device list, and Готово -> menu.
-    """
-    kb = InlineKeyboardBuilder()
-    if download_url:
-        kb.button(text=download_label, url=download_url)
-    kb.button(text="🔙 Назад", callback_data="dev:menu")
-    kb.button(text="✅ Готово", callback_data="menu:main")
-    kb.adjust(1)
     return kb.as_markup()
 
 
@@ -145,6 +126,14 @@ def buy_keyboard(*, renew: bool = False) -> InlineKeyboardMarkup:
         callback_data="menu:buy",
     )
     kb.button(text="🔙 Главное меню", callback_data="menu:main")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def manage_sub_keyboard() -> InlineKeyboardMarkup:
+    """Reminder CTA → the subscription-management screen (``sub:manage``)."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🔄 Продлить доступ", callback_data="sub:manage")
     kb.adjust(1)
     return kb.as_markup()
 

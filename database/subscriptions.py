@@ -30,6 +30,7 @@ ON CONFLICT (telegram_id) DO UPDATE SET
     source            = EXCLUDED.source,
     reminder_24h_sent = FALSE,
     reminder_3h_sent  = FALSE,
+    trial_1h_sent     = FALSE,
     activated_at      = NOW()
 RETURNING *
 """
@@ -248,6 +249,29 @@ async def mark_reminder_sent(telegram_id: int, flag_column: str) -> None:
     pool = get_pool()
     await pool.execute(
         f"UPDATE subscriptions SET {flag_column} = TRUE WHERE telegram_id = $1",
+        telegram_id,
+    )
+
+
+async def due_trial_1h_reminders() -> list[asyncpg.Record]:
+    """Active trial subscriptions activated 1h+ ago and not yet reminded once
+    (the 'продли заранее' nudge an hour into the trial)."""
+    pool = get_pool()
+    return await pool.fetch(
+        """
+        SELECT telegram_id, expires_at
+        FROM subscriptions
+        WHERE status = 'active' AND source = 'trial'
+          AND activated_at < NOW() - INTERVAL '1 hour'
+          AND NOT trial_1h_sent
+        """
+    )
+
+
+async def mark_trial_1h_sent(telegram_id: int) -> None:
+    pool = get_pool()
+    await pool.execute(
+        "UPDATE subscriptions SET trial_1h_sent = TRUE WHERE telegram_id = $1",
         telegram_id,
     )
 

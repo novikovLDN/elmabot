@@ -113,6 +113,12 @@ APP_ANDROIDTV_URL = _get_str(
     "APP_ANDROIDTV_URL",
     "https://play.google.com/store/apps/details?id=com.happproxy",
 )
+# iOS shows two Happ store links (Russia / other region) plus an optional Incy
+# link. Both Happ links default to APP_IOS_URL; the Incy download button is
+# hidden until APP_INCY_IOS_URL is set.
+APP_IOS_RU_URL = _get_str("APP_IOS_RU_URL", APP_IOS_URL)
+APP_IOS_INTL_URL = _get_str("APP_IOS_INTL_URL", APP_IOS_URL)
+APP_INCY_IOS_URL = _get_str("APP_INCY_IOS_URL", "")
 
 # --- Platega payments (SBP / card via app.platega.io) ---
 # Credentials from the Platega dashboard (Настройки). When MERCHANT_ID/SECRET are
