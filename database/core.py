@@ -118,6 +118,48 @@ CREATE INDEX IF NOT EXISTS idx_subs_expiry
     ON subscriptions(expires_at) WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_payments_status
     ON payments(status);
+
+-- --- Admin web dashboard ------------------------------------------------
+-- One password hash per admin telegram_id (set via a bot magic-link).
+CREATE TABLE IF NOT EXISTS admin_auth (
+    telegram_id   BIGINT PRIMARY KEY,
+    password_hash TEXT,
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- One-time magic-link tokens (set/reset password, issued by the bot).
+CREATE TABLE IF NOT EXISTS admin_login_tokens (
+    token       TEXT PRIMARY KEY,
+    telegram_id BIGINT NOT NULL,
+    purpose     TEXT NOT NULL DEFAULT 'setup',   -- setup | reset
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    expires_at  TIMESTAMPTZ NOT NULL,
+    used_at     TIMESTAMPTZ
+);
+
+-- Audit log of admin actions performed from the dashboard.
+CREATE TABLE IF NOT EXISTS audit_log (
+    id          BIGSERIAL PRIMARY KEY,
+    admin_id    BIGINT NOT NULL,
+    action      TEXT NOT NULL,
+    target_id   BIGINT,
+    detail      TEXT,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
+
+-- WebAuthn / Passkey credentials, one or more per admin.
+CREATE TABLE IF NOT EXISTS webauthn_credentials (
+    credential_id TEXT PRIMARY KEY,           -- base64url credential id
+    telegram_id   BIGINT NOT NULL,
+    public_key    TEXT NOT NULL,              -- base64url COSE public key
+    sign_count    BIGINT NOT NULL DEFAULT 0,
+    label         TEXT,
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    last_used_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_webauthn_tg ON webauthn_credentials(telegram_id);
 """
 
 

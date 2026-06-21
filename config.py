@@ -26,6 +26,13 @@ def _get_int(name: str, default: int | None = None) -> int:
         raise RuntimeError(f"Environment variable {name!r} must be an integer") from exc
 
 
+def _get_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 # --- Telegram ---
 BOT_TOKEN = _get_str("BOT_TOKEN", "")
 # Product brand name. Screens hard-code the default ("ELMA"); set BRAND_NAME to
@@ -160,6 +167,28 @@ USE_WEBHOOK = bool(WEBHOOK_BASE_URL)
 # box on webhook deployments; stays empty on plain local polling.
 if not CONNECT_PAGE_URL and WEBHOOK_BASE_URL:
     CONNECT_PAGE_URL = f"{WEBHOOK_BASE_URL}/connect"
+
+# --- Admin dashboard (web) ---
+# Single-admin web panel served by the same aiohttp process under /dashboard/.
+# Disabled by default; set DASHBOARD_ENABLED=true to mount the API + SPA.
+DASHBOARD_ENABLED = _get_bool("DASHBOARD_ENABLED", False)
+# Secret used to sign dashboard JWTs. Defaults to a stable value derived from the
+# bot token so tokens survive restarts without extra config (override in prod).
+JWT_SECRET = _get_str("JWT_SECRET", "") or hashlib.sha256(
+    ("dashboard:" + BOT_TOKEN).encode()
+).hexdigest()
+# How long a dashboard access token stays valid.
+JWT_TTL_DAYS = _get_int("JWT_TTL_DAYS", 5)
+# Public base URL used to build magic-links from the bot. Defaults to the
+# webhook/Railway domain; the dashboard lives at "<base>/dashboard/".
+DASHBOARD_BASE_URL = _get_str("DASHBOARD_BASE_URL", "") or WEBHOOK_BASE_URL
+# Relying-Party id for WebAuthn/Passkey (the bare domain, no scheme/port).
+# Derived from DASHBOARD_BASE_URL when not set explicitly.
+_dash_host = (
+    DASHBOARD_BASE_URL.split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+)
+WEBAUTHN_RP_ID = _get_str("WEBAUTHN_RP_ID", "") or _dash_host
+WEBAUTHN_RP_NAME = _get_str("WEBAUTHN_RP_NAME", f"{BRAND_NAME} Admin")
 
 # --- Scheduler tuning ---
 REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)

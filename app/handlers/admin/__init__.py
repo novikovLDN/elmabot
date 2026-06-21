@@ -28,6 +28,7 @@ from app.keyboards import (
     admin_user_actions,
     broadcast_user_markup,
 )
+import config
 from app.services import broadcaster, subscription_service
 from app.tariffs import get_tariff
 from app.utils import convert_tg_emoji, safe_edit, safe_send
@@ -37,6 +38,7 @@ from database import (
     REVENUE_WINDOWS,
     SEGMENTS,
     activity_windows,
+    create_login_token,
     find_user_by_username,
     get_subscription,
     get_user,
@@ -161,6 +163,28 @@ def fmt_duration(td: timedelta) -> str:
 async def cmd_admin(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("🛠 <b>Админ-панель</b>", parse_mode="HTML", reply_markup=admin_menu())
+
+
+@router.message(Command("dashboard"))
+async def cmd_dashboard(message: Message) -> None:
+    """Issue a one-time magic-link to set the dashboard password / sign in."""
+    if not config.DASHBOARD_ENABLED:
+        await message.answer("🌐 Веб-дашборд выключен (DASHBOARD_ENABLED=false).")
+        return
+    if not config.DASHBOARD_BASE_URL:
+        await message.answer("⚠️ Не задан DASHBOARD_BASE_URL — ссылку не построить.")
+        return
+    token = await create_login_token(message.from_user.id, purpose="setup")
+    url = f"{config.DASHBOARD_BASE_URL}/dashboard/setup?token={token}"
+    await message.answer(
+        "🌐 <b>Вход в дашборд</b>\n\n"
+        "Одноразовая ссылка (15 минут) — задайте пароль и войдите:\n"
+        f"{html.escape(url)}\n\n"
+        "После установки пароля заходите на "
+        f"{html.escape(config.DASHBOARD_BASE_URL)}/dashboard/",
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
 
 
 BLOCK_TEXT = (

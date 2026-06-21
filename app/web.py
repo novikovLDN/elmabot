@@ -112,6 +112,10 @@ def build_app(bot: Bot, dp: Dispatcher | None = None) -> web.Application:
     app.router.add_get("/", _health)
     app.router.add_get("/connect", _connect_page)
     app.router.add_post("/platega/webhook", _platega_webhook)
+    # Admin web dashboard (no-op unless DASHBOARD_ENABLED).
+    from app.api.dashboard import setup_dashboard
+
+    setup_dashboard(app, bot)
     if dp is not None:
         SimpleRequestHandler(
             dispatcher=dp,

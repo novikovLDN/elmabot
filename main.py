@@ -81,8 +81,8 @@ async def main() -> None:
         else:
             # Polling mode (local dev): drop any stale webhook first.
             await bot.delete_webhook(drop_pending_updates=True)
-            if config.PAYMENTS_ENABLED:
-                runner = await start_server(bot)  # Platega callback only
+            if config.PAYMENTS_ENABLED or config.DASHBOARD_ENABLED:
+                runner = await start_server(bot)  # Platega callback and/or dashboard
             else:
                 logger.info("Polling mode, payments off — no HTTP server")
             logger.info("Bot starting (polling)…")
