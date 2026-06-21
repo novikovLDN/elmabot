@@ -3,173 +3,103 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-<meta name="theme-color" content="#0b0b10" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#ffffff" />
 <meta name="robots" content="noindex" />
-<title>Подключение · Elma VPN</title>
+<title>Подключение Elma</title>
 <style>
   :root {
-    --bg:        #f6f7f9;
-    --card:      #ffffff;
-    --ink:       #0e0f13;
-    --ink-soft:  #6b7280;
-    --line:      #ececf0;
-    --field:     #f4f5f7;
-    --accent-1:  #6366f1;   /* indigo */
-    --accent-2:  #22c6e6;   /* cyan   */
-    --ok:        #16a34a;
-    --err:       #d2436b;
-    --radius:    18px;
-    --maxw:      420px;
+    --bg:       #ffffff;
+    --ink:      #111114;   /* заголовок / кнопка */
+    --ink-soft: #6b7280;   /* подписи, ключ      */
+    --field:    #f3f4f6;   /* блок ключа         */
+    --radius:   12px;
+    --maxw:     460px;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg:       #0b0b10;
-      --card:     #15161c;
-      --ink:      #f4f5f8;
-      --ink-soft: #9aa0ad;
-      --line:     #24262f;
-      --field:    #1d1f27;
-    }
-  }
-
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; height: 100%; }
+  html, body { margin: 0; background: var(--bg); }
   body {
-    background:
-      radial-gradient(120% 60% at 50% -10%, rgba(99,102,241,.16), transparent 60%),
-      var(--bg);
-    color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    min-height: 100%;
-    display: flex; align-items: center; justify-content: center;
-    padding: 28px 20px calc(28px + env(safe-area-inset-bottom));
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 48px 22px calc(40px + env(safe-area-inset-bottom));
   }
+  .wrap { max-width: var(--maxw); margin: 0 auto; animation: rise .4s ease both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
 
-  .card {
-    width: 100%; max-width: var(--maxw);
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 26px;
-    padding: 34px 26px 26px;
-    box-shadow: 0 24px 60px -28px rgba(20, 22, 40, .45);
-    text-align: center;
-    animation: rise .5s cubic-bezier(.2,.7,.2,1) both;
-  }
-  @keyframes rise { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
-
-  /* --- Brand mark --- */
-  .logo {
-    width: 64px; height: 64px; margin: 0 auto 18px;
-    border-radius: 19px;
-    display: grid; place-items: center;
-    background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-    box-shadow: 0 12px 26px -10px rgba(99,102,241,.7);
-  }
-  .logo svg { width: 34px; height: 34px; display: block; }
-  .brand { font-size: 13px; font-weight: 700; letter-spacing: 3px; color: var(--ink-soft); text-transform: uppercase; margin: 0 0 6px; }
-
-  h1 { margin: 0 0 8px; font-size: 23px; font-weight: 800; letter-spacing: -.3px; }
-  .sub { margin: 0 0 24px; color: var(--ink-soft); font-size: 15.5px; line-height: 1.55; }
-  .sub b { color: var(--ink); font-weight: 700; }
+  h1 { margin: 0 0 12px; font-size: 23px; font-weight: 800; letter-spacing: -.2px; }
+  .sub { margin: 0 0 22px; color: var(--ink-soft); font-size: 15.5px; line-height: 1.5; }
 
   .btn {
-    width: 100%;
-    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    display: inline-flex; align-items: center; gap: 8px;
     border: 0; cursor: pointer; text-decoration: none;
-    background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
-    color: #fff;
-    padding: 17px 22px; border-radius: var(--radius);
-    font-size: 16.5px; font-weight: 700; letter-spacing: .1px;
-    box-shadow: 0 14px 30px -14px rgba(99,102,241,.85);
-    transition: transform .12s ease, box-shadow .2s ease, filter .2s ease;
+    background: var(--ink); color: #fff;
+    padding: 14px 22px; border-radius: var(--radius);
+    font-size: 15.5px; font-weight: 700;
+    transition: transform .12s ease, opacity .2s ease;
   }
-  .btn:active { transform: translateY(1px) scale(.99); filter: brightness(.97); }
-  .btn .arrow { transition: transform .2s ease; }
-  .btn:hover .arrow { transform: translateX(3px); }
+  .btn:active { transform: scale(.98); opacity: .9; }
 
-  .status { margin: 14px 0 0; min-height: 20px; font-size: 13.5px; color: var(--ink-soft); transition: opacity .2s ease; }
-  .status .dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%;
-    background: var(--accent-1); vertical-align: middle; animation: pulse 1s ease-in-out infinite; }
-  @keyframes pulse { 0%,100% { opacity: .35; transform: scale(.85) } 50% { opacity: 1; transform: scale(1) } }
+  .status { margin: 12px 2px 0; min-height: 18px; font-size: 13px; color: var(--ink-soft); }
 
-  /* --- Manual fallback --- */
-  .manual { margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--line); text-align: left; }
-  .manual .label { margin: 0 0 10px; color: var(--ink-soft); font-size: 13.5px; line-height: 1.5; }
-  .keyrow {
-    display: flex; align-items: stretch; gap: 8px;
-    background: var(--field); border: 1px solid var(--line);
-    border-radius: 13px; padding: 12px 12px 12px 14px;
-    cursor: pointer; transition: border-color .2s ease, background .2s ease;
-  }
-  .keyrow:active { border-color: var(--accent-1); }
-  .key {
-    flex: 1; min-width: 0;
+  .manual { margin-top: 30px; }
+  .manual .label { margin: 0 0 10px; color: var(--ink-soft); font-size: 14px; line-height: 1.5; }
+  .keybox {
+    background: var(--field); border-radius: var(--radius);
+    padding: 14px 16px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-    font-size: 12.5px; line-height: 1.55; color: var(--ink-soft);
-    word-break: break-all; user-select: all; -webkit-user-select: all;
-    max-height: 4.6em; overflow: hidden;
+    font-size: 13px; line-height: 1.6; color: var(--ink-soft);
+    word-break: break-all; white-space: pre-wrap;
+    cursor: pointer; user-select: all; -webkit-user-select: all;
   }
-  .copy { flex: none; align-self: center; display: grid; place-items: center;
-    width: 34px; height: 34px; border-radius: 9px; color: var(--ink-soft); }
-  .copy svg { width: 18px; height: 18px; }
+  .copy {
+    display: block; margin: 10px 2px 0; text-align: right;
+    color: var(--ink); font-size: 14px; font-weight: 600;
+    background: none; border: 0; cursor: pointer; margin-left: auto;
+  }
+  .copy:active { opacity: .6; }
 
-  .foot { margin: 20px 2px 0; font-size: 12px; line-height: 1.5; color: var(--ink-soft); display: flex; align-items: center; justify-content: center; gap: 6px; }
-  .foot svg { width: 13px; height: 13px; opacity: .7; }
+  .foot {
+    margin-top: 40px;
+    font-size: 12px; font-weight: 600; letter-spacing: 2px;
+    text-transform: uppercase; color: #c4c7cf;
+  }
 
-  .error { color: var(--err); font-size: 15.5px; line-height: 1.6; margin: 6px 0 0; }
+  .error { color: #d2436b; font-size: 15.5px; line-height: 1.55; }
 
   .toast {
-    position: fixed; left: 50%; bottom: calc(26px + env(safe-area-inset-bottom));
+    position: fixed; left: 50%; bottom: calc(28px + env(safe-area-inset-bottom));
     transform: translateX(-50%) translateY(16px);
-    background: var(--ink); color: var(--bg);
-    padding: 11px 18px; border-radius: 12px; font-size: 14px; font-weight: 600;
-    opacity: 0; pointer-events: none; transition: all .25s ease;
-    box-shadow: 0 12px 30px -10px rgba(0,0,0,.4);
+    background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 12px;
+    font-size: 14px; font-weight: 600; opacity: 0; pointer-events: none; transition: all .25s ease;
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
-  <div class="card">
-    <div class="logo" aria-hidden="true">
-      <!-- bolt mark -->
-      <svg viewBox="0 0 24 24" fill="none"><path d="M13 2L4.5 13.2c-.4.5 0 1.3.7 1.3H11l-1 8 8.8-11.7c.4-.6 0-1.3-.7-1.3H12l1-7.5z" fill="#fff"/></svg>
-    </div>
-
-    <!-- normal state -->
+  <div class="wrap">
+    <!-- обычное состояние -->
     <div id="ok">
-      <p class="brand">Elma VPN</p>
-      <h1>Почти готово</h1>
-      <p class="sub">Нажмите кнопку — откроется <b id="app1">Happ</b> и подписка добавится автоматически.</p>
+      <h1>Подключение Elma</h1>
+      <p class="sub">Нажми кнопку — откроется приложение Happ и импортируется подписка.</p>
 
-      <button class="btn" id="connect" type="button">
-        Открыть в <span id="app2">Happ</span> <span class="arrow">→</span>
-      </button>
+      <button class="btn" id="connect" type="button">Открыть в Happ</button>
       <p class="status" id="status"></p>
 
       <div class="manual" id="manual" hidden>
-        <p class="label">Не открылось? Скопируйте ключ и вставьте в приложение вручную:</p>
-        <div class="keyrow" id="keyrow" title="Нажмите, чтобы скопировать">
-          <div class="key" id="key"></div>
-          <span class="copy" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
-          </span>
-        </div>
+        <p class="label">Если не открылось, скопируйте и вставьте вручную:</p>
+        <div class="keybox" id="key" title="Нажмите, чтобы скопировать"></div>
+        <button class="copy" id="copy" type="button">Скопировать</button>
       </div>
 
-      <p class="foot">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-        Ключ передаётся только вашему устройству
-      </p>
+      <div class="foot">Elma · VPN</div>
     </div>
 
-    <!-- missing / stale key -->
+    <!-- нет ключа в ссылке -->
     <div id="bad" hidden>
-      <p class="brand">Elma VPN</p>
-      <h1>Ссылка недействительна</h1>
+      <h1>Подключение Elma</h1>
       <p class="error">Ссылка открыта не полностью или устарела.<br>Вернитесь в бота Elma и откройте ссылку заново.</p>
+      <div class="foot">Elma · VPN</div>
     </div>
   </div>
 
@@ -178,18 +108,15 @@
 <script>
   (function () {
     "use strict";
-    // Ключ приходит в #fragment — на сервер он не уходит. Поддерживаем оба
-    // приложения: happ:// (RSA crypt4) и incy:// (AES crypt1). Голый base64
-    // без схемы трактуем как Happ — для обратной совместимости.
+    // Ключ приходит в #fragment — на сервер он не уходит. Открываем Happ:
+    // happ://crypt4/… передаём как есть, голый base64 без схемы — префиксуем.
     var raw = "";
     try { raw = decodeURIComponent((location.hash || "").slice(1)).trim(); }
     catch (e) { raw = (location.hash || "").slice(1).trim(); }
 
     var deeplink = "";
     if (raw) {
-      deeplink = (raw.indexOf("happ://") === 0 || raw.indexOf("incy://") === 0)
-        ? raw
-        : "happ://crypt4/" + raw;
+      deeplink = (raw.indexOf("happ://") === 0) ? raw : "happ://crypt4/" + raw;
     }
 
     var $ = function (id) { return document.getElementById(id); };
@@ -200,22 +127,17 @@
       return;
     }
 
-    var appName = deeplink.indexOf("incy://") === 0 ? "Incy" : "Happ";
-    $("app1").textContent = appName;
-    $("app2").textContent = appName;
     $("key").textContent = deeplink;
 
     var opened = false;
     function openApp() {
       opened = true;
-      $("status").innerHTML = '<span class="dot"></span>Открываем ' + appName + '…';
-      // Навигация на кастомную схему — ОС передаёт ссылку в приложение.
-      window.location.href = deeplink;
+      $("status").textContent = "Открываем Happ…";
+      window.location.href = deeplink;   // ОС передаёт ссылку приложению Happ
     }
-
     $("connect").addEventListener("click", openApp);
 
-    // Тост-копирование ключа.
+    // Копирование ключа.
     function toast() {
       var t = $("toast");
       t.classList.add("show");
@@ -229,20 +151,18 @@
     }
     function fallbackCopy() {
       var ta = document.createElement("textarea");
-      ta.value = deeplink;
-      ta.style.position = "fixed"; ta.style.opacity = "0";
+      ta.value = deeplink; ta.style.position = "fixed"; ta.style.opacity = "0";
       document.body.appendChild(ta); ta.focus(); ta.select();
       try { document.execCommand("copy"); } catch (e) {}
       document.body.removeChild(ta); toast();
     }
-    $("keyrow").addEventListener("click", copyKey);
+    $("key").addEventListener("click", copyKey);
+    $("copy").addEventListener("click", copyKey);
 
-    // Авто-попытка открыть приложение сразу — многие платформы откроют без нажатия.
-    window.addEventListener("load", function () {
-      setTimeout(openApp, 600);
-    });
+    // Авто-попытка открыть Happ сразу после загрузки.
+    window.addEventListener("load", function () { setTimeout(openApp, 600); });
 
-    // Если через ~2.5с мы всё ещё на странице — показываем ручной импорт.
+    // Если через ~2.5с всё ещё на странице — показываем ручной импорт.
     setTimeout(function () {
       $("manual").hidden = false;
       if (opened) $("status").textContent = "Если приложение не открылось — нажмите кнопку ещё раз.";
