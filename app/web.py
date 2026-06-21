@@ -9,6 +9,7 @@ Platega retries non-2xx responses (up to 3 times, 5 min apart), so:
   * provisioning failed       -> 500 (let it retry; complete_purchase is idempotent)
 """
 import logging
+from pathlib import Path
 
 from aiogram import Bot, Dispatcher
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
@@ -21,9 +22,26 @@ from database import get_payment, is_payment_paid, mark_payment_failed
 
 logger = logging.getLogger(__name__)
 
+# Branded one-tap connect page; the crypt key arrives in the URL #fragment and
+# never reaches us, so this is a static file. Read once at import.
+_CONNECT_HTML_PATH = Path(__file__).resolve().parent.parent / "web" / "connect.html"
+try:
+    _CONNECT_HTML = _CONNECT_HTML_PATH.read_text(encoding="utf-8")
+except OSError:  # pragma: no cover - file should always ship with the app
+    logger.warning("connect.html not found at %s", _CONNECT_HTML_PATH)
+    _CONNECT_HTML = "<!doctype html><meta charset=utf-8><title>Elma</title>"
+
 
 async def _health(_: web.Request) -> web.Response:
     return web.Response(text="ok")
+
+
+async def _connect_page(_: web.Request) -> web.Response:
+    return web.Response(
+        text=_CONNECT_HTML,
+        content_type="text/html",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 async def _platega_webhook(request: web.Request) -> web.Response:
@@ -92,6 +110,7 @@ def build_app(bot: Bot, dp: Dispatcher | None = None) -> web.Application:
     app = web.Application()
     app["bot"] = bot
     app.router.add_get("/", _health)
+    app.router.add_get("/connect", _connect_page)
     app.router.add_post("/platega/webhook", _platega_webhook)
     if dp is not None:
         SimpleRequestHandler(

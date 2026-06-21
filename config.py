@@ -88,11 +88,12 @@ DISCOUNT_REACTIVATION_PCT = _get_int("DISCOUNT_REACTIVATION_PCT", 20)
 REACTIVATION_AFTER_DAYS = _get_int("REACTIVATION_AFTER_DAYS", 3)
 
 # --- Branding / onboarding ---
-# Optional branded landing page (web/connect.html) that auto-opens Happ and
-# imports the subscription. When set, the connection screens show an "Открыть в
-# Happ" button linking to it; the crypt key travels in the URL #fragment, so it
-# never reaches the page's web server. Empty -> button hidden, key shown as text.
-# Example: "https://your-domain/connect.html"
+# Branded landing page (web/connect.html, served by this service at /connect)
+# that auto-opens Happ and imports the subscription in one tap. The connection
+# screens link to it; the crypt key travels in the URL #fragment, so it never
+# reaches the web server. When left empty it auto-resolves to "<base>/connect"
+# below (once WEBHOOK_BASE_URL / RAILWAY_PUBLIC_DOMAIN is known); set explicitly
+# to host the page elsewhere. Empty + no base -> button hidden, key shown as text.
 CONNECT_PAGE_URL = _get_str("CONNECT_PAGE_URL", "").rstrip("/")
 # Per-platform app download links shown on the device connection screens.
 # Default to the public Happ client pages; override per deployment if needed.
@@ -153,6 +154,12 @@ TELEGRAM_WEBHOOK_SECRET = _get_str("TELEGRAM_WEBHOOK_SECRET", "") or hashlib.sha
 ).hexdigest()
 
 USE_WEBHOOK = bool(WEBHOOK_BASE_URL)
+
+# If no explicit connect page was configured, serve our own /connect route off
+# the public base URL (Railway domain). Keeps one-tap connect working out of the
+# box on webhook deployments; stays empty on plain local polling.
+if not CONNECT_PAGE_URL and WEBHOOK_BASE_URL:
+    CONNECT_PAGE_URL = f"{WEBHOOK_BASE_URL}/connect"
 
 # --- Scheduler tuning ---
 REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)
