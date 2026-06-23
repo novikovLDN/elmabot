@@ -232,11 +232,15 @@ async def due_reminders(flag_column: str) -> list[asyncpg.Record]:
         raise ValueError(f"unknown reminder column {flag_column!r}")
     window = _REMINDER_COLUMNS[flag_column]
     pool = get_pool()
+    # Paid subscriptions only: the time-based "подписка заканчивается" reminders
+    # are renewal nudges. Trials get their own −10% trial-end offer instead, and
+    # a fresh 2-day trial would otherwise fall straight into the 3-day window.
     return await pool.fetch(
         f"""
         SELECT telegram_id, expires_at, source
         FROM subscriptions
         WHERE status = 'active'
+          AND source <> 'trial'
           AND expires_at BETWEEN NOW() AND NOW() + INTERVAL '{window}'
           AND NOT {flag_column}
         """
@@ -280,7 +284,7 @@ async def expired_active() -> list[asyncpg.Record]:
     pool = get_pool()
     return await pool.fetch(
         """
-        SELECT telegram_id, panel_uuid
+        SELECT telegram_id, panel_uuid, source
         FROM subscriptions
         WHERE status = 'active' AND expires_at < NOW()
         """

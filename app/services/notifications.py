@@ -97,6 +97,11 @@ async def expiry_cleanup_loop(bot: Bot) -> None:
                 uid = row["telegram_id"]
                 await subscription_service.deprovision(row["panel_uuid"])
                 await mark_expired(uid)
+                # Trials are converted by the dedicated −10% trial-end offer
+                # (offer_loop); they must NOT get the paid "Доступ приостановлен"
+                # / −20% restore message — that's only for ended PAID subs.
+                if row["source"] == "trial":
+                    continue
                 # −20% restore offer right at expiry.
                 await set_offer(uid, "sub_end", DISCOUNT_SUB_END_PCT, utcnow() + timedelta(days=1))
                 await safe_send(
