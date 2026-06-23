@@ -335,6 +335,7 @@ async def due_reactivation_offers(after_days: int) -> list[asyncpg.Record]:
         FROM subscriptions s
         JOIN users u ON u.telegram_id = s.telegram_id
         WHERE s.status = 'expired'
+          AND s.source <> 'trial'
           AND NOT s.react_offer_sent
           AND u.is_reachable
           AND s.expires_at <  NOW() - INTERVAL '{days} days'

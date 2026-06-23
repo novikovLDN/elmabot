@@ -83,6 +83,8 @@ from .users import (
     release_trial,
     set_offer,
     set_referral,
+    set_trial_funnel_stage,
+    due_trial_funnel,
     trial_available,
     upsert_user,
 )
@@ -113,6 +115,8 @@ __all__ = [
     "set_offer",
     "clear_offer",
     "mark_trial_offer_sent",
+    "due_trial_funnel",
+    "set_trial_funnel_stage",
     # subscriptions
     "get_subscription",
     "upsert_subscription",

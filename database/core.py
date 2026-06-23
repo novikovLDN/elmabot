@@ -34,13 +34,15 @@ CREATE TABLE IF NOT EXISTS users (
     trial_offer_sent BOOLEAN DEFAULT FALSE,
     offer_code       TEXT,
     offer_pct        INTEGER,
-    offer_expires_at TIMESTAMPTZ
+    offer_expires_at TIMESTAMPTZ,
+    trial_funnel_stage SMALLINT NOT NULL DEFAULT 0
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by      BIGINT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_offer_sent BOOLEAN DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_code       TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_pct        INTEGER;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_expires_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_funnel_stage SMALLINT NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS referrals (
     referred_id BIGINT PRIMARY KEY REFERENCES users(telegram_id),

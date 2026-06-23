@@ -223,3 +223,40 @@ async def mark_trial_offer_sent(telegram_id: int) -> None:
     await pool.execute(
         "UPDATE users SET trial_offer_sent = TRUE WHERE telegram_id = $1", telegram_id
     )
+
+
+# --- Trial conversion funnel ----------------------------------------------
+
+async def due_trial_funnel() -> list[asyncpg.Record]:
+    """Trial users still in the conversion funnel: used the trial, never paid,
+    no active paid/gift access, reachable, and not past the last stage."""
+    pool = get_pool()
+    return await pool.fetch(
+        """
+        SELECT u.telegram_id, u.trial_used_at, u.trial_expires_at,
+               u.trial_funnel_stage
+        FROM users u
+        WHERE u.trial_used_at IS NOT NULL
+          AND u.trial_expires_at IS NOT NULL
+          AND u.is_reachable
+          AND u.trial_funnel_stage < 7
+          AND NOT EXISTS (
+              SELECT 1 FROM payments p
+              WHERE p.telegram_id = u.telegram_id AND p.status = 'paid'
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM subscriptions s
+              WHERE s.telegram_id = u.telegram_id
+                AND s.status = 'active' AND s.source <> 'trial'
+          )
+        """
+    )
+
+
+async def set_trial_funnel_stage(telegram_id: int, stage: int) -> None:
+    pool = get_pool()
+    await pool.execute(
+        "UPDATE users SET trial_funnel_stage = $2 WHERE telegram_id = $1",
+        telegram_id,
+        stage,
+    )

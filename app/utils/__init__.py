@@ -4,12 +4,14 @@ from .telegram_safe import (
     safe_send,
     send_screen,
     show_screen,
+    strip_tg_emoji,
 )
 
 __all__ = [
     "safe_send",
     "safe_edit",
     "convert_tg_emoji",
+    "strip_tg_emoji",
     "send_screen",
     "show_screen",
 ]

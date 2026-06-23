@@ -30,6 +30,12 @@ def convert_tg_emoji(text: str) -> str:
     )
 
 
+def strip_tg_emoji(text: str) -> str:
+    """Drop the custom-emoji markup, keeping the plain fallback emoji — used when
+    the bot can't send premium emoji (``CUSTOM_EMOJI_INVALID``)."""
+    return _TG_EMOJI_RE.sub(lambda m: m.group(1), text)
+
+
 async def safe_send(
     bot: Bot,
     user_id: int,
