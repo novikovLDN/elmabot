@@ -41,11 +41,13 @@ from config import (
     APP_IOS_RU_URL,
     APP_MACOS_URL,
     APP_WINDOWS_URL,
+    BYPASS_ENABLED,
     CONNECT_PAGE_URL,
     SUPPORT_URL,
     TRIAL_DAYS,
 )
 from database import (
+    get_bypass,
     get_subscription,
     set_referral,
     trial_available,
@@ -367,6 +369,16 @@ async def _happ_key(user_id: int) -> str | None:
     return happ_crypto.format_for_user(raw) if raw else None
 
 
+async def _bypass_key(user_id: int) -> str | None:
+    """Happ crypt4 deep link for the user's bypass entity, or None."""
+    if not BYPASS_ENABLED:
+        return None
+    row = await get_bypass(user_id)
+    if not row or not row["subscription_url"]:
+        return None
+    return happ_crypto.format_for_user(row["subscription_url"])
+
+
 async def _no_access(call: CallbackQuery) -> None:
     """Shown when a connection screen is reached without an active subscription."""
     kb = InlineKeyboardBuilder()
@@ -442,6 +454,14 @@ async def cb_connect(call: CallbackQuery) -> None:
         kb.button(text="🔑 Добавить VPN ключ", url=page)
     else:
         kb.button(text="🔑 Добавить VPN ключ", callback_data=f"addkey:{key}")
+    # Bypass key — same one-tap logic, shown only if the user has bypass.
+    bp = await _bypass_key(call.from_user.id)
+    if bp:
+        bp_page = _connect_link(bp)
+        if bp_page:
+            kb.button(text="🌐 Добавить обход", url=bp_page)
+        else:
+            kb.button(text="🌐 Добавить обход", callback_data=f"addbp:{key}")
     kb.button(text="✅ Готово", callback_data="onb:done")
     kb.button(text="📋 Установить вручную", callback_data=f"manual:{key}")
     kb.button(text="💬 Нужна помощь", url=SUPPORT_URL)
@@ -481,6 +501,20 @@ async def cb_addkey(call: CallbackQuery) -> None:
         f"<blockquote expandable><code>{html.escape(happ)}</code></blockquote>"
     )
     await call.answer("Ключ отправлен ниже 👇")
+
+
+@router.callback_query(F.data.startswith("addbp:"))
+async def cb_addbp(call: CallbackQuery) -> None:
+    """Connect-page fallback: reveal the bypass crypt4 key as a tap-to-copy quote."""
+    bp = await _bypass_key(call.from_user.id)
+    if not bp:
+        await call.answer("Ключ обхода недоступен", show_alert=True)
+        return
+    await call.message.answer(
+        "🌐 Нажми на ключ — он скопируется, затем вставь его в Happ:\n\n"
+        f"<blockquote expandable><code>{html.escape(bp)}</code></blockquote>"
+    )
+    await call.answer("Ключ обхода отправлен ниже 👇")
 
 
 @router.callback_query(F.data == "onb:done")
