@@ -141,14 +141,6 @@ CONNECT_TEXT = (
     "ключ добавится автоматически."
 )
 
-MANUAL_TEXT = (
-    "<b>Ручная установка — 3 простых шага</b>\n\n"
-    "1. Нажмите на ключ ниже — он скопируется\n"
-    "2. Откройте Happ\n"
-    "3. Вставьте из буфера (📋)\n\n"
-    "{key}"
-)
-
 # Phone/desktop devices: Happ download buttons (label, url) and an optional
 # download-screen photo (a key in app.screens). MacOS mirrors the Windows flow.
 PHONE_DEVICES: dict[str, dict] = {
@@ -216,6 +208,11 @@ def _add_connect_button(kb, label: str, deeplink: str, fallback_cb: str) -> None
         kb.button(text=label, url=page)
     else:
         kb.button(text=label, callback_data=fallback_cb)
+
+
+def _labeled_key(label: str, key: str) -> str:
+    """A titled key in a collapsed, tap-to-copy quote."""
+    return f"{label}\n<blockquote expandable><code>{html.escape(key)}</code></blockquote>"
 
 
 def _key_block(happ_link: str) -> str:
@@ -479,25 +476,36 @@ async def cb_connect(call: CallbackQuery) -> None:
 
     uid = call.from_user.id
     kb = InlineKeyboardBuilder()
-    # VPN (premium): Happ for everyone, Incy additionally on iOS.
+    rows: list[int] = []
+
+    # VPN row: Happ (left) + Incy (right, iOS only).
     _add_connect_button(kb, "🔑 Добавить VPN (Happ)", happ, f"addkey:{key}")
+    vpn_n = 1
     if key == "ios":
         incy_vpn = await _incy_vpn_key(uid)
         if incy_vpn:
-            _add_connect_button(kb, "💚 Добавить VPN (Incy)", incy_vpn, f"addvincy:{key}")
-    # Bypass (only if the user has it): Happ, plus Incy on iOS.
+            _add_connect_button(kb, "💚 Incy VPN", incy_vpn, f"addvincy:{key}")
+            vpn_n = 2
+    rows.append(vpn_n)
+
+    # Обход row (only if the user has bypass): Happ (left) + Incy (right, iOS).
     bp = await _bypass_key(uid)
     if bp:
         _add_connect_button(kb, "🌐 Добавить Обход (Happ)", bp, f"addbp:{key}")
+        bp_n = 1
         if key == "ios":
             incy_bp = await _incy_bypass_key(uid)
             if incy_bp:
-                _add_connect_button(kb, "💚 Добавить обход (Incy)", incy_bp, f"addbpincy:{key}")
+                _add_connect_button(kb, "💚 Incy Обход", incy_bp, f"addbpincy:{key}")
+                bp_n = 2
+        rows.append(bp_n)
+
     kb.button(text="✅ Готово", callback_data="onb:done")
     kb.button(text="📋 Установить вручную", callback_data=f"manual:{key}")
     kb.button(text="💬 Нужна помощь", url=SUPPORT_URL)
     kb.button(text="🔙 Назад", callback_data=f"dl:{key}")
-    kb.adjust(1)
+    rows += [1, 1, 1, 1]
+    kb.adjust(*rows)
     await show_screen(call.message, "connect", CONNECT_TEXT, reply_markup=kb.as_markup())
     await call.answer()
 
@@ -505,18 +513,38 @@ async def cb_connect(call: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("manual:"))
 async def cb_manual(call: CallbackQuery) -> None:
     key = call.data.split(":", 1)[1]
-    happ = await _happ_key(call.from_user.id)
+    uid = call.from_user.id
+    happ = await _happ_key(uid)
     if not happ:
         await _no_access(call)
         return
+
+    parts = [
+        "📋 <b>Ручная установка — 3 простых шага</b>\n",
+        "1. Нажмите на ключ ниже — он скопируется",
+        "2. Откройте Happ/Incy",
+        "3. Нажмите ➕ в правом верхнем углу (или «Вставить» в Incy) "
+        "и вставьте из буфера 📋",
+        "<i>Повторите для второго ключа.</i>\n",
+        _labeled_key("🔑 <b>VPN ключ Happ</b> (обычные безлимитные сервера):", happ),
+    ]
+    bp = await _bypass_key(uid)
+    if bp:
+        parts.append(_labeled_key("🌐 <b>Обход ключ Happ</b> (белые списки РФ):", bp))
+    if key == "ios":
+        iv = await _incy_vpn_key(uid)
+        if iv:
+            parts.append(_labeled_key("💚 <b>VPN ключ Incy</b> (обычные безлимитные сервера):", iv))
+        if bp:
+            ib = await _incy_bypass_key(uid)
+            if ib:
+                parts.append(_labeled_key("💚 <b>Обход ключ Incy</b> (белые списки РФ):", ib))
+
     kb = InlineKeyboardBuilder()
     kb.button(text="✅ Готово", callback_data="onb:done")
     kb.button(text="🔙 Назад", callback_data=f"cn:{key}")
     kb.adjust(1)
-    await safe_edit(
-        call.message, MANUAL_TEXT.format(key=_key_block(happ)),
-        reply_markup=kb.as_markup(),
-    )
+    await safe_edit(call.message, "\n".join(parts), reply_markup=kb.as_markup())
     await call.answer()
 
 
