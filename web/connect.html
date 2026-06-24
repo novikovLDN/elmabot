@@ -116,7 +116,9 @@
 
     var deeplink = "";
     if (raw) {
-      deeplink = (raw.indexOf("happ://") === 0) ? raw : "happ://crypt4/" + raw;
+      deeplink = (raw.indexOf("happ://") === 0 || raw.indexOf("incy://") === 0)
+        ? raw
+        : "happ://crypt4/" + raw;
     }
 
     var $ = function (id) { return document.getElementById(id); };
@@ -127,13 +129,18 @@
       return;
     }
 
+    // App name from the scheme: incy:// → Incy, otherwise Happ.
+    var app = deeplink.indexOf("incy://") === 0 ? "Incy" : "Happ";
+    var btn = $("connect");
+    if (btn) btn.textContent = "Открыть в " + app;
+
     $("key").textContent = deeplink;
 
     var opened = false;
     function openApp() {
       opened = true;
-      $("status").textContent = "Открываем Happ…";
-      window.location.href = deeplink;   // ОС передаёт ссылку приложению Happ
+      $("status").textContent = "Открываем " + app + "…";
+      window.location.href = deeplink;   // ОС передаёт ссылку приложению
     }
     $("connect").addEventListener("click", openApp);
 

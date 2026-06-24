@@ -172,7 +172,9 @@ APP_ANDROIDTV_URL = _get_str(
 # hidden until APP_INCY_IOS_URL is set.
 APP_IOS_RU_URL = _get_str("APP_IOS_RU_URL", APP_IOS_URL)
 APP_IOS_INTL_URL = _get_str("APP_IOS_INTL_URL", APP_IOS_URL)
-APP_INCY_IOS_URL = _get_str("APP_INCY_IOS_URL", "")
+APP_INCY_IOS_URL = _get_str(
+    "APP_INCY_IOS_URL", "https://apps.apple.com/ru/app/incy/id6756943388"
+)
 
 # --- Platega payments (SBP / card via app.platega.io) ---
 # Credentials from the Platega dashboard (Настройки). When MERCHANT_ID/SECRET are

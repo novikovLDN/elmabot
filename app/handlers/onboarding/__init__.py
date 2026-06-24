@@ -33,10 +33,11 @@ from app.keyboards import (
     welcome_keyboard,
 )
 from app.handlers.menu import show_main
-from app.services import billing, happ_crypto, subscription_service
+from app.services import billing, happ_crypto, incy_crypto, subscription_service
 from app.utils import convert_tg_emoji, safe_edit, send_screen, show_screen
 from config import (
     APP_ANDROID_URL,
+    APP_INCY_IOS_URL,
     APP_IOS_INTL_URL,
     APP_IOS_RU_URL,
     APP_MACOS_URL,
@@ -136,7 +137,8 @@ DOWNLOAD_TEXT = (
 
 CONNECT_TEXT = (
     "🌐 <b>Подключитесь в одно нажатие</b>\n\n"
-    "Нажмите кнопку ниже — ключ добавится автоматически."
+    "Нажмите кнопку ниже с названием вашего приложения — "
+    "ключ добавится автоматически."
 )
 
 MANUAL_TEXT = (
@@ -152,6 +154,7 @@ MANUAL_TEXT = (
 PHONE_DEVICES: dict[str, dict] = {
     "ios": {
         "downloads": [
+            ("📲 Скачать Incy", APP_INCY_IOS_URL),
             ("📲 Скачать Happ (Россия)", APP_IOS_RU_URL),
             ("📲 Скачать Happ (другой регион)", APP_IOS_INTL_URL),
         ],
@@ -203,6 +206,16 @@ def _connect_link(deeplink: str | None) -> str | None:
     if not CONNECT_PAGE_URL or not deeplink:
         return None
     return f"{CONNECT_PAGE_URL}#{quote(deeplink, safe='')}"
+
+
+def _add_connect_button(kb, label: str, deeplink: str, fallback_cb: str) -> None:
+    """One-tap add button: connect-page redirect (URL) if available, else a
+    callback that reveals the key as a copyable quote."""
+    page = _connect_link(deeplink)
+    if page:
+        kb.button(text=label, url=page)
+    else:
+        kb.button(text=label, callback_data=fallback_cb)
 
 
 def _key_block(happ_link: str) -> str:
@@ -379,6 +392,22 @@ async def _bypass_key(user_id: int) -> str | None:
     return happ_crypto.format_for_user(row["subscription_url"])
 
 
+async def _incy_vpn_key(user_id: int) -> str | None:
+    """Incy crypt1 deep link for the user's subscription, or None (sidecar)."""
+    raw = await _active_sub_raw(user_id)
+    return await incy_crypto.to_incy_link(raw) if raw else None
+
+
+async def _incy_bypass_key(user_id: int) -> str | None:
+    """Incy crypt1 deep link for the user's bypass entity, or None."""
+    if not BYPASS_ENABLED:
+        return None
+    row = await get_bypass(user_id)
+    if not row or not row["subscription_url"]:
+        return None
+    return await incy_crypto.to_incy_link(row["subscription_url"])
+
+
 async def _no_access(call: CallbackQuery) -> None:
     """Shown when a connection screen is reached without an active subscription."""
     kb = InlineKeyboardBuilder()
@@ -448,20 +477,22 @@ async def cb_connect(call: CallbackQuery) -> None:
         await _no_access(call)
         return
 
+    uid = call.from_user.id
     kb = InlineKeyboardBuilder()
-    page = _connect_link(happ)
-    if page:
-        kb.button(text="🔑 Добавить VPN ключ", url=page)
-    else:
-        kb.button(text="🔑 Добавить VPN ключ", callback_data=f"addkey:{key}")
-    # Bypass key — same one-tap logic, shown only if the user has bypass.
-    bp = await _bypass_key(call.from_user.id)
+    # VPN (premium): Happ for everyone, Incy additionally on iOS.
+    _add_connect_button(kb, "🔑 Добавить VPN (Happ)", happ, f"addkey:{key}")
+    if key == "ios":
+        incy_vpn = await _incy_vpn_key(uid)
+        if incy_vpn:
+            _add_connect_button(kb, "💚 Добавить VPN (Incy)", incy_vpn, f"addvincy:{key}")
+    # Bypass (only if the user has it): Happ, plus Incy on iOS.
+    bp = await _bypass_key(uid)
     if bp:
-        bp_page = _connect_link(bp)
-        if bp_page:
-            kb.button(text="🌐 Добавить обход", url=bp_page)
-        else:
-            kb.button(text="🌐 Добавить обход", callback_data=f"addbp:{key}")
+        _add_connect_button(kb, "🌐 Добавить Обход (Happ)", bp, f"addbp:{key}")
+        if key == "ios":
+            incy_bp = await _incy_bypass_key(uid)
+            if incy_bp:
+                _add_connect_button(kb, "💚 Добавить обход (Incy)", incy_bp, f"addbpincy:{key}")
     kb.button(text="✅ Готово", callback_data="onb:done")
     kb.button(text="📋 Установить вручную", callback_data=f"manual:{key}")
     kb.button(text="💬 Нужна помощь", url=SUPPORT_URL)
@@ -513,6 +544,34 @@ async def cb_addbp(call: CallbackQuery) -> None:
     await call.message.answer(
         "🌐 Нажми на ключ — он скопируется, затем вставь его в Happ:\n\n"
         f"<blockquote expandable><code>{html.escape(bp)}</code></blockquote>"
+    )
+    await call.answer("Ключ обхода отправлен ниже 👇")
+
+
+@router.callback_query(F.data.startswith("addvincy:"))
+async def cb_addvincy(call: CallbackQuery) -> None:
+    """Connect-page fallback: reveal the Incy crypt1 VPN key."""
+    incy = await _incy_vpn_key(call.from_user.id)
+    if not incy:
+        await call.answer("Ключ Incy недоступен", show_alert=True)
+        return
+    await call.message.answer(
+        "💚 Нажми на ключ — он скопируется, затем вставь его в Incy:\n\n"
+        f"<blockquote expandable><code>{html.escape(incy)}</code></blockquote>"
+    )
+    await call.answer("Ключ отправлен ниже 👇")
+
+
+@router.callback_query(F.data.startswith("addbpincy:"))
+async def cb_addbpincy(call: CallbackQuery) -> None:
+    """Connect-page fallback: reveal the Incy crypt1 bypass key."""
+    incy = await _incy_bypass_key(call.from_user.id)
+    if not incy:
+        await call.answer("Ключ обхода Incy недоступен", show_alert=True)
+        return
+    await call.message.answer(
+        "💚 Нажми на ключ — он скопируется, затем вставь его в Incy:\n\n"
+        f"<blockquote expandable><code>{html.escape(incy)}</code></blockquote>"
     )
     await call.answer("Ключ обхода отправлен ниже 👇")
 
