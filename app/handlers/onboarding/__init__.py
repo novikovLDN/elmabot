@@ -531,14 +531,14 @@ async def cb_manual(call: CallbackQuery) -> None:
     bp = await _bypass_key(uid)
     if bp:
         parts.append(_labeled_key("🌐 <b>Обход ключ Happ</b> (белые списки РФ):", bp))
-    if key == "ios":
-        iv = await _incy_vpn_key(uid)
-        if iv:
-            parts.append(_labeled_key("💚 <b>VPN ключ Incy</b> (обычные безлимитные сервера):", iv))
-        if bp:
-            ib = await _incy_bypass_key(uid)
-            if ib:
-                parts.append(_labeled_key("💚 <b>Обход ключ Incy</b> (белые списки РФ):", ib))
+    # Incy keys on the manual screen are shown for every device (unified screen).
+    iv = await _incy_vpn_key(uid)
+    if iv:
+        parts.append(_labeled_key("💚 <b>VPN ключ Incy</b> (обычные безлимитные сервера):", iv))
+    if bp:
+        ib = await _incy_bypass_key(uid)
+        if ib:
+            parts.append(_labeled_key("💚 <b>Обход ключ Incy</b> (белые списки РФ):", ib))
 
     kb = InlineKeyboardBuilder()
     kb.button(text="✅ Готово", callback_data="onb:done")
