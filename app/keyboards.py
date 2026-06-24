@@ -16,22 +16,24 @@ def back_to_menu() -> InlineKeyboardMarkup:
 def main_menu_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
     from config import BYPASS_ENABLED
 
+    sub_text = "🔄 Продлить подписку" if has_active_sub else "💳 Купить подписку"
+
     kb = InlineKeyboardBuilder()
     kb.button(text="📲 Подключиться", callback_data="dev:menu")
-    if has_active_sub:
-        kb.button(text="🔄 Продлить подписку", callback_data="menu:buy")
-    else:
-        kb.button(text="💳 Купить подписку", callback_data="menu:buy")
-    extra = 0
-    if BYPASS_ENABLED:
-        kb.button(text="🌐 Обход блокировок", callback_data="tr:open")
-        extra = 1
     kb.button(text="👤 Личный кабинет", callback_data="menu:cabinet")
+    # Right under the cabinet: «Купить ГБ» | «Купить/Продлить подписку».
+    if BYPASS_ENABLED:
+        kb.button(text="🌐 Купить ГБ", callback_data="tr:open")
+        kb.button(text=sub_text, callback_data="menu:buy")
+        buy_row = (2,)
+    else:
+        kb.button(text=sub_text, callback_data="menu:buy")
+        buy_row = (1,)
     kb.button(text="🫂 Реферальная программа", callback_data="menu:referral")
     kb.button(text="🎁 Подарить", callback_data="gift:open")
     kb.button(text="🛎️ Помощь", callback_data="help:open")
     kb.button(text="ℹ️ О сервисе", callback_data="about:open")
-    kb.adjust(1, 1, *( (1,) if extra else () ), 2, 2, 1)
+    kb.adjust(1, 1, *buy_row, 2, 2)
     return kb.as_markup()
 
 

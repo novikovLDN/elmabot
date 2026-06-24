@@ -113,6 +113,23 @@ async def get_payment(invoice_id: str) -> asyncpg.Record | None:
     )
 
 
+async def pending_payments_recent(min_age_min: int, max_age_min: int) -> list[asyncpg.Record]:
+    """Pending payments aged between min/max minutes — reconcile candidates for
+    when the provider webhook was missed (the min age avoids racing the webhook)."""
+    pool = get_pool()
+    return await pool.fetch(
+        """
+        SELECT * FROM payments
+        WHERE status = 'pending'
+          AND created_at <= NOW() - make_interval(mins => $1)
+          AND created_at >= NOW() - make_interval(mins => $2)
+        ORDER BY created_at
+        """,
+        min_age_min,
+        max_age_min,
+    )
+
+
 async def is_payment_paid(invoice_id: str) -> bool:
     pool = get_pool()
     row = await pool.fetchrow(

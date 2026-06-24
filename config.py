@@ -241,6 +241,13 @@ REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)
 EXPIRY_INTERVAL_SECONDS = _get_int("EXPIRY_INTERVAL_SECONDS", 600)
 # How often to poll Remnawave for bypass traffic remaining (low-balance pushes).
 TRAFFIC_MONITOR_SECONDS = _get_int("TRAFFIC_MONITOR_SECONDS", 300)
+# Reconcile poller: re-check pending payments the provider webhook may have
+# missed and finalize confirmed ones, so a missed webhook never leaves a paid
+# user without access/confirmation. Only touches payments aged ≥ MIN_AGE (so it
+# never races the webhook) and ≤ MAX_AGE.
+PAYMENT_RECONCILE_SECONDS = _get_int("PAYMENT_RECONCILE_SECONDS", 60)
+PAYMENT_RECONCILE_MIN_AGE_MIN = _get_int("PAYMENT_RECONCILE_MIN_AGE_MIN", 2)
+PAYMENT_RECONCILE_MAX_AGE_MIN = _get_int("PAYMENT_RECONCILE_MAX_AGE_MIN", 30)
 # Pause between users in the dashboard bypass backfill — paces the panel API so a
 # mass migration never trips Remnawave rate limits.
 BYPASS_BACKFILL_PACE_MS = _get_int("BYPASS_BACKFILL_PACE_MS", 150)

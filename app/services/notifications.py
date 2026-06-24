@@ -32,17 +32,19 @@ from database import (
     due_reminders,
     due_trial_funnel,
     expired_active,
+    is_payment_paid,
     mark_expired,
     mark_react_offer_sent,
     mark_reminder_sent,
     mark_unreachable,
+    pending_payments_recent,
     set_bypass_notify_level,
     set_offer,
     set_trial_funnel_stage,
     utcnow,
 )
 
-from . import bypass_service, subscription_service
+from . import billing, bypass_service, platega, subscription_service
 from ..keyboards import offer_keyboard
 from ..utils import convert_tg_emoji, safe_send, strip_tg_emoji
 
@@ -328,3 +330,42 @@ async def traffic_monitor_loop(bot: Bot) -> None:
         except Exception:  # noqa: BLE001 - keep the loop alive
             logger.exception("traffic_monitor_loop iteration failed")
         await asyncio.sleep(config.TRAFFIC_MONITOR_SECONDS)
+
+
+# --- Payment reconcile (missed-webhook safety net) ------------------------
+
+async def _reconcile_payments(bot: Bot) -> None:
+    rows = await pending_payments_recent(
+        config.PAYMENT_RECONCILE_MIN_AGE_MIN, config.PAYMENT_RECONCILE_MAX_AGE_MIN
+    )
+    fixed = 0
+    for payment in rows:
+        txn = payment["invoice_id"]
+        if not txn or await is_payment_paid(txn):
+            continue
+        try:
+            status = await platega.get_status(txn)
+        except Exception:  # noqa: BLE001 - provider hiccup, retry next tick
+            logger.warning("Reconcile: status check failed for %s", txn)
+            continue
+        if status != platega.STATUS_CONFIRMED:
+            continue
+        try:
+            await billing.finalize_confirmed_payment(bot, payment)
+            fixed += 1
+            logger.info("Reconciled missed payment %s (code=%s)", txn, payment["tariff_code"])
+        except Exception:  # noqa: BLE001
+            logger.exception("Reconcile finalize failed for %s", txn)
+    if fixed:
+        logger.info("Payment reconcile finalized %d missed payment(s)", fixed)
+
+
+async def payment_reconcile_loop(bot: Bot) -> None:
+    if not config.PAYMENTS_ENABLED:
+        return
+    while True:
+        try:
+            await _reconcile_payments(bot)
+        except Exception:  # noqa: BLE001 - keep the loop alive
+            logger.exception("payment_reconcile_loop iteration failed")
+        await asyncio.sleep(config.PAYMENT_RECONCILE_SECONDS)

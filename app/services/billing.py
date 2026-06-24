@@ -13,7 +13,7 @@ from aiogram import Bot
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 import config
-from app.tariffs import Tariff, get_tariff
+from app.tariffs import TARIFFS, Tariff, get_tariff
 from app.utils import safe_send
 from database import (
     clear_offer,
@@ -95,6 +95,30 @@ async def complete_traffic_purchase(
         "Ключ обхода и остаток трафика — в личном кабинете 👇",
         reply_markup=kb.as_markup(),
     )
+
+
+async def finalize_confirmed_payment(bot: Bot, payment) -> None:
+    """Provision a CONFIRMED payment (traffic pack or subscription) and notify.
+
+    Shared by the Platega webhook and the reconcile poller. The caller guarantees
+    the payment isn't already settled (is_payment_paid guard) before calling.
+    """
+    code = payment["tariff_code"] or ""
+    invoice_id = payment["invoice_id"]
+    tg = payment["telegram_id"]
+    amount = payment["amount_kopecks"]
+
+    if code.startswith("tr_"):
+        gb = int(code[3:])  # ValueError -> caller logs & marks failed
+        await complete_traffic_purchase(
+            bot, tg, gb, invoice_id=invoice_id, amount_paid=amount,
+            provider=payment["provider"],
+        )
+        return
+
+    tariff = get_tariff(code) or TARIFFS[0]
+    await complete_purchase(bot, tg, tariff, invoice_id=invoice_id, amount_paid=amount)
+    await notify_purchase_activated(bot, tg)
 
 
 _PURCHASE_OK_TEXT = (

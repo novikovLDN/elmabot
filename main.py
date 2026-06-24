@@ -15,6 +15,7 @@ from app.services import platega, remnawave
 from app.services.notifications import (
     expiry_cleanup_loop,
     offer_loop,
+    payment_reconcile_loop,
     reminder_loop,
     traffic_monitor_loop,
 )
@@ -64,6 +65,7 @@ async def main() -> None:
         asyncio.create_task(expiry_cleanup_loop(bot), name="expiry_cleanup_loop"),
         asyncio.create_task(offer_loop(bot), name="offer_loop"),
         asyncio.create_task(traffic_monitor_loop(bot), name="traffic_monitor_loop"),
+        asyncio.create_task(payment_reconcile_loop(bot), name="payment_reconcile_loop"),
     ]
 
     runner = None
