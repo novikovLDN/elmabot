@@ -8,6 +8,7 @@ import html
 import logging
 import re
 from datetime import timedelta
+from urllib.parse import quote
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
@@ -29,7 +30,7 @@ from app.keyboards import (
     broadcast_user_markup,
 )
 import config
-from app.services import broadcaster, subscription_service
+from app.services import broadcaster, happ_crypto, subscription_service
 from app.tariffs import get_tariff
 from app.utils import convert_tg_emoji, safe_edit, safe_send
 from config import ADMIN_IDS, REFERRAL_BONUS_DAYS, SUPPORT_USERNAME
@@ -40,6 +41,7 @@ from database import (
     activity_windows,
     create_login_token,
     find_user_by_username,
+    get_bypass,
     get_subscription,
     get_user,
     payment_history,
@@ -638,6 +640,8 @@ async def _builder_view(state: FSMContext) -> tuple[str, object]:
         lines.append("📣 Кнопка «Перейти в канал»: <b>вкл.</b>")
     if data.get("referral"):
         lines.append("🫂 Кнопка «Пригласить друга»: <b>вкл.</b>")
+    if data.get("bypass"):
+        lines.append("🌐 Кнопка «Добавить Обход»: <b>вкл.</b>")
     lines.append("")
     lines.append(
         "<i>Добавьте кнопки к сообщению (по желанию) и нажмите «Отправить». "
@@ -648,6 +652,7 @@ async def _builder_view(state: FSMContext) -> tuple[str, object]:
         disc_days=data.get("disc_days"),
         channel=data.get("channel", False),
         referral=data.get("referral", False),
+        bypass=data.get("bypass", False),
     )
     return "\n".join(lines), markup
 
@@ -775,6 +780,29 @@ async def cb_btn_referral(call: CallbackQuery, state: FSMContext) -> None:
     await call.answer()
 
 
+@router.callback_query(F.data == "bcastbtn:bypass")
+async def cb_btn_bypass(call: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    await state.update_data(bypass=not data.get("bypass", False))
+    body, markup = await _builder_view(state)
+    await safe_edit(call.message, body, reply_markup=markup)
+    await call.answer()
+
+
+async def _bypass_connect_url(uid: int) -> str | None:
+    """Per-user one-tap link: connect page + the user's bypass crypt4 key in the
+    #fragment. None if no connect page or the user has no bypass key."""
+    if not config.CONNECT_PAGE_URL:
+        return None
+    row = await get_bypass(uid)
+    if not row or not row["subscription_url"]:
+        return None
+    crypt4 = happ_crypto.format_for_user(row["subscription_url"])
+    if not crypt4:
+        return None
+    return f"{config.CONNECT_PAGE_URL}#{quote(crypt4, safe='')}"
+
+
 @router.callback_query(F.data == "bcast:send")
 async def cb_send_broadcast(call: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
@@ -782,12 +810,19 @@ async def cb_send_broadcast(call: CallbackQuery, state: FSMContext) -> None:
     if "segment" not in data or "text" not in data:
         await call.answer("Нет данных рассылки", show_alert=True)
         return
-    markup = broadcast_user_markup(
-        data.get("disc_pct"),
-        data.get("disc_days"),
-        data.get("channel", False),
-        data.get("referral", False),
-    )
+    disc_pct = data.get("disc_pct")
+    disc_days = data.get("disc_days")
+    channel = data.get("channel", False)
+    referral = data.get("referral", False)
+    bypass = data.get("bypass", False)
+
+    async def make_markup(uid: int):
+        # The bypass button is a per-recipient link; everything else is static.
+        bypass_url = await _bypass_connect_url(uid) if bypass else None
+        return broadcast_user_markup(
+            disc_pct, disc_days, channel, referral, bypass_url=bypass_url
+        )
+
     await call.message.edit_text("📤 Рассылка запущена…")
     await call.answer()
     asyncio.create_task(
@@ -797,7 +832,7 @@ async def cb_send_broadcast(call: CallbackQuery, state: FSMContext) -> None:
             data.get("photo_id"),
             data["text"],
             call.from_user.id,
-            markup,
+            make_markup,
         )
     )
 
@@ -808,12 +843,13 @@ async def _run_broadcast(
     photo_id: str | None,
     text: str,
     admin_id: int,
-    markup=None,
+    make_markup,
 ) -> None:
     ids = await recipients(segment)
     total = len(ids)
 
     async def send_one(uid: int) -> None:
+        markup = await make_markup(uid)
         if photo_id:
             await bot.send_photo(
                 uid, photo_id, caption=text or None, parse_mode="HTML",

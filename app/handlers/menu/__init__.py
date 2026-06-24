@@ -225,12 +225,12 @@ async def _cabinet_view(uid: int):
             f"Использовано: {used / _GB:.1f} / {limit / _GB:.0f} ГБ · "
             f"осталось <b>{left / _GB:.1f} ГБ</b>"
         )
-        # Bypass key strictly as a Happ crypt4 deep link (like premium).
+        # Bypass key strictly as a Happ crypt4 deep link in a collapsed quote.
         crypt4 = happ_crypto.format_for_user(usage["subscription_url"])
         if crypt4:
             text += (
                 "\n🔑 Ключ обхода (импортируй в Happ):\n"
-                f"<code>{html.escape(crypt4)}</code>"
+                f"<blockquote expandable><code>{html.escape(crypt4)}</code></blockquote>"
             )
     return text, cabinet_keyboard(has_active_sub=active, has_bypass=has_bypass)
 

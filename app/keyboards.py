@@ -285,6 +285,7 @@ def admin_broadcast_builder(
     disc_days: int | None = None,
     channel: bool = False,
     referral: bool = False,
+    bypass: bool = False,
 ) -> InlineKeyboardMarkup:
     """Compose-step keyboard: optionally attach buttons, then send."""
     kb = InlineKeyboardBuilder()
@@ -307,6 +308,13 @@ def admin_broadcast_builder(
         ),
         callback_data="bcastbtn:ref",
     )
+    from config import BYPASS_ENABLED, CONNECT_PAGE_URL
+
+    if BYPASS_ENABLED and CONNECT_PAGE_URL:
+        kb.button(
+            text=("✅ Кнопка «Добавить Обход»" if bypass else "🌐 + Кнопка «Добавить Обход»"),
+            callback_data="bcastbtn:bypass",
+        )
     kb.button(text="🚀 Отправить рассылку", callback_data="bcast:send")
     kb.button(text="⬅️ Отмена", callback_data="admin:home")
     kb.adjust(1)
@@ -314,13 +322,20 @@ def admin_broadcast_builder(
 
 
 def broadcast_user_markup(
-    disc_pct: int | None, disc_days: int | None, channel: bool, referral: bool = False
+    disc_pct: int | None, disc_days: int | None, channel: bool, referral: bool = False,
+    *, bypass_url: str | None = None,
 ) -> InlineKeyboardMarkup | None:
-    """The inline buttons attached to the message recipients receive."""
+    """The inline buttons attached to the message recipients receive.
+
+    ``bypass_url`` is per-recipient (their bypass crypt4 key on the connect page),
+    so the send loop builds this markup individually for each user."""
     from config import CHANNEL_URL
 
     kb = InlineKeyboardBuilder()
     has_any = False
+    if bypass_url:
+        kb.button(text="🌐 Добавить Обход 🤍", url=bypass_url)
+        has_any = True
     if disc_pct and disc_days:
         kb.button(
             text=f"🔥 Купить со скидкой −{disc_pct}%",
