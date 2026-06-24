@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Fingerprint, KeyRound, LogOut, Plus, Trash2 } from "lucide-react";
+import { Fingerprint, Globe, KeyRound, LogOut, Plus, Trash2 } from "lucide-react";
 import { endpoints, ApiError } from "@/lib/api";
 import { fmtDate, fmtNum } from "@/lib/format";
 import { logout } from "@/lib/auth";
 import { registerPasskey } from "@/lib/passkey";
+import { useEventStream } from "@/lib/ws";
 import { PageLoader, Spinner } from "@/components/Spinner";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { toast } from "@/store/toast";
@@ -94,9 +96,93 @@ export default function Settings() {
         )}
       </div>
 
+      <BypassBackfill />
+
       <button onClick={logout} className="btn-secondary w-full">
         <LogOut className="h-4 w-4" /> Выйти из консоли
       </button>
+    </div>
+  );
+}
+
+function BypassBackfill() {
+  const [gb, setGb] = useState(50);
+  const prev = useQuery({
+    queryKey: ["bypass", "backfill"], queryFn: endpoints.bypassPreview, refetchInterval: 30_000,
+  });
+  const events = useEventStream().filter((e) => e.type.startsWith("bypass_backfill"));
+  const last = events[0];
+
+  const run = useMutation({
+    mutationFn: () => endpoints.bypassBackfill(gb),
+    onSuccess: (r) => toast.success(`Запущено для ${fmtNum(r.total)} пользователей`),
+    onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
+  });
+
+  if (prev.data && !prev.data.enabled) {
+    return (
+      <div className="card card-pad">
+        <div className="mb-1 flex items-center gap-2">
+          <Globe className="h-4 w-4 text-fg-subtle" />
+          <div className="label">Миграция Bypass</div>
+        </div>
+        <p className="text-sm text-fg-muted">
+          Bypass выключен. Задайте <span className="font-mono">REMNAWAVE_BYPASS_SQUAD_UUID</span>,
+          чтобы включить.
+        </p>
+      </div>
+    );
+  }
+
+  const eligible = prev.data?.eligible ?? 0;
+  const running = (prev.data?.running ?? false) || (!!last && last.type !== "bypass_backfill:done");
+  const done = Number(last?.done ?? 0);
+  const total = Number(last?.total ?? 0);
+  const ok = Number(last?.ok ?? 0);
+  const failed = Number(last?.failed ?? 0);
+
+  return (
+    <div className="card card-pad space-y-3">
+      <div className="flex items-center gap-2">
+        <Globe className="h-4 w-4 text-fg-subtle" />
+        <div className="label">Миграция Bypass</div>
+      </div>
+      <p className="text-sm text-fg-muted">
+        Создаст bypass-профиль в нужном сквоте для всех активных платных подписчиков,
+        у кого его ещё нет. Идемпотентно (повторно не дублирует), с троттлингом панели,
+        фоном с прогрессом.
+      </p>
+
+      <div className="flex items-center justify-between rounded-xl bg-bg-elevated px-3 py-2 text-sm">
+        <span className="text-fg-muted">Подходит сейчас</span>
+        <span className="font-semibold">{fmtNum(eligible)}</span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input type="number" min={1} className="input w-28" value={gb}
+          onChange={(e) => setGb(Math.max(1, Number(e.target.value)))} />
+        <span className="text-sm text-fg-muted">ГБ начислить каждому</span>
+      </div>
+
+      {last && (
+        <div className="rounded-xl bg-bg-elevated px-3 py-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-fg-muted">
+              {last.type === "bypass_backfill:done" ? "Готово" : "Идёт миграция…"}
+            </span>
+            <span className="font-medium">{fmtNum(done)} / {fmtNum(total)}</span>
+          </div>
+          <div className="mt-1 text-xs text-fg-subtle">✓ {fmtNum(ok)} · ⚠ {fmtNum(failed)}</div>
+        </div>
+      )}
+
+      <ConfirmButton
+        className="w-full" variant="info" icon={Globe}
+        idleLabel={`Создать bypass всем (${fmtNum(eligible)})`}
+        confirmLabel={`Точно запустить для ${fmtNum(eligible)}?`}
+        pending={run.isPending || running} disabled={eligible === 0}
+        onConfirm={() => run.mutate()}
+      />
     </div>
   );
 }

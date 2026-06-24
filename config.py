@@ -241,6 +241,9 @@ REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)
 EXPIRY_INTERVAL_SECONDS = _get_int("EXPIRY_INTERVAL_SECONDS", 600)
 # How often to poll Remnawave for bypass traffic remaining (low-balance pushes).
 TRAFFIC_MONITOR_SECONDS = _get_int("TRAFFIC_MONITOR_SECONDS", 300)
+# Pause between users in the dashboard bypass backfill — paces the panel API so a
+# mass migration never trips Remnawave rate limits.
+BYPASS_BACKFILL_PACE_MS = _get_int("BYPASS_BACKFILL_PACE_MS", 150)
 
 # --- Channel ---
 # Public channel link for the "Перейти в канал" broadcast button. Override via

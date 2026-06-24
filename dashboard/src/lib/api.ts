@@ -183,6 +183,12 @@ export const endpoints = {
 
   // settings
   settings: () => api.get<Settings>("/settings"),
+
+  // bypass migration
+  bypassPreview: () =>
+    api.get<{ enabled: boolean; eligible: number; running: boolean }>("/bypass/backfill/preview"),
+  bypassBackfill: (gb: number) =>
+    api.post<{ ok: boolean; total: number; gb: number }>("/bypass/backfill", { gb }),
 };
 
 export interface BroadcastPayload {

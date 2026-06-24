@@ -70,6 +70,8 @@ from .admin import (
 )
 from .bypass import (
     all_bypass,
+    bypass_backfill_count,
+    bypass_backfill_targets,
     clear_bypass_panel,
     get_bypass,
     record_traffic_purchase,
@@ -168,6 +170,8 @@ __all__ = [
     "set_bypass_notify_level",
     "clear_bypass_panel",
     "all_bypass",
+    "bypass_backfill_targets",
+    "bypass_backfill_count",
     "record_traffic_purchase",
     # admin dashboard
     "get_admin_password_hash",

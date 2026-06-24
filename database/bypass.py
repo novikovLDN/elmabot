@@ -95,6 +95,36 @@ async def all_bypass() -> list[asyncpg.Record]:
     )
 
 
+async def bypass_backfill_targets() -> list[int]:
+    """Active *paid* subscribers (not trials) who don't yet have a bypass entity.
+    Used by the dashboard backfill to provision bypass for existing customers."""
+    pool = get_pool()
+    rows = await pool.fetch(
+        """
+        SELECT s.telegram_id
+        FROM subscriptions s
+        LEFT JOIN bypass_subscriptions b ON b.telegram_id = s.telegram_id
+        WHERE s.status = 'active' AND s.source <> 'trial'
+          AND (b.telegram_id IS NULL OR b.panel_uuid IS NULL)
+        ORDER BY s.telegram_id
+        """
+    )
+    return [r["telegram_id"] for r in rows]
+
+
+async def bypass_backfill_count() -> int:
+    pool = get_pool()
+    return await pool.fetchval(
+        """
+        SELECT COUNT(*)
+        FROM subscriptions s
+        LEFT JOIN bypass_subscriptions b ON b.telegram_id = s.telegram_id
+        WHERE s.status = 'active' AND s.source <> 'trial'
+          AND (b.telegram_id IS NULL OR b.panel_uuid IS NULL)
+        """
+    )
+
+
 async def record_traffic_purchase(
     telegram_id: int,
     gb_amount: int,
