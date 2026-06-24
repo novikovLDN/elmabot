@@ -195,9 +195,9 @@ REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)
 EXPIRY_INTERVAL_SECONDS = _get_int("EXPIRY_INTERVAL_SECONDS", 600)
 
 # --- Channel ---
-# Public channel link for the "Перейти в канал" broadcast button. Empty = the
-# button shows a "скоро" stub (channel not created yet).
-CHANNEL_URL = _get_str("CHANNEL_URL", "")
+# Public channel link for the "Перейти в канал" broadcast button. Override via
+# the CHANNEL_URL env var; empty disables it (button shows a "скоро" stub).
+CHANNEL_URL = _get_str("CHANNEL_URL", "https://t.me/elma_vpn")
 
 # --- Broadcast (admin fan-out) ---
 # Telegram throttles bulk sends to ~30 msg/s to *different* users before it
