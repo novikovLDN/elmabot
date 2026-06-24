@@ -14,7 +14,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 from app.format import fmt_date
 from app.keyboards import cabinet_keyboard, main_menu_keyboard
-from app.services import bypass_service
+from app.services import bypass_service, happ_crypto
 from app.utils import safe_edit, send_screen, show_screen
 from config import (
     DEVICE_LIMIT,
@@ -225,10 +225,12 @@ async def _cabinet_view(uid: int):
             f"Использовано: {used / _GB:.1f} / {limit / _GB:.0f} ГБ · "
             f"осталось <b>{left / _GB:.1f} ГБ</b>"
         )
-        if usage["subscription_url"]:
+        # Bypass key strictly as a Happ crypt4 deep link (like premium).
+        crypt4 = happ_crypto.format_for_user(usage["subscription_url"])
+        if crypt4:
             text += (
                 "\n🔑 Ключ обхода (импортируй в Happ):\n"
-                f"<code>{html.escape(usage['subscription_url'])}</code>"
+                f"<code>{html.escape(crypt4)}</code>"
             )
     return text, cabinet_keyboard(has_active_sub=active, has_bypass=has_bypass)
 
