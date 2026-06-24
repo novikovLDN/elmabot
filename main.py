@@ -16,6 +16,7 @@ from app.services.notifications import (
     expiry_cleanup_loop,
     offer_loop,
     reminder_loop,
+    traffic_monitor_loop,
 )
 from app.web import start_server
 from database import close_db, init_db
@@ -62,6 +63,7 @@ async def main() -> None:
         asyncio.create_task(reminder_loop(bot), name="reminder_loop"),
         asyncio.create_task(expiry_cleanup_loop(bot), name="expiry_cleanup_loop"),
         asyncio.create_task(offer_loop(bot), name="offer_loop"),
+        asyncio.create_task(traffic_monitor_loop(bot), name="traffic_monitor_loop"),
     ]
 
     runner = None

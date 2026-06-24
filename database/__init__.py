@@ -68,6 +68,15 @@ from .admin import (
     webauthn_list,
     webauthn_touch,
 )
+from .bypass import (
+    all_bypass,
+    clear_bypass_panel,
+    get_bypass,
+    record_traffic_purchase,
+    set_bypass_meta,
+    set_bypass_notify_level,
+    upsert_bypass,
+)
 from .users import (
     claim_trial,
     clear_offer,
@@ -152,6 +161,14 @@ __all__ = [
     # gifts
     "create_gift",
     "redeem_gift_record",
+    # bypass / traffic
+    "get_bypass",
+    "upsert_bypass",
+    "set_bypass_meta",
+    "set_bypass_notify_level",
+    "clear_bypass_panel",
+    "all_bypass",
+    "record_traffic_purchase",
     # admin dashboard
     "get_admin_password_hash",
     "set_admin_password",

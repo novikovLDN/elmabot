@@ -7,6 +7,7 @@ from .menu import router as menu_router
 from .onboarding import router as onboarding_router
 from .purchase import router as purchase_router
 from .referral import router as referral_router
+from .traffic import router as traffic_router
 
 
 def get_routers() -> list[Router]:
@@ -17,4 +18,5 @@ def get_routers() -> list[Router]:
         referral_router,
         gift_router,
         purchase_router,
+        traffic_router,
     ]

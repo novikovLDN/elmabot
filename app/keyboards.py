@@ -14,31 +14,43 @@ def back_to_menu() -> InlineKeyboardMarkup:
 # --- Main menu / personal cabinet ---
 
 def main_menu_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
+    from config import BYPASS_ENABLED
+
     kb = InlineKeyboardBuilder()
     kb.button(text="📲 Подключиться", callback_data="dev:menu")
     if has_active_sub:
         kb.button(text="🔄 Продлить подписку", callback_data="menu:buy")
     else:
         kb.button(text="💳 Купить подписку", callback_data="menu:buy")
+    extra = 0
+    if BYPASS_ENABLED:
+        kb.button(text="🌐 Обход блокировок", callback_data="tr:open")
+        extra = 1
     kb.button(text="👤 Личный кабинет", callback_data="menu:cabinet")
     kb.button(text="🫂 Реферальная программа", callback_data="menu:referral")
     kb.button(text="🎁 Подарить", callback_data="gift:open")
     kb.button(text="🛎️ Помощь", callback_data="help:open")
     kb.button(text="ℹ️ О сервисе", callback_data="about:open")
-    kb.adjust(1, 2, 1, 2, 1)
+    kb.adjust(1, 1, *( (1,) if extra else () ), 2, 2, 1)
     return kb.as_markup()
 
 
-def cabinet_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
+def cabinet_keyboard(*, has_active_sub: bool, has_bypass: bool = False) -> InlineKeyboardMarkup:
+    from config import BYPASS_ENABLED
+
     kb = InlineKeyboardBuilder()
     if has_active_sub:
         kb.button(text="🔄 Продлить подписку", callback_data="menu:buy")
         kb.button(text="📲 Подключиться", callback_data="dev:menu")
-        kb.button(text="🫂 Реферальная программа", callback_data="menu:referral")
-        kb.button(text="🛎️ Поддержка", url=_support_url())
     else:
         kb.button(text="💳 Купить подписку", callback_data="menu:buy")
-        kb.button(text="🛎️ Написать в поддержку", url=_support_url())
+    if BYPASS_ENABLED:
+        kb.button(
+            text="🌐 Докупить ГБ обхода" if has_bypass else "🌐 Обход блокировок",
+            callback_data="tr:open",
+        )
+    kb.button(text="🫂 Реферальная программа", callback_data="menu:referral")
+    kb.button(text="🛎️ Поддержка", url=_support_url())
     kb.button(text="🔙 Назад", callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()

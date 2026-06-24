@@ -162,6 +162,32 @@ CREATE TABLE IF NOT EXISTS webauthn_credentials (
     last_used_at  TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_webauthn_tg ON webauthn_credentials(telegram_id);
+
+-- --- Bypass (обход) — отдельная Remnawave-entity, оплата по ГБ ----------
+-- Fully independent of premium `subscriptions`: a user can have premium,
+-- bypass, both or neither. expireAt in the panel is +10y; access ends when GB
+-- run out.
+CREATE TABLE IF NOT EXISTS bypass_subscriptions (
+    telegram_id         BIGINT PRIMARY KEY REFERENCES users(telegram_id),
+    panel_uuid          TEXT,                       -- Remnawave bypass entity uuid
+    subscription_url    TEXT,                       -- ready client link
+    traffic_limit_bytes BIGINT NOT NULL DEFAULT 0,  -- cumulative purchased bytes
+    notify_level        SMALLINT NOT NULL DEFAULT -1, -- last low-traffic step sent
+    created_at          TIMESTAMPTZ DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Audit ledger of GB-pack purchases (never deleted).
+CREATE TABLE IF NOT EXISTS traffic_purchases (
+    id            BIGSERIAL PRIMARY KEY,
+    telegram_id   BIGINT NOT NULL REFERENCES users(telegram_id),
+    gb_amount     INTEGER NOT NULL,
+    price_kopecks BIGINT NOT NULL,
+    provider      TEXT NOT NULL DEFAULT 'unknown',
+    invoice_id    TEXT UNIQUE,
+    created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_traffic_purchases_tg ON traffic_purchases(telegram_id);
 """
 
 

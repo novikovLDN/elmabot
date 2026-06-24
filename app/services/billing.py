@@ -23,10 +23,11 @@ from database import (
     get_user,
     has_paid_payment,
     mark_payment_paid,
+    record_traffic_purchase,
     redeem_gift_record,
 )
 
-from . import subscription_service
+from . import bypass_service, subscription_service
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,43 @@ async def complete_purchase(
     if first_purchase:
         await _reward_referrer(bot, user_id)
     return sub
+
+
+_GB = 1024 ** 3
+
+
+async def complete_traffic_purchase(
+    bot: Bot,
+    user_id: int,
+    gb: int,
+    *,
+    invoice_id: str,
+    amount_paid: int,
+    provider: str = "unknown",
+) -> None:
+    """Provision a bypass GB pack — adds traffic only, never touches premium.
+
+    Provisioning runs first (panel call), then the payment is settled and the
+    purchase journalled. A retry would at worst add the GB twice (user benefit),
+    never leave a paid user without traffic.
+    """
+    new_limit = await bypass_service.provision_traffic(user_id, gb * _GB)
+    await mark_payment_paid(user_id, invoice_id, amount_paid)
+    await record_traffic_purchase(user_id, gb, amount_paid, provider, invoice_id)
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text="👤 Личный кабинет", callback_data="menu:cabinet")
+    kb.button(text="📲 Подключиться", callback_data="dev:menu")
+    kb.adjust(1)
+    await safe_send(
+        bot,
+        user_id,
+        "✅ <b>Трафик обхода зачислен</b>\n\n"
+        f"➕ {gb} ГБ добавлено.\n"
+        f"📦 Всего лимит: <b>{new_limit // _GB} ГБ</b>.\n\n"
+        "Ключ обхода и остаток трафика — в личном кабинете 👇",
+        reply_markup=kb.as_markup(),
+    )
 
 
 _PURCHASE_OK_TEXT = (

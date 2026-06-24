@@ -16,7 +16,9 @@ from datetime import timedelta
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+import config
 from config import (
     DISCOUNT_REACTIVATION_PCT,
     DISCOUNT_SUB_END_PCT,
@@ -25,6 +27,7 @@ from config import (
     REMINDER_INTERVAL_SECONDS,
 )
 from database import (
+    all_bypass,
     due_reactivation_offers,
     due_reminders,
     due_trial_funnel,
@@ -33,12 +36,13 @@ from database import (
     mark_react_offer_sent,
     mark_reminder_sent,
     mark_unreachable,
+    set_bypass_notify_level,
     set_offer,
     set_trial_funnel_stage,
     utcnow,
 )
 
-from . import subscription_service
+from . import bypass_service, subscription_service
 from ..keyboards import offer_keyboard
 from ..utils import convert_tg_emoji, safe_send, strip_tg_emoji
 
@@ -271,3 +275,56 @@ async def offer_loop(bot: Bot) -> None:
         except Exception:  # noqa: BLE001 - keep the loop alive
             logger.exception("offer_loop iteration failed")
         await asyncio.sleep(EXPIRY_INTERVAL_SECONDS)
+
+
+# --- Bypass traffic monitor -----------------------------------------------
+
+_TRAFFIC_MSG: dict[int, str] = {
+    0: "🌐 <b>Осталось ~8 ГБ обхода</b>\n\nСкоро стоит пополнить, чтобы доступ не прервался 👇",
+    1: "🌐 <b>5 ГБ обхода осталось</b>\n\nПора пополнить запас 👇",
+    2: "🌐 <b>3 ГБ обхода осталось</b>\n\nЛучше пополнить заранее 👇",
+    3: "⚠️ <b>1 ГБ обхода!</b>\n\nСовсем скоро отключится — пополни 👇",
+    4: "⚠️ <b>500 МБ обхода</b>\n\nПочти всё. Пополни, чтобы не потерять доступ 👇",
+    5: "🛑 <b>Трафик обхода закончился</b>\n\nОбход отключился. Пополни — и всё снова заработает 👇",
+}
+
+
+def _traffic_kb():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🌐 Купить ГБ обхода", callback_data="tr:open")
+    kb.button(text="🏠 Меню", callback_data="menu:main")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+async def _traffic_monitor(bot: Bot) -> None:
+    rows = await all_bypass()
+    sent = 0
+    for row in rows:
+        tg = row["telegram_id"]
+        usage = await bypass_service.get_usage(tg)
+        if not usage or not usage["limit"]:
+            continue
+        remaining = usage["remaining"]
+        target = -1
+        for i, (threshold, _label) in enumerate(config.TRAFFIC_NOTIFY_THRESHOLDS):
+            if remaining <= threshold:
+                target = i
+        current = row["notify_level"] if row["notify_level"] is not None else -1
+        if target > current:
+            await safe_send(bot, tg, _TRAFFIC_MSG[target], reply_markup=_traffic_kb())
+            await set_bypass_notify_level(tg, target)
+            sent += 1
+    if sent:
+        logger.info("Traffic monitor sent %d low-balance pushes", sent)
+
+
+async def traffic_monitor_loop(bot: Bot) -> None:
+    if not config.BYPASS_ENABLED:
+        return
+    while True:
+        try:
+            await _traffic_monitor(bot)
+        except Exception:  # noqa: BLE001 - keep the loop alive
+            logger.exception("traffic_monitor_loop iteration failed")
+        await asyncio.sleep(config.TRAFFIC_MONITOR_SECONDS)

@@ -3,6 +3,7 @@
 Static, navigation-heavy screens. Copy follows the approved ELMA spec verbatim;
 tone is warm, on "ты", short.
 """
+import html
 import logging
 
 from aiogram import F, Router
@@ -10,8 +11,10 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+import config
 from app.format import fmt_date
 from app.keyboards import cabinet_keyboard, main_menu_keyboard
+from app.services import bypass_service
 from app.utils import safe_edit, send_screen, show_screen
 from config import (
     DEVICE_LIMIT,
@@ -22,6 +25,15 @@ from config import (
     TERMS_URL,
 )
 from database import get_subscription, referral_stats
+
+_GB = 1024 ** 3
+
+
+def _traffic_bar(used: int, limit: int, width: int = 10) -> str:
+    if limit <= 0:
+        return ""
+    filled = min(width, round(used / limit * width))
+    return "▓" * filled + "░" * (width - filled)
 
 logger = logging.getLogger(__name__)
 router = Router(name="menu")
@@ -200,7 +212,25 @@ async def _cabinet_view(uid: int):
             "🔎 Статус подписки: не активна\n"
             "📅 Дата окончания: —"
         )
-    return text, cabinet_keyboard(has_active_sub=active)
+
+    # Bypass (traffic) block — independent of premium.
+    usage = await bypass_service.get_usage(uid) if config.BYPASS_ENABLED else None
+    has_bypass = bool(usage and usage["limit"])
+    if has_bypass:
+        used, limit, left = usage["used"], usage["limit"], usage["remaining"]
+        pct = round(used / limit * 100) if limit else 0
+        text += (
+            "\n\n🌐 <b>Обход блокировок</b>\n"
+            f"{_traffic_bar(used, limit)} {pct}%\n"
+            f"Использовано: {used / _GB:.1f} / {limit / _GB:.0f} ГБ · "
+            f"осталось <b>{left / _GB:.1f} ГБ</b>"
+        )
+        if usage["subscription_url"]:
+            text += (
+                "\n🔑 Ключ обхода (импортируй в Happ):\n"
+                f"<code>{html.escape(usage['subscription_url'])}</code>"
+            )
+    return text, cabinet_keyboard(has_active_sub=active, has_bypass=has_bypass)
 
 
 @router.message(Command("account"))

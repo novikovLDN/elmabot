@@ -79,6 +79,52 @@ TRIAL_DAYS = _get_int("TRIAL_DAYS", 2)
 DEVICE_LIMIT = _get_int("DEVICE_LIMIT", 5)
 TRAFFIC_LIMIT_BYTES = _get_int("TRAFFIC_LIMIT_BYTES", 0)
 
+# --- Bypass (обход белых списков) ---
+# A SECOND, independent Remnawave entity per user (username "<prefix>bp_<id>"),
+# living in its OWN squad, sold by GB packs (traffic-metered, expireAt +10y).
+# Premium and bypass never touch each other. Leave the squad empty to disable.
+REMNAWAVE_BYPASS_SQUAD_UUID = _get_str("REMNAWAVE_BYPASS_SQUAD_UUID", "")
+BYPASS_USERNAME_PREFIX = _get_str(
+    "BYPASS_USERNAME_PREFIX", f"{REMNAWAVE_USERNAME_PREFIX}bp_"
+)
+BYPASS_DEVICE_LIMIT = _get_int("BYPASS_DEVICE_LIMIT", DEVICE_LIMIT)
+# Bypass works by GB, not by time — the panel expiry sits far in the future.
+BYPASS_EXPIRE_DAYS = _get_int("BYPASS_EXPIRE_DAYS", 3650)
+BYPASS_ENABLED = bool(REMNAWAVE_BYPASS_SQUAD_UUID)
+
+_GB = 1024 ** 3
+
+# Traffic packs: gb -> {price (₽), bytes, discount label}. Two tiers (base /
+# extended) shown on separate screens.
+TRAFFIC_PACKS: dict[int, dict] = {
+    15:  {"price": 89,  "bytes": 15 * _GB,  "discount": ""},
+    50:  {"price": 269, "bytes": 50 * _GB,  "discount": "🔥 −10%"},
+    75:  {"price": 389, "bytes": 75 * _GB,  "discount": "🔥 −13%"},
+    100: {"price": 469, "bytes": 100 * _GB, "discount": "🔥 −22%"},
+    150: {"price": 669, "bytes": 150 * _GB, "discount": "🔥 −26%"},
+    200: {"price": 859, "bytes": 200 * _GB, "discount": "🔥 −28%"},
+}
+TRAFFIC_PACKS_EXTENDED: dict[int, dict] = {
+    300:  {"price": 1199,  "bytes": 300 * _GB,  "discount": "🔥 −33%"},
+    600:  {"price": 2299,  "bytes": 600 * _GB,  "discount": "🔥 −36%"},
+    1200: {"price": 4399,  "bytes": 1200 * _GB, "discount": "🔥 −39%"},
+    2200: {"price": 7899,  "bytes": 2200 * _GB, "discount": "🔥 −40%"},
+    5000: {"price": 17999, "bytes": 5000 * _GB, "discount": "🔥 −40%"},
+    8000: {"price": 28799, "bytes": 8000 * _GB, "discount": "🔥 −40%"},
+}
+TRAFFIC_PACKS_ALL: dict[int, dict] = {**TRAFFIC_PACKS, **TRAFFIC_PACKS_EXTENDED}
+
+# Low-traffic push steps: when remaining bytes drop below a threshold we notify
+# once (tracked by the stored notify level). Ordered high -> low.
+TRAFFIC_NOTIFY_THRESHOLDS: list[tuple[int, str]] = [
+    (8 * _GB,    "8 ГБ"),
+    (5 * _GB,    "5 ГБ"),
+    (3 * _GB,    "3 ГБ"),
+    (1 * _GB,    "1 ГБ"),
+    (500 * 1024 ** 2, "500 МБ"),
+    (0,          "0"),
+]
+
 # --- Referral ---
 # Days added to the referrer when an invited friend makes their first *paid*
 # purchase (a trial does not count).
@@ -193,6 +239,8 @@ WEBAUTHN_RP_NAME = _get_str("WEBAUTHN_RP_NAME", f"{BRAND_NAME} Admin")
 # --- Scheduler tuning ---
 REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)
 EXPIRY_INTERVAL_SECONDS = _get_int("EXPIRY_INTERVAL_SECONDS", 600)
+# How often to poll Remnawave for bypass traffic remaining (low-balance pushes).
+TRAFFIC_MONITOR_SECONDS = _get_int("TRAFFIC_MONITOR_SECONDS", 300)
 
 # --- Channel ---
 # Public channel link for the "Перейти в канал" broadcast button. Override via
@@ -232,3 +280,13 @@ def build_username(telegram_id: int) -> str:
     The prefix lets us *recover* the DB<->panel link by walking the panel.
     """
     return f"{REMNAWAVE_USERNAME_PREFIX}{telegram_id}"[:32]
+
+
+def build_bypass_username(telegram_id: int) -> str:
+    """Panel username for the user's separate bypass entity."""
+    return f"{BYPASS_USERNAME_PREFIX}{telegram_id}"[:32]
+
+
+def traffic_pack(gb: int) -> dict | None:
+    """Pack metadata for ``gb``, or None if it isn't a real pack."""
+    return TRAFFIC_PACKS_ALL.get(gb)

@@ -83,8 +83,31 @@ async def _platega_webhook(request: web.Request) -> web.Response:
         logger.warning("Platega CONFIRMED for unknown txn %s", txn_id)
         return web.Response(text="unknown txn")
 
-    tariff = get_tariff(payment["tariff_code"]) or TARIFFS[0]
     bot: Bot = request.app["bot"]
+    code = payment["tariff_code"] or ""
+
+    # Bypass GB pack ("tr_<gb>") — provision traffic only, not a subscription.
+    if code.startswith("tr_"):
+        try:
+            gb = int(code[3:])
+        except ValueError:
+            logger.error("Platega traffic txn %s has bad code %r", txn_id, code)
+            return web.Response(text="bad traffic code")
+        try:
+            await billing.complete_traffic_purchase(
+                bot, payment["telegram_id"], gb,
+                invoice_id=txn_id, amount_paid=payment["amount_kopecks"],
+                provider=payment["provider"],
+            )
+        except Exception as exc:  # noqa: BLE001 - let Platega retry
+            logger.exception("Traffic provisioning failed for txn %s", txn_id)
+            await mark_payment_failed(txn_id, f"Ошибка начисления трафика: {exc}")
+            return web.Response(status=500, text="provisioning failed")
+        logger.info("Traffic pack provisioned: txn=%s user=%s gb=%d",
+                    txn_id, payment["telegram_id"], gb)
+        return web.Response(text="ok")
+
+    tariff = get_tariff(code) or TARIFFS[0]
     try:
         await billing.complete_purchase(
             bot,
