@@ -51,17 +51,21 @@ def cabinet_keyboard(*, has_active_sub: bool, has_bypass: bool = False) -> Inlin
 
     kb = InlineKeyboardBuilder()
     if has_active_sub:
-        kb.button(text="🔄 Продлить подписку", callback_data="menu:buy")
-        kb.button(text="📲 Подключиться", callback_data="dev:menu")
+        kb.button(text="Продлить подписку", callback_data="menu:buy",
+                  style="primary", icon_custom_emoji_id=emoji.SUB)
+        kb.button(text="Подключиться", callback_data="dev:menu",
+                  style="primary", icon_custom_emoji_id=emoji.CONNECT)
     else:
-        kb.button(text="💳 Купить подписку", callback_data="menu:buy")
+        kb.button(text="Купить подписку", callback_data="menu:buy",
+                  style="primary", icon_custom_emoji_id=emoji.SUB)
     if BYPASS_ENABLED:
         kb.button(
-            text="🌐 Докупить ГБ обхода" if has_bypass else "🌐 Обход блокировок",
-            callback_data="tr:open",
+            text="Докупить ГБ обхода" if has_bypass else "Обход блокировок",
+            callback_data="tr:open", icon_custom_emoji_id=emoji.GB,
         )
-    kb.button(text="🫂 Реферальная программа", callback_data="menu:referral")
-    kb.button(text="🛎️ Поддержка", url=_support_url())
+    kb.button(text="Реферальная программа", callback_data="menu:referral",
+              icon_custom_emoji_id=emoji.REFERRAL)
+    kb.button(text="Поддержка", url=_support_url(), icon_custom_emoji_id=emoji.HELP)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
