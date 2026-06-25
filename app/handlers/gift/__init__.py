@@ -30,7 +30,8 @@ INTRO = (
 
 def _intro_kb():
     kb = InlineKeyboardBuilder()
-    kb.button(text="📅 Выбрать срок", callback_data="gift:tariffs")
+    kb.button(text="Выбрать срок", callback_data="gift:tariffs",
+              icon_custom_emoji_id=emoji.CALENDAR)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
