@@ -17,5 +17,9 @@ ABOUT = "5334544901428229844"     # ℹ️ О сервисе
 SBP = "5217837965547427903"       # 🔸 СБП
 CARD = "5377377923076476823"      # 🏛 Банковская карта
 
+# Premium tariff list
+TARIFF_KEY = "5330115548900501467"      # 🔑 default tariff
+TARIFF_DIAMOND = "5372885812486626219"  # 💎 highlighted (3 месяца)
+
 # Used on every "Назад" button across the bot.
-BACK = "5226497800732168952"      # ⬅️
+BACK = "5375389258729147520"      # ⬅️

@@ -171,12 +171,12 @@ def offer_keyboard(button_text: str) -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-def tariffs_keyboard(rows: list[tuple[str, str]]) -> InlineKeyboardMarkup:
-    """Tariff list. ``rows`` is ``[(callback_data, label), ...]`` so the handler
-    can bake the (optionally discounted) price into each label."""
+def tariffs_keyboard(rows: list[tuple[str, str, str | None]]) -> InlineKeyboardMarkup:
+    """Tariff list. ``rows`` is ``[(callback_data, label, icon_emoji_id), ...]``
+    so the handler bakes the (discounted) price and per-row premium icon."""
     kb = InlineKeyboardBuilder()
-    for data, label in rows:
-        kb.button(text=label, callback_data=data)
+    for data, label, icon in rows:
+        kb.button(text=label, callback_data=data, icon_custom_emoji_id=icon)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()

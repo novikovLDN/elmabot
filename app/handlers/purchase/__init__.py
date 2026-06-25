@@ -56,15 +56,16 @@ async def _tariffs_view(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
         )
     lines.append("\nВыбери период 👇")
 
-    rows: list[tuple[str, str]] = []
+    rows: list[tuple[str, str, str | None]] = []
     for t in tariffs.TARIFFS:
         final = discounts.apply(t.price_rub, offer)
-        label = f"🗝️ {t.title} — {final} ₽"
+        label = f"{t.title} — {final} ₽"
         if offer and final != t.price_rub:
             label += " ⚡"
         elif t.save_label:
             label += f"  {t.save_label}"
-        rows.append((f"buy:tariff:{t.code}", label))
+        icon = emoji.TARIFF_DIAMOND if t.code == "3m" else emoji.TARIFF_KEY
+        rows.append((f"buy:tariff:{t.code}", label, icon))
 
     return "\n".join(lines), tariffs_keyboard(rows)
 
