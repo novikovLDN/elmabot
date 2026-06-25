@@ -13,6 +13,7 @@ from aiogram import Bot
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 import config
+from app import emoji
 from app.tariffs import TARIFFS, Tariff, get_tariff
 from app.utils import safe_send
 from database import (
@@ -136,9 +137,12 @@ _PURCHASE_OK_TEXT = (
 async def notify_purchase_activated(bot: Bot, user_id: int) -> None:
     """Confirmation message after a subscription purchase (Stars or Platega)."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="📲 Подключиться", callback_data="dev:menu")
-    kb.button(text="👥 Пригласить друга", callback_data="menu:referral")
-    kb.button(text="👤 Личный кабинет", callback_data="menu:cabinet")
+    kb.button(text="Подключиться", callback_data="dev:menu",
+              style="primary", icon_custom_emoji_id=emoji.CONNECT)
+    kb.button(text="Пригласить друга", callback_data="menu:referral",
+              icon_custom_emoji_id=emoji.INVITE)
+    kb.button(text="Личный кабинет", callback_data="menu:cabinet",
+              icon_custom_emoji_id=emoji.CABINET)
     kb.adjust(1)
     await safe_send(bot, user_id, _PURCHASE_OK_TEXT, reply_markup=kb.as_markup())
 

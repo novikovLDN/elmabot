@@ -188,7 +188,7 @@ def tariffs_keyboard(rows: list[tuple[str, str, str | None]]) -> InlineKeyboardM
 
 def referral_keyboard(share_url: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="🫂 Пригласить друга", url=share_url)
+    kb.button(text="Пригласить друга", url=share_url, icon_custom_emoji_id=emoji.INVITE)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
@@ -365,7 +365,8 @@ def broadcast_user_markup(
             kb.button(text="📣 Перейти в канал", callback_data="chan:soon")
         has_any = True
     if referral:
-        kb.button(text="🫂 Пригласить друга", callback_data="menu:referral")
+        kb.button(text="Пригласить друга", callback_data="menu:referral",
+                  icon_custom_emoji_id=emoji.INVITE)
         has_any = True
     if not has_any:
         return None

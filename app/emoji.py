@@ -20,6 +20,10 @@ CARD = "5377377923076476823"      # 🏛 Банковская карта
 # Premium tariff list
 TARIFF_KEY = "5330115548900501467"      # 🔑 default tariff
 TARIFF_DIAMOND = "5372885812486626219"  # 💎 highlighted (3 месяца)
+TARIFF_CROWN = "5449601904147440135"    # 👑 1 год
+
+# "Пригласить друга"
+INVITE = "5271604874419647061"          # 🔗
 
 # Used on every "Назад" button across the bot.
 BACK = "5375389258729147520"      # ⬅️

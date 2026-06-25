@@ -64,7 +64,10 @@ async def _tariffs_view(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
             label += " ⚡"
         elif t.save_label:
             label += f"  {t.save_label}"
-        icon = emoji.TARIFF_DIAMOND if t.code == "3m" else emoji.TARIFF_KEY
+        icon = {
+            "3m": emoji.TARIFF_DIAMOND,
+            "12m": emoji.TARIFF_CROWN,
+        }.get(t.code, emoji.TARIFF_KEY)
         rows.append((f"buy:tariff:{t.code}", label, icon))
 
     return "\n".join(lines), tariffs_keyboard(rows)
