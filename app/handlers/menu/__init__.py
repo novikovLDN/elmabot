@@ -12,6 +12,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 import config
+from app import emoji
 from app.format import fmt_date
 from app.keyboards import cabinet_keyboard, main_menu_keyboard
 from app.services import bypass_service, happ_crypto
@@ -253,7 +254,7 @@ async def cb_cabinet(call: CallbackQuery) -> None:
 def _about_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text="📋 Политика сервиса", callback_data="about:policy")
-    kb.button(text="🔙 Назад", callback_data="menu:main")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -273,7 +274,7 @@ async def cb_about(call: CallbackQuery) -> None:
 async def cb_policy(call: CallbackQuery) -> None:
     kb = InlineKeyboardBuilder()
     kb.button(text="📑 Документы", callback_data="about:docs")
-    kb.button(text="🔙 Назад", callback_data="about:open")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="about:open")
     kb.adjust(1)
     await safe_edit(call.message, POLICY, reply_markup=kb.as_markup())
     await call.answer()
@@ -290,7 +291,7 @@ async def cb_docs(call: CallbackQuery) -> None:
     )
     kb = InlineKeyboardBuilder()
     kb.button(text="🏠 Главное меню", callback_data="menu:main")
-    kb.button(text="🔙 Назад", callback_data="about:policy")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="about:policy")
     kb.adjust(1)
     await safe_edit(
         call.message, text, reply_markup=kb.as_markup(), disable_web_page_preview=True
@@ -305,7 +306,7 @@ def _help_kb():
     kb.button(text="📖 Частые вопросы", callback_data="help:faq")
     kb.button(text="📲 Инструкции", callback_data="dev:menu")
     kb.button(text="💬 Написать оператору", url=SUPPORT_URL)
-    kb.button(text="🔙 Назад", callback_data="menu:main")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -328,7 +329,7 @@ async def cb_faq(call: CallbackQuery) -> None:
     kb.button(text="📲 Как подключиться", callback_data="faq:howto")
     kb.button(text="🐌 Низкая скорость", callback_data="faq:slow")
     kb.button(text="💳 Не проходит оплата", callback_data="faq:pay")
-    kb.button(text="🔙 Назад", callback_data="help:open")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="help:open")
     kb.adjust(1)
     await safe_edit(call.message, FAQ, reply_markup=kb.as_markup())
     await call.answer()
@@ -343,7 +344,7 @@ async def cb_faq_answer(call: CallbackQuery) -> None:
         return
     kb = InlineKeyboardBuilder()
     kb.button(text="💬 Написать оператору", url=SUPPORT_URL)
-    kb.button(text="🔙 Назад", callback_data="help:faq")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="help:faq")
     kb.adjust(1)
     await safe_edit(call.message, text, reply_markup=kb.as_markup())
     await call.answer()

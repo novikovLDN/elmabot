@@ -24,6 +24,7 @@ from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from app import emoji
 from app.keyboards import (
     buy_keyboard,
     claim_keyboard,
@@ -427,7 +428,7 @@ async def _show_tv_guide(call: CallbackQuery, key: str) -> None:
     happ = happ_crypto.format_for_user(raw)
     kb = InlineKeyboardBuilder()
     kb.button(text="📤 Поделиться", callback_data="share:open")
-    kb.button(text="🔙 Назад", callback_data="dev:menu")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="dev:menu")
     kb.adjust(1)
     await safe_edit(
         call.message, TV_DEVICES[key].format(key=_key_block(happ)),
@@ -452,7 +453,7 @@ async def cb_download(call: CallbackQuery) -> None:
         if url:
             kb.button(text=label, url=url)
     kb.button(text="➡️ Дальше", callback_data=f"cn:{key}")
-    kb.button(text="🔙 Назад", callback_data="dev:menu")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="dev:menu")
     kb.adjust(1)
     if device["dl_photo"]:
         await show_screen(call.message, device["dl_photo"], DOWNLOAD_TEXT, reply_markup=kb.as_markup())
@@ -503,7 +504,7 @@ async def cb_connect(call: CallbackQuery) -> None:
     kb.button(text="✅ Готово", callback_data="onb:done")
     kb.button(text="📋 Установить вручную", callback_data=f"manual:{key}")
     kb.button(text="💬 Нужна помощь", url=SUPPORT_URL)
-    kb.button(text="🔙 Назад", callback_data=f"dl:{key}")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"dl:{key}")
     rows += [1, 1, 1, 1]
     kb.adjust(*rows)
     await show_screen(call.message, "connect", CONNECT_TEXT, reply_markup=kb.as_markup())
@@ -542,7 +543,7 @@ async def cb_manual(call: CallbackQuery) -> None:
 
     kb = InlineKeyboardBuilder()
     kb.button(text="✅ Готово", callback_data="onb:done")
-    kb.button(text="🔙 Назад", callback_data=f"cn:{key}")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"cn:{key}")
     kb.adjust(1)
     await safe_edit(call.message, "\n".join(parts), reply_markup=kb.as_markup())
     await call.answer()

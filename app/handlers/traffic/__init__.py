@@ -12,6 +12,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 import config
+from app import emoji
 from app.keyboards import back_to_menu, payment_methods_keyboard
 from app.services import bypass_service, platega
 from app.utils import safe_edit
@@ -43,7 +44,7 @@ def _packs_keyboard(packs: dict[int, dict], *, extended: bool) -> InlineKeyboard
         kb.button(text="← Базовые пакеты", callback_data="tr:open")
     else:
         kb.button(text="📦 Больше объёма →", callback_data="tr:ext")
-    kb.button(text="🔙 Назад", callback_data="menu:cabinet")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:cabinet")
     kb.adjust(*rows, 1, 1)
     return kb
 
@@ -163,7 +164,7 @@ async def cb_method(call: CallbackQuery) -> None:
     method_label = "СБП" if method == "sbp" else "картой"
     kb = InlineKeyboardBuilder()
     kb.button(text=f"💳 Оплатить {price} ₽", url=pay_url)
-    kb.button(text="🔙 Назад", callback_data=f"tr:pack:{gb}")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"tr:pack:{gb}")
     kb.adjust(1)
     await safe_edit(
         call.message,

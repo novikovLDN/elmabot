@@ -2,6 +2,8 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from app import emoji
+
 
 def back_to_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
@@ -16,24 +18,30 @@ def back_to_menu() -> InlineKeyboardMarkup:
 def main_menu_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
     from config import BYPASS_ENABLED
 
-    sub_text = "🔄 Продлить подписку" if has_active_sub else "💳 Купить подписку"
+    sub_text = "Продлить подписку" if has_active_sub else "Купить подписку"
 
     kb = InlineKeyboardBuilder()
     # Bot API button styles: "primary" (blue), "success" (green), "danger" (red).
-    kb.button(text="📲 Подключиться", callback_data="dev:menu", style="primary")
-    kb.button(text="👤 Личный кабинет", callback_data="menu:cabinet")
+    # icon_custom_emoji_id puts a premium emoji to the left of the label.
+    kb.button(text="Подключиться", callback_data="dev:menu",
+              style="primary", icon_custom_emoji_id=emoji.CONNECT)
+    kb.button(text="Личный кабинет", callback_data="menu:cabinet",
+              icon_custom_emoji_id=emoji.CABINET)
     # Right under the cabinet: «Купить ГБ» | «Купить/Продлить подписку».
     if BYPASS_ENABLED:
-        kb.button(text="🌐 Купить ГБ", callback_data="tr:open")
-        kb.button(text=sub_text, callback_data="menu:buy", style="primary")
+        kb.button(text="Купить ГБ", callback_data="tr:open", icon_custom_emoji_id=emoji.GB)
+        kb.button(text=sub_text, callback_data="menu:buy",
+                  style="primary", icon_custom_emoji_id=emoji.SUB)
         buy_row = (2,)
     else:
-        kb.button(text=sub_text, callback_data="menu:buy", style="primary")
+        kb.button(text=sub_text, callback_data="menu:buy",
+                  style="primary", icon_custom_emoji_id=emoji.SUB)
         buy_row = (1,)
-    kb.button(text="🫂 Реферальная программа", callback_data="menu:referral")
-    kb.button(text="🎁 Подарить", callback_data="gift:open")
-    kb.button(text="🛎️ Помощь", callback_data="help:open")
-    kb.button(text="ℹ️ О сервисе", callback_data="about:open")
+    kb.button(text="Реферальная программа", callback_data="menu:referral",
+              icon_custom_emoji_id=emoji.REFERRAL)
+    kb.button(text="Подарить", callback_data="gift:open", icon_custom_emoji_id=emoji.GIFT)
+    kb.button(text="Помощь", callback_data="help:open", icon_custom_emoji_id=emoji.HELP)
+    kb.button(text="О сервисе", callback_data="about:open", icon_custom_emoji_id=emoji.ABOUT)
     kb.adjust(1, 1, *buy_row, 2, 2)
     return kb.as_markup()
 
@@ -54,7 +62,7 @@ def cabinet_keyboard(*, has_active_sub: bool, has_bypass: bool = False) -> Inlin
         )
     kb.button(text="🫂 Реферальная программа", callback_data="menu:referral")
     kb.button(text="🛎️ Поддержка", url=_support_url())
-    kb.button(text="🔙 Назад", callback_data="menu:main")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -76,7 +84,7 @@ def payment_methods_keyboard(
     kb = InlineKeyboardBuilder()
     kb.button(text="🏦 СБП", callback_data=f"{prefix}:sbp:{code}")
     kb.button(text="💳 Банковская карта", callback_data=f"{prefix}:card:{code}")
-    kb.button(text="🔙 Назад", callback_data=back_data)
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=back_data)
     kb.adjust(1)
     return kb.as_markup()
 
@@ -110,7 +118,7 @@ def devices_keyboard() -> InlineKeyboardMarkup:
     kb.button(text="📺 Android TV", callback_data="dl:androidtv")
     kb.button(text="🍎 Apple TV", callback_data="dl:appletv")
     kb.button(text="📤 Поделиться", callback_data="share:open")
-    kb.button(text="🔙 Назад", callback_data="menu:main")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(2, 2, 2, 1, 1)
     return kb.as_markup()
 
@@ -120,7 +128,7 @@ def share_keyboard() -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="📥 Копировать ссылку", callback_data="share:copy")
     kb.button(text="⤵️ QR-код", callback_data="share:qr")
-    kb.button(text="🔙 Назад", callback_data="dev:menu")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="dev:menu")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -168,7 +176,7 @@ def tariffs_keyboard(rows: list[tuple[str, str]]) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     for data, label in rows:
         kb.button(text=label, callback_data=data)
-    kb.button(text="🔙 Назад", callback_data="menu:main")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -176,7 +184,7 @@ def tariffs_keyboard(rows: list[tuple[str, str]]) -> InlineKeyboardMarkup:
 def referral_keyboard(share_url: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text="🫂 Пригласить друга", url=share_url)
-    kb.button(text="🔙 Назад", callback_data="menu:main")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
 

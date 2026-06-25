@@ -15,7 +15,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message, PreCheck
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 import config
-from app import tariffs
+from app import emoji, tariffs
 from app.format import fmt_date
 from app.keyboards import back_to_menu, payment_methods_keyboard, tariffs_keyboard
 from app.services import billing, discounts, payments, platega
@@ -98,7 +98,7 @@ async def cb_sub_manage(call: CallbackQuery) -> None:
     """Subscription-management screen — reached from the renewal reminder."""
     kb = InlineKeyboardBuilder()
     kb.button(text="🔄 Продлить Plus", callback_data="menu:buy")
-    kb.button(text="🔙 Назад", callback_data="menu:main")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     await safe_edit(call.message, SUB_MANAGE, reply_markup=kb.as_markup())
     await call.answer()
@@ -227,7 +227,7 @@ async def cb_method(call: CallbackQuery) -> None:
     method_label = "СБП" if method == "sbp" else "картой"
     kb = InlineKeyboardBuilder()
     kb.button(text=f"💳 Оплатить {final} ₽", url=pay_url)
-    kb.button(text="🔙 Назад", callback_data=f"buy:tariff:{code}")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"buy:tariff:{code}")
     kb.adjust(1)
     await safe_edit(
         call.message,

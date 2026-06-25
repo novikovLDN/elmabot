@@ -12,7 +12,7 @@ from aiogram.filters import Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import CallbackQuery, Message
 
-from app import tariffs
+from app import emoji, tariffs
 from app.keyboards import back_to_menu, payment_methods_keyboard
 from app.utils import safe_edit
 
@@ -31,7 +31,7 @@ INTRO = (
 def _intro_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text="📅 Выбрать срок", callback_data="gift:tariffs")
-    kb.button(text="🔙 Назад", callback_data="menu:main")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -55,7 +55,7 @@ async def cb_gift_tariffs(call: CallbackQuery) -> None:
         if t.save_label:
             label += f"  {t.save_label}"
         kb.button(text=label, callback_data=f"gift:tariff:{t.code}")
-    kb.button(text="🔙 Назад", callback_data="gift:open")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="gift:open")
     kb.adjust(1)
     await safe_edit(
         call.message,
