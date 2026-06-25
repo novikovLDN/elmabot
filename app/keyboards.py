@@ -19,15 +19,16 @@ def main_menu_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
     sub_text = "🔄 Продлить подписку" if has_active_sub else "💳 Купить подписку"
 
     kb = InlineKeyboardBuilder()
-    kb.button(text="📲 Подключиться", callback_data="dev:menu")
+    # Bot API button styles: "primary" (blue), "success" (green), "danger" (red).
+    kb.button(text="📲 Подключиться", callback_data="dev:menu", style="primary")
     kb.button(text="👤 Личный кабинет", callback_data="menu:cabinet")
     # Right under the cabinet: «Купить ГБ» | «Купить/Продлить подписку».
     if BYPASS_ENABLED:
         kb.button(text="🌐 Купить ГБ", callback_data="tr:open")
-        kb.button(text=sub_text, callback_data="menu:buy")
+        kb.button(text=sub_text, callback_data="menu:buy", style="primary")
         buy_row = (2,)
     else:
-        kb.button(text=sub_text, callback_data="menu:buy")
+        kb.button(text=sub_text, callback_data="menu:buy", style="primary")
         buy_row = (1,)
     kb.button(text="🫂 Реферальная программа", callback_data="menu:referral")
     kb.button(text="🎁 Подарить", callback_data="gift:open")
