@@ -82,8 +82,9 @@ def payment_methods_keyboard(
     handlers stay separate; ``code`` is the chosen tariff.
     """
     kb = InlineKeyboardBuilder()
-    kb.button(text="🏦 СБП", callback_data=f"{prefix}:sbp:{code}")
-    kb.button(text="💳 Банковская карта", callback_data=f"{prefix}:card:{code}")
+    kb.button(text="СБП", callback_data=f"{prefix}:sbp:{code}", icon_custom_emoji_id=emoji.SBP)
+    kb.button(text="Банковская карта", callback_data=f"{prefix}:card:{code}",
+              icon_custom_emoji_id=emoji.CARD)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=back_data)
     kb.adjust(1)
     return kb.as_markup()
