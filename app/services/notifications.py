@@ -79,7 +79,9 @@ async def _send_day_of(bot: Bot) -> None:
             "⏳ <b>Подписка заканчивается сегодня</b>\n\n"
             "Не теряй доступ — продли за минуту."
         )
-        await safe_send(bot, uid, text, reply_markup=offer_keyboard("🔄 Продлить подписку"))
+        await safe_send(bot, uid, text,
+                        reply_markup=offer_keyboard("🔄 Продлить подписку",
+                                                    pct=DISCOUNT_SUB_END_PCT))
         await mark_reminder_sent(uid, "reminder_3h_sent")
     if rows:
         logger.info("Sent %d day-of reminders", len(rows))
@@ -117,7 +119,8 @@ async def expiry_cleanup_loop(bot: Bot) -> None:
                     "Подписка закончилась.\n"
                     "Но всё легко исправить — один клик\n"
                     "и ты снова в сети 🤍",
-                    reply_markup=offer_keyboard("🔑 Восстановить доступ −20%"),
+                    reply_markup=offer_keyboard("🔑 Восстановить доступ −20%",
+                                                pct=DISCOUNT_SUB_END_PCT),
                 )
             if rows:
                 logger.info("Expired %d subscriptions", len(rows))
@@ -243,7 +246,7 @@ async def _trial_funnel(bot: Bot) -> None:
         raw, button, pct = _FUNNEL_TEXT[target]
         if pct:
             await set_offer(uid, "trial", pct, now + timedelta(days=1))
-        await _send_funnel(bot, uid, raw, offer_keyboard(button))
+        await _send_funnel(bot, uid, raw, offer_keyboard(button, pct=pct))
         await set_trial_funnel_stage(uid, target)
         advanced += 1
     if advanced:
@@ -263,7 +266,10 @@ async def _reactivation_offers(bot: Bot) -> None:
             "Ты был с нами — и мы помним 🤍\n\n"
             f"Возвращайся со скидкой {DISCOUNT_REACTIVATION_PCT}% —\n"
             "это только для тебя.",
-            reply_markup=offer_keyboard(f"🔑 Купить со скидкой −{DISCOUNT_REACTIVATION_PCT}%"),
+            reply_markup=offer_keyboard(
+                f"🔑 Купить со скидкой −{DISCOUNT_REACTIVATION_PCT}%",
+                pct=DISCOUNT_REACTIVATION_PCT,
+            ),
         )
     if rows:
         logger.info("Sent %d reactivation offers", len(rows))

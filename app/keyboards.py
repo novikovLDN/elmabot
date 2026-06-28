@@ -166,11 +166,16 @@ def manage_sub_keyboard() -> InlineKeyboardMarkup:
     return kb.as_markup()
 
 
-def offer_keyboard(button_text: str) -> InlineKeyboardMarkup:
-    """Single call-to-action (renew / restore / buy with discount) → buy flow."""
+def offer_keyboard(
+    button_text: str, *, pct: int | None = None, days: int = 1
+) -> InlineKeyboardMarkup:
+    """Single call-to-action → buy flow. When ``pct`` is given the button carries
+    the discount (``promo:pct:days``), so clicking re-applies it on the spot —
+    it never depends on a previously-stored (and possibly expired) offer."""
     kb = InlineKeyboardBuilder()
-    kb.button(text=button_text, callback_data="menu:buy")
-    kb.button(text="🔙 Главное меню", callback_data="menu:main")
+    cb = f"promo:{pct}:{days}" if pct else "menu:buy"
+    kb.button(text=button_text, callback_data=cb)
+    kb.button(text="🏠 Главное меню", callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
 

@@ -124,6 +124,11 @@ async def cb_promo(call: CallbackQuery) -> None:
     await set_offer(
         call.from_user.id, "promo", pct, utcnow() + timedelta(days=days)
     )
+    _u = await get_user(call.from_user.id)
+    logger.info(
+        "promo uid=%s pct=%s days=%s -> active_offer=%s",
+        call.from_user.id, pct, days, discounts.active_offer(_u),
+    )
     text, markup = await _tariffs_view(call.from_user.id)
     # The source may be a photo broadcast (no editable text) -> send a fresh msg.
     await call.message.answer(text, reply_markup=markup)
