@@ -19,6 +19,13 @@ REASONS: dict[str, str] = {
     "reactivation": "скидка на возвращение",
     "promo": "акционная скидка",
     "trial": "персональная скидка для тебя",
+    "year": "скидка на годовой тариф",
+}
+
+# Offers whose discount is limited to specific tariff codes. Codes not listed
+# here apply to every plan (``applies_to`` returns True by default).
+SCOPED: dict[str, set[str]] = {
+    "year": {"12m"},
 }
 
 
@@ -45,6 +52,18 @@ def active_offer(user: asyncpg.Record | None) -> Offer | None:
     if exp <= utcnow():
         return None
     return Offer(code=code, pct=int(pct), expires_at=exp)
+
+
+def applies_to(offer: Offer | None, tariff_code: str) -> bool:
+    """Whether ``offer`` discounts this particular tariff.
+
+    Most offers apply to every plan; scoped offers (e.g. the year promo) only to
+    the tariff codes listed in ``SCOPED``.
+    """
+    if offer is None or offer.pct <= 0:
+        return False
+    scope = SCOPED.get(offer.code)
+    return tariff_code in scope if scope is not None else True
 
 
 def apply(price_rub: int, offer: Offer | None) -> int:

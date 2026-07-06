@@ -180,12 +180,17 @@ def offer_keyboard(
     return kb.as_markup()
 
 
-def tariffs_keyboard(rows: list[tuple[str, str, str | None]]) -> InlineKeyboardMarkup:
-    """Tariff list. ``rows`` is ``[(callback_data, label, icon_emoji_id), ...]``
-    so the handler bakes the (discounted) price and per-row premium icon."""
+def tariffs_keyboard(
+    rows: list[tuple[str, str, str | None, str | None]],
+) -> InlineKeyboardMarkup:
+    """Tariff list. ``rows`` is ``[(callback_data, label, icon_emoji_id, style),
+    ...]`` so the handler bakes the (discounted) price, per-row premium icon and
+    an optional button style ("success" highlights the year-promo pick)."""
     kb = InlineKeyboardBuilder()
-    for data, label, icon in rows:
-        kb.button(text=label, callback_data=data, icon_custom_emoji_id=icon)
+    for data, label, icon, style in rows:
+        kb.button(
+            text=label, callback_data=data, icon_custom_emoji_id=icon, style=style
+        )
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
@@ -307,9 +312,20 @@ def admin_broadcast_builder(
     channel: bool = False,
     referral: bool = False,
     bypass: bool = False,
+    year: bool = False,
 ) -> InlineKeyboardMarkup:
     """Compose-step keyboard: optionally attach buttons, then send."""
+    from config import YEAR_PROMO_PCT
+
     kb = InlineKeyboardBuilder()
+    kb.button(
+        text=(
+            f"✅ Кнопка «1 год −{YEAR_PROMO_PCT}%»"
+            if year
+            else f"🏆 + Кнопка «1 год со скидкой {YEAR_PROMO_PCT}%»"
+        ),
+        callback_data="bcastbtn:year",
+    )
     if disc_pct:
         kb.button(
             text=f"✏️ Скидка: −{disc_pct}% / {disc_days} дн.",
@@ -344,16 +360,26 @@ def admin_broadcast_builder(
 
 def broadcast_user_markup(
     disc_pct: int | None, disc_days: int | None, channel: bool, referral: bool = False,
-    *, bypass_url: str | None = None,
+    *, bypass_url: str | None = None, year: bool = False,
 ) -> InlineKeyboardMarkup | None:
     """The inline buttons attached to the message recipients receive.
 
     ``bypass_url`` is per-recipient (their bypass crypt4 key on the connect page),
     so the send loop builds this markup individually for each user."""
-    from config import CHANNEL_URL
+    from config import CHANNEL_URL, YEAR_PROMO_PCT
 
     kb = InlineKeyboardBuilder()
     has_any = False
+    if year:
+        # Its own callback (not promo:pct:days) — the year offer is scoped to the
+        # 1-year plan and opens a dedicated screen with a premium-emoji flash.
+        kb.button(
+            text=f"🏆 1 год со скидкой {YEAR_PROMO_PCT}%",
+            callback_data="yearpromo",
+            style="success",
+            icon_custom_emoji_id=emoji.TROPHY,
+        )
+        has_any = True
     if bypass_url:
         kb.button(text="🌐 Добавить Обход 🤍", url=bypass_url)
         has_any = True

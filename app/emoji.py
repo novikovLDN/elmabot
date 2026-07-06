@@ -29,6 +29,9 @@ SHARE = "5271604874419647061"           # 🔗
 # Gift
 CALENDAR = "5413879192267805083"        # 🗓 Выбрать срок
 
+# Year-promo broadcast button (1 год со скидкой)
+TROPHY = "5413566144986503832"          # 🏆 flashed on tap + year-plan icon
+
 # Device picker
 DEV_IOS = "5440584199402693616"         # 🤍
 DEV_MAC = "5454100049166357274"         # 🍏

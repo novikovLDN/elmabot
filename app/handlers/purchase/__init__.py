@@ -5,6 +5,7 @@ Payments are not wired yet: choosing a tariff opens the payment screen (СБП /
 connected, the only changes are inside ``cb_method`` (create invoice) and
 ``on_paid`` (already routes through ``billing.complete_purchase``).
 """
+import asyncio
 import logging
 from datetime import timedelta
 
@@ -19,7 +20,7 @@ from app import emoji, tariffs
 from app.format import fmt_date
 from app.keyboards import back_to_menu, payment_methods_keyboard, tariffs_keyboard
 from app.services import billing, discounts, payments, platega
-from app.utils import safe_edit, safe_send
+from app.utils import convert_tg_emoji, safe_edit, safe_send
 from database import (
     create_pending_payment,
     get_user,
@@ -43,32 +44,49 @@ PLUS_HEADER = (
     "🔒 Zero-logs — твои данные только твои"
 )
 
+# Shown when the active offer is the year promo: all periods listed, the 1-year
+# plan discounted and highlighted (success style), others at the regular price.
+# The percentage comes from config so header, button label and price never drift.
+YEAR_PROMO_HEADER = (
+    f"🎁 <b>Скидка {config.YEAR_PROMO_PCT}% на 1 год</b>\n\n"
+    "Годовой план — сразу с учётом скидки.\n"
+    "Другие периоды доступны по обычной цене.\n\n"
+    "Выбери тариф ↓"
+)
+
 
 async def _tariffs_view(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
     user = await get_user(user_id)
     offer = discounts.active_offer(user)
+    year_promo = offer is not None and offer.code == "year"
 
-    lines = [PLUS_HEADER]
-    if offer:
-        lines.append(
-            f"\n🎁 Тебе доступна {offer.reason}: <b>−{offer.pct}%</b> "
-            f"(до {fmt_date(offer.expires_at)})"
-        )
-    lines.append("\nВыбери период 👇")
+    if year_promo:
+        lines = [YEAR_PROMO_HEADER]
+    else:
+        lines = [PLUS_HEADER]
+        if offer:
+            lines.append(
+                f"\n🎁 Тебе доступна {offer.reason}: <b>−{offer.pct}%</b> "
+                f"(до {fmt_date(offer.expires_at)})"
+            )
+        lines.append("\nВыбери период 👇")
 
-    rows: list[tuple[str, str, str | None]] = []
+    rows: list[tuple[str, str, str | None, str | None]] = []
     for t in tariffs.TARIFFS:
-        final = discounts.apply(t.price_rub, offer)
+        discounted = discounts.applies_to(offer, t.code)
+        final = discounts.apply(t.price_rub, offer) if discounted else t.price_rub
         label = f"{t.title} — {final} ₽"
-        if offer and final != t.price_rub:
-            label += " ⚡"
+        style = None
+        if discounted and final != t.price_rub:
+            label += f" · −{offer.pct}% ⚡"
+            style = "success"  # green "success"-style button on the discounted plan
         elif t.save_label:
             label += f"  {t.save_label}"
         icon = {
             "3m": emoji.TARIFF_DIAMOND,
             "12m": emoji.TARIFF_CROWN,
         }.get(t.code, emoji.TARIFF_KEY)
-        rows.append((f"buy:tariff:{t.code}", label, icon))
+        rows.append((f"buy:tariff:{t.code}", label, icon, style))
 
     return "\n".join(lines), tariffs_keyboard(rows)
 
@@ -135,6 +153,34 @@ async def cb_promo(call: CallbackQuery) -> None:
     await call.answer(f"Скидка −{pct}% активирована!")
 
 
+@router.callback_query(F.data == "yearpromo")
+async def cb_yearpromo(call: CallbackQuery) -> None:
+    """Broadcast-button entry point for the year promo: grant a 24h discount
+    scoped to the 1-year plan, flash a premium 🏆 for ~2s, then open the tariff
+    screen with 1 год highlighted (green) and discounted."""
+    await set_offer(
+        call.from_user.id, "year", config.YEAR_PROMO_PCT, utcnow() + timedelta(days=1)
+    )
+    await call.answer(f"Скидка −{config.YEAR_PROMO_PCT}% на 1 год активирована!")
+
+    # Premium-emoji flash — purely cosmetic, so never let it block the offer.
+    chat_id = call.message.chat.id
+    try:
+        flash = await call.bot.send_message(
+            chat_id,
+            convert_tg_emoji(f"![🏆](tg://emoji?id={emoji.TROPHY})"),
+            parse_mode="HTML",
+        )
+        await asyncio.sleep(2)
+        await call.bot.delete_message(chat_id, flash.message_id)
+    except Exception:  # noqa: BLE001
+        logger.warning("year-promo emoji flash failed for %s", call.from_user.id)
+
+    text, markup = await _tariffs_view(call.from_user.id)
+    # Source may be a photo broadcast (no editable text) -> send a fresh message.
+    await call.message.answer(text, reply_markup=markup)
+
+
 @router.callback_query(F.data == "chan:soon")
 async def cb_channel_soon(call: CallbackQuery) -> None:
     await call.answer("Канал скоро откроется ✨", show_alert=True)
@@ -150,9 +196,10 @@ async def cb_tariff(call: CallbackQuery) -> None:
         return
     user = await get_user(call.from_user.id)
     offer = discounts.active_offer(user)
-    final = discounts.apply(tariff.price_rub, offer)
+    discounted = discounts.applies_to(offer, code)
+    final = discounts.apply(tariff.price_rub, offer) if discounted else tariff.price_rub
 
-    if offer and final != tariff.price_rub:
+    if discounted and final != tariff.price_rub:
         price = f"<s>{tariff.price_rub} ₽</s> {final} ₽ (−{offer.pct}%)"
     else:
         price = f"{final} ₽"
@@ -184,7 +231,12 @@ async def cb_method(call: CallbackQuery) -> None:
         return
 
     user = await get_user(call.from_user.id)
-    final = discounts.apply(tariff.price_rub, discounts.active_offer(user))
+    offer = discounts.active_offer(user)
+    final = (
+        discounts.apply(tariff.price_rub, offer)
+        if discounts.applies_to(offer, code)
+        else tariff.price_rub
+    )
 
     if not config.PAYMENTS_ENABLED:
         await safe_edit(
