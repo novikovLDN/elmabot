@@ -142,7 +142,7 @@ REACTIVATION_AFTER_DAYS = _get_int("REACTIVATION_AFTER_DAYS", 3)
 # Year-promo broadcast button: a one-day discount applied *only* to the 1-year
 # plan. One percentage drives the button label, the tariff screen header and the
 # price, so they can never drift apart.
-YEAR_PROMO_PCT = _get_int("YEAR_PROMO_PCT", 40)
+YEAR_PROMO_PCT = _get_int("YEAR_PROMO_PCT", 35)
 
 # --- Branding / onboarding ---
 # Branded landing page (web/connect.html, served by this service at /connect)
