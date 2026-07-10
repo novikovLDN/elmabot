@@ -493,7 +493,7 @@ async def cb_connect(call: CallbackQuery) -> None:
     rows: list[int] = []
 
     # VPN row: Happ (left) + Incy (right, iOS/Android/macOS).
-    _add_connect_button(kb, "🔑 Добавить VPN (Happ)", happ, f"addkey:{key}")
+    _add_connect_button(kb, "🔑 Happ VPN", happ, f"addkey:{key}")
     vpn_n = 1
     if key in _INCY_PLATFORMS:
         incy_vpn = await _incy_vpn_key(uid)
@@ -505,7 +505,7 @@ async def cb_connect(call: CallbackQuery) -> None:
     # Обход row (only if the user has bypass): Happ (left) + Incy (right).
     bp = await _bypass_key(uid)
     if bp:
-        _add_connect_button(kb, "🌐 Добавить Обход (Happ)", bp, f"addbp:{key}")
+        _add_connect_button(kb, "🌐 Happ Обход", bp, f"addbp:{key}")
         bp_n = 1
         if key in _INCY_PLATFORMS:
             incy_bp = await _incy_bypass_key(uid)
