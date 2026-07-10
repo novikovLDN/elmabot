@@ -59,6 +59,12 @@ async def main() -> None:
         ]
     )
 
+    # Probe the Incy crypt-link sidecar once (logs INCY_SELFTEST_OK/FAIL). A
+    # failure is non-fatal — Incy degrades to legacy links, Happ is unaffected.
+    from app.services import incy_crypto
+
+    await incy_crypto.selftest()
+
     # Background scheduler loops.
     tasks = [
         asyncio.create_task(reminder_loop(bot), name="reminder_loop"),

@@ -176,8 +176,15 @@ APP_ANDROIDTV_URL = _get_str(
 # hidden until APP_INCY_IOS_URL is set.
 APP_IOS_RU_URL = _get_str("APP_IOS_RU_URL", APP_IOS_URL)
 APP_IOS_INTL_URL = _get_str("APP_IOS_INTL_URL", APP_IOS_URL)
+# Incy download links. iOS and macOS share the App Store URL (Apple Silicon Macs
+# install the iOS app); Android has its own Play Market entry. Incy has no
+# Windows client, so Windows keeps Happ only.
 APP_INCY_IOS_URL = _get_str(
-    "APP_INCY_IOS_URL", "https://apps.apple.com/ru/app/incy/id6756943388"
+    "APP_INCY_IOS_URL", "https://apps.apple.com/ru/app/incy/id6756943388?l=en-GB"
+)
+APP_INCY_ANDROID_URL = _get_str(
+    "APP_INCY_ANDROID_URL",
+    "https://play.google.com/store/apps/details?id=llc.itdev.incy&hl=en_IE",
 )
 
 # --- Platega payments (SBP / card via app.platega.io) ---

@@ -38,6 +38,7 @@ from app.services import billing, happ_crypto, incy_crypto, subscription_service
 from app.utils import convert_tg_emoji, safe_edit, send_screen, show_screen
 from config import (
     APP_ANDROID_URL,
+    APP_INCY_ANDROID_URL,
     APP_INCY_IOS_URL,
     APP_IOS_INTL_URL,
     APP_IOS_RU_URL,
@@ -142,8 +143,14 @@ CONNECT_TEXT = (
     "ключ добавится автоматически."
 )
 
+# Platforms where Incy is available (App Store / Play Market). Incy has no
+# Windows client and TVs can't open a deep link, so both stay Happ-only.
+_INCY_PLATFORMS = frozenset({"ios", "android", "macos"})
+
 # Phone/desktop devices: Happ download buttons (label, url) and an optional
 # download-screen photo (a key in app.screens). MacOS mirrors the Windows flow.
+# Incy-capable platforms also list an Incy download link (macOS reuses the iOS
+# App Store entry — Apple Silicon Macs install the iOS app).
 PHONE_DEVICES: dict[str, dict] = {
     "ios": {
         "downloads": [
@@ -154,11 +161,17 @@ PHONE_DEVICES: dict[str, dict] = {
         "dl_photo": None,
     },
     "android": {
-        "downloads": [("📲 Скачать Happ", APP_ANDROID_URL)],
+        "downloads": [
+            ("📲 Скачать Incy", APP_INCY_ANDROID_URL),
+            ("📲 Скачать Happ", APP_ANDROID_URL),
+        ],
         "dl_photo": "dl_android",
     },
     "macos": {
-        "downloads": [("📲 Скачать Happ", APP_MACOS_URL)],
+        "downloads": [
+            ("📲 Скачать Incy", APP_INCY_IOS_URL),
+            ("📲 Скачать Happ", APP_MACOS_URL),
+        ],
         "dl_photo": None,
     },
     "windows": {
@@ -479,22 +492,22 @@ async def cb_connect(call: CallbackQuery) -> None:
     kb = InlineKeyboardBuilder()
     rows: list[int] = []
 
-    # VPN row: Happ (left) + Incy (right, iOS only).
+    # VPN row: Happ (left) + Incy (right, iOS/Android/macOS).
     _add_connect_button(kb, "🔑 Добавить VPN (Happ)", happ, f"addkey:{key}")
     vpn_n = 1
-    if key == "ios":
+    if key in _INCY_PLATFORMS:
         incy_vpn = await _incy_vpn_key(uid)
         if incy_vpn:
             _add_connect_button(kb, "💚 Incy VPN", incy_vpn, f"addvincy:{key}")
             vpn_n = 2
     rows.append(vpn_n)
 
-    # Обход row (only if the user has bypass): Happ (left) + Incy (right, iOS).
+    # Обход row (only if the user has bypass): Happ (left) + Incy (right).
     bp = await _bypass_key(uid)
     if bp:
         _add_connect_button(kb, "🌐 Добавить Обход (Happ)", bp, f"addbp:{key}")
         bp_n = 1
-        if key == "ios":
+        if key in _INCY_PLATFORMS:
             incy_bp = await _incy_bypass_key(uid)
             if incy_bp:
                 _add_connect_button(kb, "💚 Incy Обход", incy_bp, f"addbpincy:{key}")
@@ -532,14 +545,15 @@ async def cb_manual(call: CallbackQuery) -> None:
     bp = await _bypass_key(uid)
     if bp:
         parts.append(_labeled_key("🌐 <b>Обход ключ Happ</b> (белые списки РФ):", bp))
-    # Incy keys on the manual screen are shown for every device (unified screen).
-    iv = await _incy_vpn_key(uid)
-    if iv:
-        parts.append(_labeled_key("💚 <b>VPN ключ Incy</b> (обычные безлимитные сервера):", iv))
-    if bp:
-        ib = await _incy_bypass_key(uid)
-        if ib:
-            parts.append(_labeled_key("💚 <b>Обход ключ Incy</b> (белые списки РФ):", ib))
+    # Incy keys — only on platforms with an Incy client (iOS / Android / macOS).
+    if key in _INCY_PLATFORMS:
+        iv = await _incy_vpn_key(uid)
+        if iv:
+            parts.append(_labeled_key("💚 <b>VPN ключ Incy</b> (обычные безлимитные сервера):", iv))
+        if bp:
+            ib = await _incy_bypass_key(uid)
+            if ib:
+                parts.append(_labeled_key("💚 <b>Обход ключ Incy</b> (белые списки РФ):", ib))
 
     kb = InlineKeyboardBuilder()
     kb.button(text="✅ Готово", callback_data="onb:done")
