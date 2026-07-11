@@ -50,6 +50,7 @@ async def main() -> None:
             BotCommand(command="start", description=f"Запустить {config.BRAND_NAME}"),
             BotCommand(command="menu", description="Главное меню"),
             BotCommand(command="connect", description="Подключиться"),
+            BotCommand(command="hwadd", description="Добавить устройство"),
             BotCommand(command="buy", description="Купить / продлить подписку"),
             BotCommand(command="account", description="Личный кабинет"),
             BotCommand(command="invite", description="Реферальная программа"),

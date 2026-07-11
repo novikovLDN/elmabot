@@ -700,3 +700,196 @@ async def cb_qr_close(call: CallbackQuery) -> None:
     except Exception:  # noqa: BLE001 - message may be too old to delete
         await safe_edit(call.message, QR_CAPTION, reply_markup=None)
     await call.answer()
+
+
+# --- Add device (QR import for a second device) ---------------------------
+#
+# A paid user already connected on one device and wants another. Same
+# subscription URL is imported on the new device via QR (or a copy-paste key).
+# Flow: choose type (обычные / обход) → choose app (Happ / Incy) → QR + key.
+#   hw:add            → type screen
+#   hw:kind:<std|bp>  → app screen
+#   hw:app:<client>:<kind> → QR + key photo
+# "✅ Готово" reuses ``onb:done`` (flash + main menu).
+
+HW_TYPE = (
+    "📲 <b>Добавить устройство</b>\n\n"
+    "Одна подписка — до 5 устройств. Импортируй ключ на новом устройстве.\n\n"
+    "Выбери тип подключения:"
+)
+
+HW_APP = (
+    "📲 <b>Добавить устройство</b>\n\n"
+    "Выбери приложение, в котором будешь подключаться:"
+)
+
+HW_NO_SUB = "🔒 Чтобы добавить устройство, нужна активная подписка 👇"
+
+HW_BYPASS_UNAVAILABLE = (
+    "❌ <b>Обход белых списков недоступен</b>\n\n"
+    "Убедись, что у тебя активна подписка и есть трафик обхода."
+)
+
+
+async def _bypass_raw(user_id: int) -> str | None:
+    """Raw bypass subscription URL, or None if bypass is off/absent."""
+    if not BYPASS_ENABLED:
+        return None
+    row = await get_bypass(user_id)
+    if not row or not row["subscription_url"]:
+        return None
+    return row["subscription_url"]
+
+
+def _hw_type_kb(has_bypass: bool):
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🌐 Обычные сервера (безлимит)", callback_data="hw:kind:std")
+    if has_bypass:
+        kb.button(text="🤍 Обход белых списков", callback_data="hw:kind:bp")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def _hw_app_kb(kind: str):
+    kb = InlineKeyboardBuilder()
+    kb.button(text="💚 Incy", callback_data=f"hw:app:incy:{kind}", style="success")
+    kb.button(text="Happ", callback_data=f"hw:app:happ:{kind}", style="primary")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="hw:add")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def _hw_back_kb(callback_data: str):
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=callback_data)
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+async def _render_text(call: CallbackQuery, text: str, markup) -> None:
+    """Show ``text`` in place. Edits the current message, or — when it's a photo
+    (no editable text, e.g. coming back from the QR screen) — deletes and resends."""
+    res = await safe_edit(call.message, text, reply_markup=markup)
+    if res is None:
+        try:
+            await call.message.delete()
+        except Exception:  # noqa: BLE001
+            pass
+        await call.message.answer(text, reply_markup=markup)
+
+
+def _hw_caption(client: str, kind: str, crypt: str) -> str:
+    if client == "incy":
+        app, manual = "Incy", "затем в Incy нажми «Вставить»"
+        label = (
+            "💚 <b>Обход ключ Incy</b> (белые списки РФ):"
+            if kind == "bp"
+            else "💚 <b>VPN ключ Incy</b> (обычные безлимитные сервера):"
+        )
+    else:
+        app, manual = "Happ", "затем в Happ нажми иконку буфера"
+        label = (
+            "🔑 <b>Обход ключ Happ</b> (белые списки РФ):"
+            if kind == "bp"
+            else "🔑 <b>VPN ключ Happ</b> (обычные безлимитные сервера):"
+        )
+    return (
+        "📲 <b>Добавить устройство</b>\n\n"
+        f"📷 <b>По QR-коду:</b> отсканируй код выше в {app} (иконка камеры).\n"
+        f"✍️ <b>Вручную:</b> нажми на ключ ниже — он скопируется, {manual}.\n\n"
+        f"{label}\n"
+        f"<blockquote expandable><code>{html.escape(crypt)}</code></blockquote>"
+    )
+
+
+async def _hw_type_screen(call: CallbackQuery) -> None:
+    if not await _active_sub_raw(call.from_user.id):
+        await _render_text(call, HW_NO_SUB, buy_keyboard())
+        return
+    has_bypass = bool(await _bypass_raw(call.from_user.id))
+    await _render_text(call, HW_TYPE, _hw_type_kb(has_bypass))
+
+
+@router.message(Command("hwadd"))
+async def cmd_hwadd(message: Message) -> None:
+    if not await _active_sub_raw(message.from_user.id):
+        await message.answer(HW_NO_SUB, reply_markup=buy_keyboard())
+        return
+    has_bypass = bool(await _bypass_raw(message.from_user.id))
+    await message.answer(HW_TYPE, reply_markup=_hw_type_kb(has_bypass))
+
+
+@router.callback_query(F.data == "hw:add")
+async def cb_hw_add(call: CallbackQuery) -> None:
+    await _hw_type_screen(call)
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("hw:kind:"))
+async def cb_hw_kind(call: CallbackQuery) -> None:
+    kind = call.data.split(":")[2]
+    if kind not in ("std", "bp"):
+        await call.answer()
+        return
+    await _render_text(call, HW_APP, _hw_app_kb(kind))
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("hw:app:"))
+async def cb_hw_app(call: CallbackQuery) -> None:
+    parts = call.data.split(":")  # hw:app:<client>:<kind>
+    if len(parts) != 4 or parts[2] not in ("happ", "incy") or parts[3] not in ("std", "bp"):
+        await call.answer()
+        return
+    client, kind = parts[2], parts[3]
+    uid = call.from_user.id
+
+    if kind == "bp":
+        raw = await _bypass_raw(uid)
+        if not raw:
+            await _render_text(call, HW_BYPASS_UNAVAILABLE, _hw_back_kb(f"hw:kind:{kind}"))
+            await call.answer()
+            return
+    else:
+        raw = await _active_sub_raw(uid)
+        if not raw:
+            await _render_text(call, HW_NO_SUB, buy_keyboard())
+            await call.answer()
+            return
+
+    crypt = (
+        await incy_crypto.to_incy_link(raw)
+        if client == "incy"
+        else happ_crypto.format_for_user(raw)
+    )
+    if not crypt:
+        await _render_text(
+            call, "⚠️ Не удалось подготовить ключ. Попробуй ещё раз.",
+            _hw_back_kb(f"hw:kind:{kind}"),
+        )
+        await call.answer()
+        return
+
+    caption = _hw_caption(client, kind, crypt)
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Готово", callback_data="onb:done")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"hw:kind:{kind}")
+    kb.adjust(1)
+    markup = kb.as_markup()
+
+    png = _make_qr_png(crypt)
+    try:
+        await call.message.delete()
+    except Exception:  # noqa: BLE001 - previous (text) screen may be too old
+        pass
+    if png is None:
+        # QR lib unavailable — the key in the caption is still copy-pasteable.
+        await call.message.answer(caption, reply_markup=markup)
+    else:
+        await call.message.answer_photo(
+            BufferedInputFile(png, filename="elma-device.png"),
+            caption=caption,
+            reply_markup=markup,
+        )
+    await call.answer()

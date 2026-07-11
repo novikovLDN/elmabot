@@ -25,6 +25,7 @@ def main_menu_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
     # icon_custom_emoji_id puts a premium emoji to the left of the label.
     kb.button(text="Подключиться", callback_data="dev:menu",
               style="primary", icon_custom_emoji_id=emoji.CONNECT)
+    kb.button(text="📲 Добавить устройство", callback_data="hw:add")
     kb.button(text="Личный кабинет", callback_data="menu:cabinet",
               icon_custom_emoji_id=emoji.CABINET)
     # Right under the cabinet: «Купить ГБ» | «Купить/Продлить подписку».
@@ -42,7 +43,7 @@ def main_menu_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
     kb.button(text="Подарить", callback_data="gift:open", icon_custom_emoji_id=emoji.GIFT)
     kb.button(text="Помощь", callback_data="help:open", icon_custom_emoji_id=emoji.HELP)
     kb.button(text="О сервисе", callback_data="about:open", icon_custom_emoji_id=emoji.ABOUT)
-    kb.adjust(1, 1, *buy_row, 2, 2)
+    kb.adjust(1, 1, 1, *buy_row, 2, 2)
     return kb.as_markup()
 
 
