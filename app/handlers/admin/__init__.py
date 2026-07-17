@@ -39,6 +39,8 @@ from database import (
     REVENUE_WINDOWS,
     SEGMENTS,
     activity_windows,
+    bypass_backfill_targets,
+    bypass_coverage,
     create_login_token,
     find_user_by_username,
     get_bypass,
@@ -246,6 +248,58 @@ async def admin_media_file_id(message: Message) -> None:
         "Пришли мне его вместе с названием экрана — подключу фото к этому экрану.",
         parse_mode="HTML",
     )
+
+
+# --- Bypass profiles coverage ----------------------------------------------
+
+@router.callback_query(F.data == "admin:bypass_check")
+async def cb_bypass_check(call: CallbackQuery) -> None:
+    """Report whether every active paid subscriber has a bypass profile."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🔄 Обновить", callback_data="admin:bypass_check")
+    kb.button(text="⬅️ Админка", callback_data="admin:home")
+    kb.adjust(1)
+    markup = kb.as_markup()
+
+    if not config.BYPASS_ENABLED:
+        await safe_edit(
+            call.message,
+            "🌐 <b>Профили обхода</b>\n\n"
+            "Обход выключен (не задан <code>REMNAWAVE_BYPASS_SQUAD_UUID</code>).",
+            reply_markup=markup,
+        )
+        await call.answer()
+        return
+
+    cov = await bypass_coverage()
+    total, have, missing = cov["total"], cov["have"], cov["missing"]
+    pct = round(have / total * 100) if total else 100
+
+    lines = [
+        "🌐 <b>Профили обхода</b>",
+        "",
+        "Проверка активных платных подписчиков (без триалов):",
+        "",
+        f"👥 Всего: <b>{total}</b>",
+        f"✅ С профилем обхода: <b>{have}</b> ({pct}%)",
+        f"⛔️ Без профиля: <b>{missing}</b>",
+    ]
+    if missing == 0:
+        lines += ["", "🎉 У всех есть профиль обхода."]
+    else:
+        sample = (await bypass_backfill_targets())[:20]
+        ids = ", ".join(f"<code>{uid}</code>" for uid in sample)
+        lines += [
+            "",
+            f"Без профиля{' (первые 20)' if missing > 20 else ''}:",
+            ids,
+            "",
+            "<i>Создать недостающие профили можно в веб-дашборде "
+            "(«Обход» → бэкофилл, с указанием ГБ).</i>",
+        ]
+
+    await safe_edit(call.message, "\n".join(lines), reply_markup=markup)
+    await call.answer()
 
 
 # --- Stats -----------------------------------------------------------------

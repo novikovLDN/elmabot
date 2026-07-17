@@ -125,6 +125,30 @@ async def bypass_backfill_count() -> int:
     )
 
 
+async def bypass_coverage() -> dict:
+    """How many active paid subscribers have a provisioned bypass profile.
+
+    Returns ``{total, have, missing}`` over the same cohort the backfill uses
+    (active, non-trial subscriptions). ``have`` counts a real panel entity
+    (``panel_uuid`` set), so half-written rows count as missing.
+    """
+    pool = get_pool()
+    row = await pool.fetchrow(
+        """
+        SELECT
+            COUNT(*) AS total,
+            COUNT(*) FILTER (
+                WHERE b.telegram_id IS NOT NULL AND b.panel_uuid IS NOT NULL
+            ) AS have
+        FROM subscriptions s
+        LEFT JOIN bypass_subscriptions b ON b.telegram_id = s.telegram_id
+        WHERE s.status = 'active' AND s.source <> 'trial'
+        """
+    )
+    total, have = int(row["total"]), int(row["have"])
+    return {"total": total, "have": have, "missing": total - have}
+
+
 async def record_traffic_purchase(
     telegram_id: int,
     gb_amount: int,

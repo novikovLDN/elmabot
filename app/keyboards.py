@@ -214,6 +214,7 @@ def admin_menu() -> InlineKeyboardMarkup:
     kb.button(text="🫂 Рефералы", callback_data="admin:ref:0")
     kb.button(text="👤 Найти пользователя", callback_data="admin:find")
     kb.button(text="📢 Рассылка", callback_data="admin:broadcast")
+    kb.button(text="🌐 Профили обхода", callback_data="admin:bypass_check")
     kb.adjust(1)
     return kb.as_markup()
 
