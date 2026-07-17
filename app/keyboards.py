@@ -314,11 +314,16 @@ def admin_broadcast_builder(
     referral: bool = False,
     bypass: bool = False,
     year: bool = False,
+    buy: bool = False,
 ) -> InlineKeyboardMarkup:
     """Compose-step keyboard: optionally attach buttons, then send."""
     from config import YEAR_PROMO_PCT
 
     kb = InlineKeyboardBuilder()
+    kb.button(
+        text=("✅ Кнопка «Купить доступ»" if buy else "🛒 + Кнопка «Купить доступ»"),
+        callback_data="bcastbtn:buy",
+    )
     kb.button(
         text=(
             f"✅ Кнопка «1 год −{YEAR_PROMO_PCT}%»"
@@ -361,7 +366,7 @@ def admin_broadcast_builder(
 
 def broadcast_user_markup(
     disc_pct: int | None, disc_days: int | None, channel: bool, referral: bool = False,
-    *, bypass_url: str | None = None, year: bool = False,
+    *, bypass_url: str | None = None, year: bool = False, buy: bool = False,
 ) -> InlineKeyboardMarkup | None:
     """The inline buttons attached to the message recipients receive.
 
@@ -371,6 +376,11 @@ def broadcast_user_markup(
 
     kb = InlineKeyboardBuilder()
     has_any = False
+    if buy:
+        # Plain "open the tariff list" CTA (no discount). Own callback so it opens
+        # a fresh tariffs message even under a photo broadcast (menu:buy edits).
+        kb.button(text="🛒 Купить доступ", callback_data="buyaccess", style="primary")
+        has_any = True
     if year:
         # Its own callback (not promo:pct:days) — the year offer is scoped to the
         # 1-year plan and opens a dedicated screen with a premium-emoji flash.

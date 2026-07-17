@@ -181,6 +181,15 @@ async def cb_yearpromo(call: CallbackQuery) -> None:
     await call.message.answer(text, reply_markup=markup)
 
 
+@router.callback_query(F.data == "buyaccess")
+async def cb_buyaccess(call: CallbackQuery) -> None:
+    """Broadcast "Купить доступ" button: open the tariff list. Sends a fresh
+    message (not edit) so it works under a photo broadcast too."""
+    text, markup = await _tariffs_view(call.from_user.id)
+    await call.message.answer(text, reply_markup=markup)
+    await call.answer()
+
+
 @router.callback_query(F.data == "chan:soon")
 async def cb_channel_soon(call: CallbackQuery) -> None:
     await call.answer("Канал скоро откроется ✨", show_alert=True)

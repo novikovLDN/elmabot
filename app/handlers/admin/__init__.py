@@ -646,6 +646,8 @@ async def _builder_view(state: FSMContext) -> tuple[str, object]:
         lines.append(
             f"🏆 Кнопка «1 год со скидкой {config.YEAR_PROMO_PCT}%»: <b>вкл.</b>"
         )
+    if data.get("buy"):
+        lines.append("🛒 Кнопка «Купить доступ»: <b>вкл.</b>")
     lines.append("")
     lines.append(
         "<i>Добавьте кнопки к сообщению (по желанию) и нажмите «Отправить». "
@@ -658,6 +660,7 @@ async def _builder_view(state: FSMContext) -> tuple[str, object]:
         referral=data.get("referral", False),
         bypass=data.get("bypass", False),
         year=data.get("year", False),
+        buy=data.get("buy", False),
     )
     return "\n".join(lines), markup
 
@@ -803,6 +806,15 @@ async def cb_btn_year(call: CallbackQuery, state: FSMContext) -> None:
     await call.answer()
 
 
+@router.callback_query(F.data == "bcastbtn:buy")
+async def cb_btn_buy(call: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    await state.update_data(buy=not data.get("buy", False))
+    body, markup = await _builder_view(state)
+    await safe_edit(call.message, body, reply_markup=markup)
+    await call.answer()
+
+
 async def _bypass_connect_url(uid: int) -> str | None:
     """Per-user one-tap link: connect page + the user's bypass crypt4 key in the
     #fragment. None if no connect page or the user has no bypass key."""
@@ -830,12 +842,14 @@ async def cb_send_broadcast(call: CallbackQuery, state: FSMContext) -> None:
     referral = data.get("referral", False)
     bypass = data.get("bypass", False)
     year = data.get("year", False)
+    buy = data.get("buy", False)
 
     async def make_markup(uid: int):
         # The bypass button is a per-recipient link; everything else is static.
         bypass_url = await _bypass_connect_url(uid) if bypass else None
         return broadcast_user_markup(
-            disc_pct, disc_days, channel, referral, bypass_url=bypass_url, year=year
+            disc_pct, disc_days, channel, referral,
+            bypass_url=bypass_url, year=year, buy=buy,
         )
 
     await call.message.edit_text("📤 Рассылка запущена…")
