@@ -17,7 +17,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 import database
 from app.events import bus
-from app.utils import safe_send
+from app.utils import convert_tg_emoji, safe_send
 
 from . import broadcaster
 
@@ -145,6 +145,11 @@ def build_markup(button_text: str | None, button_url: str | None, buttons=None):
 
 
 def build_sender(bot, text: str, photo: str | None, markup):
+    # Convert the ![🎁](tg://emoji?id=…) markdown the admin types in the dashboard
+    # into <tg-emoji> HTML entities, so premium/animated emoji render (same as
+    # the in-Telegram admin flow). parse_mode is HTML on every send below.
+    text = convert_tg_emoji(text or "")
+
     async def send_one(uid: int) -> None:
         if photo:
             await bot.send_photo(

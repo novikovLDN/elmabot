@@ -195,6 +195,10 @@ export default function BroadcastCreate() {
           <textarea className="input min-h-[140px] font-mono text-sm" value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="<b>Заголовок</b>&#10;&#10;Текст сообщения…" />
+          <div className="mt-1 text-xs text-fg-muted">
+            HTML: <code>&lt;b&gt;</code> <code>&lt;i&gt;</code> <code>&lt;a href&gt;</code> <code>&lt;blockquote&gt;</code>.
+            Премиум-эмодзи: <code>![🎁](tg://emoji?id=5170…)</code> — отправятся анимированными.
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
