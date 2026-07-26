@@ -111,6 +111,12 @@ export interface AuditRow {
 }
 export interface Segment { key: string; label: string; count: number; }
 
+export interface ReconCandidate {
+  telegram_id: number; issue: string;
+  db_expires: string | null; panel_expires: string | null; days_over: number;
+}
+export interface ReconResult { scanned: number; limit: number; candidates: ReconCandidate[]; }
+
 export interface StatLinkRow {
   id: number; slug: string; name: string; clicks: number; active: boolean;
   created_at: string; link: string;
@@ -236,6 +242,9 @@ export const endpoints = {
   promoCreate: (p: PromoCreate) => api.post<PromoRow>("/promo", p),
   promoToggle: (code: string) => api.post<{ ok: boolean; active: boolean }>(`/promo/${code}/toggle`),
   promoDelete: (code: string) => api.post<{ ok: boolean }>(`/promo/${code}/delete`),
+
+  // reconciliation (panel vs DB expiry)
+  reconcile: (limit = 100) => api.get<ReconResult>(`/reconciliation/candidates?limit=${limit}`),
 
   // settings
   settings: () => api.get<Settings>("/settings"),

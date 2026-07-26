@@ -308,6 +308,21 @@ async def expired_active() -> list[asyncpg.Record]:
     )
 
 
+async def active_paid_for_reconcile(limit: int) -> list[asyncpg.Record]:
+    """Active paid subscriptions (newest first) for the panel↔DB expiry check."""
+    pool = get_pool()
+    return await pool.fetch(
+        """
+        SELECT telegram_id, expires_at, panel_uuid
+        FROM subscriptions
+        WHERE status = 'active' AND source <> 'trial'
+        ORDER BY expires_at DESC
+        LIMIT $1
+        """,
+        limit,
+    )
+
+
 async def mark_expired(telegram_id: int) -> None:
     pool = get_pool()
     await pool.execute(

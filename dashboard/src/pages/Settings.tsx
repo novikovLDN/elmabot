@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Fingerprint, Globe, KeyRound, LogOut, Plus, Trash2, Bell, BellOff } from "lucide-react";
+import { Fingerprint, Globe, KeyRound, LogOut, Plus, Trash2, Bell, BellOff, ShieldAlert } from "lucide-react";
 import { endpoints, ApiError } from "@/lib/api";
 import { fmtDate, fmtNum } from "@/lib/format";
 import { logout } from "@/lib/auth";
@@ -44,6 +44,7 @@ export default function Settings() {
       </div>
 
       <PushCard />
+      <ReconCard />
 
       <div className="card card-pad">
         <div className="label mb-2">Тарифы</div>
@@ -233,6 +234,46 @@ function PushCard() {
         </button>
       )}
       {key.data?.enabled && <div className="text-xs text-fg-subtle">Активных подписок: {fmtNum(key.data.count)}</div>}
+    </div>
+  );
+}
+
+function ReconCard() {
+  const [run, setRun] = useState(false);
+  const q = useQuery({
+    queryKey: ["reconcile"], queryFn: () => endpoints.reconcile(100),
+    enabled: run, refetchOnWindowFocus: false, staleTime: Infinity,
+  });
+  const cands = q.data?.candidates ?? [];
+  return (
+    <div className="card card-pad space-y-3">
+      <div className="flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-fg-subtle" /><div className="label">Сверка выдачи (панель ↔ БД)</div></div>
+      <p className="text-sm text-fg-muted">
+        Сравнивает срок в Remnawave со сроком в базе и находит перевыдачу (панель &gt; БД ≥ 1 дня)
+        или отсутствие пользователя в панели. Проверяет до 100 активных платных подписок — идёт несколько секунд.
+      </p>
+      <button className="btn-secondary" disabled={q.isFetching}
+        onClick={() => { setRun(true); q.refetch(); }}>
+        {q.isFetching ? <Spinner className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />} Проверить
+      </button>
+      {q.data && (
+        <div className="text-sm">
+          <div className="text-fg-muted">Проверено: {fmtNum(q.data.scanned)} · расхождений: <b>{fmtNum(cands.length)}</b></div>
+          {cands.length > 0 && (
+            <div className="mt-2 divide-y divide-border-subtle">
+              {cands.slice(0, 50).map((c) => (
+                <div key={c.telegram_id} className="flex items-center justify-between py-1.5">
+                  <code className="text-xs">{c.telegram_id}</code>
+                  <span className={c.issue === "no_panel" ? "badge-warning" : "badge-danger"}>
+                    {c.issue === "no_panel" ? "нет в панели" : `перевыдача +${c.days_over} дн.`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {cands.length === 0 && <div className="mt-1 text-success">✓ Расхождений не найдено</div>}
+        </div>
+      )}
     </div>
   );
 }
