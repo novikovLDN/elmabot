@@ -96,14 +96,6 @@ from .automations import (
     set_override,
     update_automation,
 )
-from .balance import (
-    adjust_balance,
-    balance_ledger,
-    get_balance,
-    set_cashback_fixed,
-    set_vip,
-    try_spend_balance,
-)
 from .marketing import (
     attribute_user,
     bump_stat_link_click,
@@ -275,13 +267,6 @@ __all__ = [
     "bump_stat_link_click",
     "attribute_user",
     "stat_link_funnel",
-    # balance / loyalty economy
-    "get_balance",
-    "adjust_balance",
-    "try_spend_balance",
-    "balance_ledger",
-    "set_vip",
-    "set_cashback_fixed",
     "record_traffic_purchase",
     # automations
     "list_overrides",

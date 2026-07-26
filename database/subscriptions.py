@@ -574,8 +574,6 @@ def _cold_since(days: int) -> str:
 
 
 _NO_ACTIVE = f"NOT {_ACTIVE_SUB}"
-_HAS_BALANCE = "u.balance_kopecks > 0"
-_VIP = "u.is_vip"
 _IS_REFERRER = "EXISTS (SELECT 1 FROM referrals r WHERE r.referrer_id = u.telegram_id)"
 _LOYAL_2PLUS = (
     "(SELECT COUNT(*) FROM payments p "
@@ -673,9 +671,6 @@ SEGMENTS: dict[str, tuple[str, str, str]] = {
               "Оплатили 2 и более раз — самые лояльные."),
     "one_time": ("1️⃣ Купили один раз", _ONE_TIME,
                  "Оплатили ровно один раз — цель для повторной продажи."),
-    "vip": ("👑 VIP", _VIP, "Пользователи с VIP-статусом."),
-    "has_balance": ("💼 Есть баланс", _HAS_BALANCE,
-                    "На балансе есть деньги — подтолкнуть потратить на подписку."),
     "bypass_users": ("🌐 Пользуются обходом", _BYPASS_USER,
                      "Есть активный ключ обхода блокировок."),
     "referrers": ("🫂 Пригласившие друзей", _IS_REFERRER,

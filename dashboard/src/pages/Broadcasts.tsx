@@ -20,7 +20,7 @@ function groupOf(key: string): (typeof GROUPS)[number] {
   if (key.startsWith("exp_in_")) return "Продление";
   if (key.startsWith("expd_") || key === "paid_lapsed") return "Возврат";
   if (key.includes("trial") || key.startsWith("cold")) return "Триал-воронка";
-  if (["loyal", "one_time", "vip", "has_balance", "bypass_users", "referrers"].includes(key)) return "Апселл";
+  if (["loyal", "one_time", "bypass_users", "referrers"].includes(key)) return "Апселл";
   return "База";
 }
 

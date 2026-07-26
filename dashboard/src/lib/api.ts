@@ -203,10 +203,6 @@ export const endpoints = {
   setDiscount: (tg: number, percent: number, days: number) =>
     api.post<{ ok: boolean; expires_at: string }>(`/users/${tg}/discount`, { percent, days }),
   clearDiscount: (tg: number) => api.post<{ ok: boolean }>(`/users/${tg}/discount/clear`),
-  adjustBalance: (tg: number, delta_rubles: number) =>
-    api.post<{ ok: boolean; balance_kopecks: number }>(`/users/${tg}/balance`, { delta_rubles }),
-  setVip: (tg: number, on: boolean) =>
-    api.post<{ ok: boolean; is_vip: boolean }>(`/users/${tg}/vip`, { on }),
 
   // payments
   payments: (page: number, limit = 30) =>

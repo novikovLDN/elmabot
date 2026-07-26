@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, X, ShieldPlus, ShieldX, Users as UsersIcon, Wallet, Percent, Crown, Coins, RefreshCw } from "lucide-react";
+import { Search, X, ShieldPlus, ShieldX, Users as UsersIcon, Wallet, Percent, RefreshCw } from "lucide-react";
 import { endpoints, ApiError } from "@/lib/api";
 import { fmtDate, fmtDateTime, fmtNum, fmtRub } from "@/lib/format";
-import { PageLoader, Spinner } from "@/components/Spinner";
+import { PageLoader } from "@/components/Spinner";
 import { EmptyState } from "@/components/EmptyState";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { toast } from "@/store/toast";
@@ -95,7 +95,6 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
   const [days, setDays] = useState(30);
   const [discPct, setDiscPct] = useState(20);
   const [discDays, setDiscDays] = useState(3);
-  const [balDelta, setBalDelta] = useState(100);
   const detail = useQuery({ queryKey: ["users", "detail", tg], queryFn: () => endpoints.user(tg) });
 
   const refresh = () => {
@@ -127,19 +126,8 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
     onSuccess: () => { toast.success("Скидка снята"); refresh(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
   });
-  const balAdj = useMutation({
-    mutationFn: (delta: number) => endpoints.adjustBalance(tg, delta),
-    onSuccess: () => { toast.success("Баланс изменён"); refresh(); },
-    onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
-  });
-  const vip = useMutation({
-    mutationFn: (on: boolean) => endpoints.setVip(tg, on),
-    onSuccess: (r) => { toast.success(r.is_vip ? "VIP выдан" : "VIP снят"); refresh(); },
-    onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
-  });
 
   const u = (detail.data?.user ?? {}) as Record<string, unknown>;
-  const isVip = !!u.is_vip;
   const str = (k: string) => (u[k] == null ? "—" : String(u[k]));
   const payments = detail.data?.payments ?? [];
   const offerActive = !!u.offer_pct && !!u.offer_expires_at && new Date(u.offer_expires_at as string) > new Date();
@@ -172,8 +160,6 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
               <KV label="Потрачено" value={fmtRub(Number(u.spent_kopecks ?? 0))} />
               <KV label="Приглашено" value={`${detail.data?.referral.invited ?? 0}`} />
               <KV label="Купили друзья" value={`${detail.data?.referral.purchased ?? 0}`} />
-              <KV label="Баланс" value={fmtRub(Number(u.balance_kopecks ?? 0))} />
-              <KV label="VIP" value={isVip ? "👑 да" : "нет"} />
             </div>
 
             {/* access control — every action double-confirmed */}
@@ -221,30 +207,6 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
                   idleLabel="Снять скидку" confirmLabel="Точно снять?"
                   pending={clearDisc.isPending} onConfirm={() => clearDisc.mutate()} />
               )}
-            </div>
-
-            {/* balance */}
-            <div className="card card-pad space-y-3">
-              <div className="flex items-center gap-2"><Wallet className="h-4 w-4 text-fg-subtle" /><div className="label">Баланс: {fmtRub(Number(u.balance_kopecks ?? 0))}</div></div>
-              <div className="flex items-center gap-2">
-                <input type="number" className="input w-28" value={balDelta}
-                  onChange={(e) => setBalDelta(Number(e.target.value))} />
-                <span className="text-sm text-fg-muted">₽</span>
-                <button className="btn-secondary ml-auto" disabled={balAdj.isPending || !balDelta} onClick={() => balAdj.mutate(Math.abs(balDelta))}>
-                  {balAdj.isPending && balAdj.variables! > 0 ? <Spinner className="h-4 w-4" /> : <Coins className="h-4 w-4" />} Начислить
-                </button>
-                <button className="btn-secondary" disabled={balAdj.isPending || !balDelta} onClick={() => balAdj.mutate(-Math.abs(balDelta))}>Списать</button>
-              </div>
-            </div>
-
-            {/* VIP */}
-            <div className="card card-pad">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2"><Crown className="h-4 w-4 text-fg-subtle" /><div className="label">VIP-статус</div></div>
-                <button className={isVip ? "btn-secondary" : "btn-info"} disabled={vip.isPending} onClick={() => vip.mutate(!isVip)}>
-                  {vip.isPending ? <Spinner className="h-4 w-4" /> : <Crown className="h-4 w-4" />} {isVip ? "Снять VIP" : "Выдать VIP"}
-                </button>
-              </div>
             </div>
 
             {/* full payment history */}

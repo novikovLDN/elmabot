@@ -25,7 +25,7 @@ from config import (
     SUPPORT_USERNAME,
     TERMS_URL,
 )
-from database import get_balance, get_subscription, referral_stats
+from database import get_subscription, referral_stats
 
 _GB = 1024 ** 3
 
@@ -233,12 +233,6 @@ async def _cabinet_view(uid: int):
                 "\n🔑 Ключ обхода (импортируй в Happ):\n"
                 f"<blockquote expandable><code>{html.escape(crypt4)}</code></blockquote>"
             )
-
-    # Balance (top-up by admin / spend on a subscription). No cashback — the
-    # referral reward is +N bonus days on a friend's purchase.
-    bal = await get_balance(uid)
-    if bal > 0:
-        text += f"\n\n💼 <b>Баланс: {bal // 100} ₽</b> — можно оплатить подписку"
 
     return text, cabinet_keyboard(has_active_sub=active, has_bypass=has_bypass)
 

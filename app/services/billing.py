@@ -26,7 +26,6 @@ from database import (
     mark_payment_paid,
     record_traffic_purchase,
     redeem_gift_record,
-    try_spend_balance,
 )
 
 from . import auto_msg, bypass_service, subscription_service
@@ -59,24 +58,6 @@ async def complete_purchase(
 
     if first_purchase:
         await _reward_referrer(bot, user_id)
-    return sub
-
-
-async def complete_balance_purchase(
-    bot: Bot, user_id: int, tariff: Tariff, amount_kopecks: int
-) -> asyncpg.Record | None:
-    """Pay for a subscription from the user's balance. Returns the subscription
-    on success, or None if the balance doesn't cover the price.
-
-    No payment row is written — the balance was funded earlier (admin top-up),
-    so spending it is not new revenue."""
-    ok = await try_spend_balance(user_id, amount_kopecks, meta=f"tariff {tariff.code}")
-    if not ok:
-        return None
-    current = await get_subscription(user_id)
-    new_expires = subscription_service.next_expiry(current, tariff.days)
-    sub = await subscription_service.create_or_renew(user_id, new_expires, source="payment")
-    await clear_offer(user_id)
     return sub
 
 
