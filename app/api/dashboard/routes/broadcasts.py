@@ -1,53 +1,43 @@
-"""Broadcasts — audience segments and sending (with live progress events).
+"""Broadcasts — segments, sending, history (last 500), resend and scheduling.
 
-GET  /broadcasts/segments   [{key, label, count}] across all segments
-POST /broadcasts/test-self  {text, photo_file_id?, button_text?, button_url?}
-                            preview to the requesting admin only
-POST /broadcasts            {segment, text, photo_file_id?, button_text?, button_url?}
-                            start a background send; progress via bus events
+GET  /broadcasts/segments            [{key, label, count}]
+POST /broadcasts/test-self           preview to the requesting admin(s)
+POST /broadcasts                     start a send now (journaled in history)
+GET  /broadcasts/history?limit=500   recent broadcasts (newest first)
+POST /broadcasts/{id}/resend         re-run a past broadcast, as-is
+GET  /broadcasts/scheduled           scheduled / recurring broadcasts
+POST /broadcasts/scheduled           create one (once | daily | weekly, MSK)
+POST /broadcasts/scheduled/{id}/toggle   pause / resume
+POST /broadcasts/scheduled/{id}/cancel   delete
 
-No persistence table yet — runs stream progress over the WebSocket and finish
-with a broadcast:done event (ТЗ broadcast history can be added later).
+All times are Moscow (MSK, UTC+3); stored UTC. See broadcast_runner.
 """
 import asyncio
 import logging
 
-from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiohttp import web
 
 import config
 import database
-from app.events import bus
-from app.services import broadcaster
-from app.utils import safe_send
+from app.services import broadcast_runner
 
-from ..util import json_ok, read_json
+from ..util import int_query, json_ok, read_json
 
 logger = logging.getLogger(__name__)
 routes = web.RouteTableDef()
 
-
-def _markup(button_text: str | None, button_url: str | None):
-    if button_text and button_url:
-        kb = InlineKeyboardBuilder()
-        kb.button(text=button_text, url=button_url)
-        return kb.as_markup()
-    return None
+_KINDS = ("once", "daily", "weekly")
 
 
-def _sender(bot, text: str, photo: str | None, markup):
-    async def send_one(uid: int) -> None:
-        if photo:
-            await bot.send_photo(
-                uid, photo, caption=text, parse_mode="HTML", reply_markup=markup
-            )
-        else:
-            await bot.send_message(
-                uid, text, parse_mode="HTML", reply_markup=markup,
-                disable_web_page_preview=True,
-            )
-
-    return send_one
+def _clean(body: dict) -> dict:
+    """Normalise a broadcast spec from a request body."""
+    return {
+        "segment": str(body.get("segment", "")),
+        "text": str(body.get("text", "")).strip(),
+        "photo_file_id": (body.get("photo_file_id") or None),
+        "button_text": (body.get("button_text") or None),
+        "button_url": (body.get("button_url") or None),
+    }
 
 
 @routes.get("/broadcasts/segments")
@@ -62,12 +52,11 @@ async def segments(request: web.Request) -> web.Response:
 async def test_self(request: web.Request) -> web.Response:
     bot = request.config_dict["bot"]
     body = await read_json(request)
-    text = str(body.get("text", "")).strip()
-    if not text and not body.get("photo_file_id"):
+    spec = _clean(body)
+    if not spec["text"] and not spec["photo_file_id"]:
         raise web.HTTPBadRequest(reason="empty message")
-    # Preview goes to every configured admin, not just the one logged in.
-    send_one = _sender(bot, text, body.get("photo_file_id"),
-                       _markup(body.get("button_text"), body.get("button_url")))
+    markup = broadcast_runner.build_markup(spec["button_text"], spec["button_url"])
+    send_one = broadcast_runner.build_sender(bot, spec["text"], spec["photo_file_id"], markup)
     sent = 0
     for aid in config.ADMIN_IDS:
         try:
@@ -84,53 +73,126 @@ async def test_self(request: web.Request) -> web.Response:
 async def create(request: web.Request) -> web.Response:
     bot = request.config_dict["bot"]
     body = await read_json(request)
-    segment = str(body.get("segment", ""))
-    text = str(body.get("text", "")).strip()
-    photo = body.get("photo_file_id")
-    if segment not in database.SEGMENTS:
+    spec = _clean(body)
+    if spec["segment"] not in database.SEGMENTS:
         raise web.HTTPBadRequest(reason="unknown segment")
-    if not text and not photo:
+    if not spec["text"] and not spec["photo_file_id"]:
         raise web.HTTPBadRequest(reason="empty message")
 
     admin_id = int(request["admin"]["sub"])
-    user_ids = await database.recipients(segment)
-    markup = _markup(body.get("button_text"), body.get("button_url"))
-    send_one = _sender(bot, text, photo, markup)
-    total = len(user_ids)
+    total = len(await database.recipients(spec["segment"]))
+    asyncio.create_task(
+        broadcast_runner.run_broadcast(bot, admin_id=admin_id, source="manual", **spec)
+    )
+    return json_ok({"ok": True, "segment": spec["segment"], "total": total}, status=202)
 
-    await database.log_audit(admin_id, "broadcast", None, f"{segment} → {total}")
-    bus.publish({"type": "broadcast:created", "segment": segment, "total": total})
 
-    async def run() -> None:
-        async def progress(res) -> None:
-            bus.publish({
-                "type": "broadcast:progress", "segment": segment,
-                "sent": res.sent, "blocked": res.blocked,
-                "failed": res.failed, "total": total,
-            })
+@routes.get("/broadcasts/history")
+async def history(request: web.Request) -> web.Response:
+    limit = int_query(request, "limit", 500, 1, 500)
+    rows = await database.list_broadcasts(limit)
+    return json_ok([dict(r) for r in rows])
 
-        res = await broadcaster.broadcast(user_ids, send_one, progress=progress)
-        bus.publish({
-            "type": "broadcast:done", "segment": segment,
-            "sent": res.sent, "blocked": res.blocked,
-            "failed": res.failed, "total": total,
-        })
-        logger.info(
-            "Dashboard broadcast to %s done: sent=%d blocked=%d failed=%d",
-            segment, res.sent, res.blocked, res.failed,
+
+@routes.post("/broadcasts/{id}/resend")
+async def resend(request: web.Request) -> web.Response:
+    bot = request.config_dict["bot"]
+    try:
+        bid = int(request.match_info["id"])
+    except ValueError:
+        raise web.HTTPBadRequest(reason="bad id")
+    row = await database.get_broadcast(bid)
+    if row is None:
+        raise web.HTTPNotFound(reason="broadcast not found")
+    if row["segment"] not in database.SEGMENTS:
+        raise web.HTTPBadRequest(reason="сегмент больше не существует")
+
+    admin_id = int(request["admin"]["sub"])
+    total = len(await database.recipients(row["segment"]))
+    asyncio.create_task(broadcast_runner.run_broadcast(
+        bot, admin_id=admin_id, source="resend", segment=row["segment"],
+        text=row["text"], photo_file_id=row["photo_file_id"],
+        button_text=row["button_text"], button_url=row["button_url"],
+    ))
+    return json_ok({"ok": True, "segment": row["segment"], "total": total}, status=202)
+
+
+# --- Scheduled / recurring -------------------------------------------------
+
+@routes.get("/broadcasts/scheduled")
+async def scheduled_list(request: web.Request) -> web.Response:
+    rows = await database.list_scheduled()
+    return json_ok([dict(r) for r in rows])
+
+
+@routes.post("/broadcasts/scheduled")
+async def scheduled_create(request: web.Request) -> web.Response:
+    body = await read_json(request)
+    spec = _clean(body)
+    if spec["segment"] not in database.SEGMENTS:
+        raise web.HTTPBadRequest(reason="unknown segment")
+    if not spec["text"] and not spec["photo_file_id"]:
+        raise web.HTTPBadRequest(reason="empty message")
+
+    kind = str(body.get("kind", ""))
+    if kind not in _KINDS:
+        raise web.HTTPBadRequest(reason="kind: once | daily | weekly")
+
+    time_msk = str(body.get("time_msk", "")).strip() or None
+    weekdays = None
+    run_at_local = str(body.get("run_at_local", "")).strip() or None
+    try:
+        if kind in ("daily", "weekly"):
+            broadcast_runner.parse_hhmm(time_msk or "")  # validate
+        if kind == "weekly":
+            days = sorted(broadcast_runner.parse_weekdays(str(body.get("weekdays", ""))))
+            weekdays = ",".join(str(d) for d in days)
+        run_at = broadcast_runner.initial_run_at(
+            kind, run_at_local=run_at_local, time_msk=time_msk, weekdays=weekdays,
         )
-        # Notify every admin in their bot DM with the result.
-        label = database.SEGMENTS.get(segment, (segment, ""))[0]
-        summary = (
-            "✅ <b>Рассылка завершена</b>\n\n"
-            f"Сегмент: <b>{label}</b>\n"
-            f"Получателей: {total}\n"
-            f"📨 Доставлено: {res.sent}\n"
-            f"🚫 Заблокировали: {res.blocked}\n"
-            f"⚠️ Ошибок: {res.failed}"
-        )
-        for aid in config.ADMIN_IDS:
-            await safe_send(bot, aid, summary)
+    except ValueError as exc:
+        raise web.HTTPBadRequest(reason=str(exc))
 
-    asyncio.create_task(run())
-    return json_ok({"ok": True, "segment": segment, "total": total}, status=202)
+    admin_id = int(request["admin"]["sub"])
+    row = await database.create_scheduled(
+        admin_id=admin_id, segment=spec["segment"], text=spec["text"],
+        photo_file_id=spec["photo_file_id"], button_text=spec["button_text"],
+        button_url=spec["button_url"], kind=kind, run_at=run_at,
+        time_msk=time_msk if kind != "once" else None, weekdays=weekdays,
+    )
+    await database.log_audit(
+        admin_id, "broadcast_schedule", None, f"{kind} {spec['segment']}"
+    )
+    return json_ok(dict(row), status=201)
+
+
+@routes.post("/broadcasts/scheduled/{id}/toggle")
+async def scheduled_toggle(request: web.Request) -> web.Response:
+    try:
+        sid = int(request.match_info["id"])
+    except ValueError:
+        raise web.HTTPBadRequest(reason="bad id")
+    row = await database.get_scheduled(sid)
+    if row is None:
+        raise web.HTTPNotFound(reason="not found")
+    new_active = not row["active"]
+    # Resuming a recurring schedule whose slot has passed: move it to the next
+    # future slot so it doesn't fire immediately on resume.
+    if new_active and row["kind"] != "once":
+        nxt = broadcast_runner.compute_next_run(
+            row["kind"], row["time_msk"], row["weekdays"], broadcast_runner._now()
+        )
+        if nxt is not None:
+            await database.set_scheduled_run_at(sid, nxt)
+    await database.set_scheduled_active(sid, new_active)
+    return json_ok({"ok": True, "active": new_active})
+
+
+@routes.post("/broadcasts/scheduled/{id}/cancel")
+async def scheduled_cancel(request: web.Request) -> web.Response:
+    try:
+        sid = int(request.match_info["id"])
+    except ValueError:
+        raise web.HTTPBadRequest(reason="bad id")
+    await database.delete_scheduled(sid)
+    return json_ok({"ok": True})

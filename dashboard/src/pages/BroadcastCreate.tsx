@@ -1,12 +1,23 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Send, TestTube2 } from "lucide-react";
-import { endpoints, ApiError, type BroadcastPayload } from "@/lib/api";
+import { ArrowLeft, Send, TestTube2, Clock } from "lucide-react";
+import {
+  endpoints, ApiError,
+  type BroadcastPayload, type SchedulePayload, type ScheduleKind,
+} from "@/lib/api";
 import { fmtNum } from "@/lib/format";
 import { Spinner } from "@/components/Spinner";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { cn } from "@/lib/cn";
 import { toast } from "@/store/toast";
+
+const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const KINDS: { key: ScheduleKind; label: string }[] = [
+  { key: "once", label: "Однократно" },
+  { key: "daily", label: "Ежедневно" },
+  { key: "weekly", label: "Еженедельно" },
+];
 
 export default function BroadcastCreate() {
   const [params] = useSearchParams();
@@ -19,12 +30,18 @@ export default function BroadcastCreate() {
   const [btnText, setBtnText] = useState("");
   const [btnUrl, setBtnUrl] = useState("");
 
+  const [mode, setMode] = useState<"now" | "schedule">(params.get("schedule") ? "schedule" : "now");
+  const [kind, setKind] = useState<ScheduleKind>("once");
+  const [runAt, setRunAt] = useState(""); // 'YYYY-MM-DDTHH:MM' (MSK) for once
+  const [timeMsk, setTimeMsk] = useState("12:00"); // for daily / weekly
+  const [weekdays, setWeekdays] = useState<Set<number>>(new Set());
+
   const count = useMemo(
     () => segs.data?.find((s) => s.key === segment)?.count ?? 0,
     [segs.data, segment],
   );
 
-  const payload = (withSegment: boolean): BroadcastPayload => ({
+  const base = (withSegment: boolean): BroadcastPayload => ({
     ...(withSegment ? { segment } : {}),
     text,
     photo_file_id: photo || undefined,
@@ -32,18 +49,45 @@ export default function BroadcastCreate() {
     button_url: btnUrl || undefined,
   });
 
+  const schedulePayload = (): SchedulePayload => {
+    const p: SchedulePayload = { ...base(true), kind };
+    if (kind === "once") p.run_at_local = runAt;
+    else {
+      p.time_msk = timeMsk;
+      if (kind === "weekly") p.weekdays = [...weekdays].sort((a, b) => a - b).join(",");
+    }
+    return p;
+  };
+
   const test = useMutation({
-    mutationFn: () => endpoints.broadcastTestSelf(payload(false)),
+    mutationFn: () => endpoints.broadcastTestSelf(base(false)),
     onSuccess: () => toast.success("Тест отправлен вам в бот"),
     onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
   });
   const send = useMutation({
-    mutationFn: () => endpoints.broadcastSend(payload(true)),
+    mutationFn: () => endpoints.broadcastSend(base(true)),
     onSuccess: (r) => { toast.success(`Рассылка запущена: ${fmtNum(r.total)} получателей`); navigate("/broadcasts"); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
+  });
+  const schedule = useMutation({
+    mutationFn: () => endpoints.scheduledCreate(schedulePayload()),
+    onSuccess: () => { toast.success("Рассылка запланирована"); navigate("/broadcasts"); },
     onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
   });
 
   const empty = !text.trim() && !photo.trim();
+  const scheduleInvalid =
+    (kind === "once" && !runAt) ||
+    (kind === "daily" && !timeMsk) ||
+    (kind === "weekly" && (!timeMsk || weekdays.size === 0));
+
+  function toggleDay(d: number) {
+    setWeekdays((prev) => {
+      const next = new Set(prev);
+      next.has(d) ? next.delete(d) : next.add(d);
+      return next;
+    });
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -85,6 +129,61 @@ export default function BroadcastCreate() {
           </div>
         </div>
 
+        {/* Когда отправлять */}
+        <div>
+          <label className="label mb-1 block">Когда отправлять</label>
+          <div className="flex gap-1 rounded-xl bg-bg-elevated p-1">
+            <button onClick={() => setMode("now")}
+              className={cn("flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition", mode === "now" ? "bg-bg-surface shadow-sm" : "text-fg-muted")}>
+              Сейчас
+            </button>
+            <button onClick={() => setMode("schedule")}
+              className={cn("flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition", mode === "schedule" ? "bg-bg-surface shadow-sm" : "text-fg-muted")}>
+              По расписанию
+            </button>
+          </div>
+        </div>
+
+        {mode === "schedule" && (
+          <div className="space-y-3 rounded-xl border border-border-subtle p-3">
+            <div className="flex flex-wrap gap-1">
+              {KINDS.map((k) => (
+                <button key={k.key} onClick={() => setKind(k.key)}
+                  className={cn("rounded-lg px-3 py-1.5 text-sm font-medium transition", kind === k.key ? "btn-primary" : "btn-secondary")}>
+                  {k.label}
+                </button>
+              ))}
+            </div>
+
+            {kind === "once" && (
+              <div>
+                <label className="label mb-1 block">Дата и время (МСК, не дальше 7 дней)</label>
+                <input type="datetime-local" className="input" value={runAt} onChange={(e) => setRunAt(e.target.value)} />
+              </div>
+            )}
+            {(kind === "daily" || kind === "weekly") && (
+              <div>
+                <label className="label mb-1 block">Время (МСК)</label>
+                <input type="time" className="input max-w-[160px]" value={timeMsk} onChange={(e) => setTimeMsk(e.target.value)} />
+              </div>
+            )}
+            {kind === "weekly" && (
+              <div>
+                <label className="label mb-1 block">Дни недели</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {WEEKDAYS.map((w, i) => (
+                    <button key={i} onClick={() => toggleDay(i)}
+                      className={cn("h-9 w-11 rounded-lg text-sm font-medium transition", weekdays.has(i) ? "btn-primary" : "btn-secondary")}>
+                      {w}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="text-xs text-fg-muted">🕒 Всё время — московское (МСК, UTC+3).</div>
+          </div>
+        )}
+
         <div className="rounded-xl bg-bg-elevated px-3 py-2 text-xs text-fg-muted">
           💡 Сначала нажмите <b>«Тест админу»</b> — бот пришлёт вам в личку готовое
           сообщение ровно в том виде, в котором его получат пользователи.
@@ -94,12 +193,21 @@ export default function BroadcastCreate() {
           <button className="btn-secondary" disabled={empty || test.isPending} onClick={() => test.mutate()}>
             {test.isPending ? <Spinner className="h-4 w-4" /> : <TestTube2 className="h-4 w-4" />} Тест админу
           </button>
-          <ConfirmButton
-            className="ml-auto" variant="primary" icon={Send}
-            idleLabel="Отправить" confirmLabel={`Точно отправить ${fmtNum(count)}?`}
-            pending={send.isPending} disabled={empty}
-            onConfirm={() => send.mutate()}
-          />
+          {mode === "now" ? (
+            <ConfirmButton
+              className="ml-auto" variant="primary" icon={Send}
+              idleLabel="Отправить" confirmLabel={`Точно отправить ${fmtNum(count)}?`}
+              pending={send.isPending} disabled={empty}
+              onConfirm={() => send.mutate()}
+            />
+          ) : (
+            <ConfirmButton
+              className="ml-auto" variant="primary" icon={Clock}
+              idleLabel="Запланировать" confirmLabel="Точно запланировать?"
+              pending={schedule.isPending} disabled={empty || scheduleInvalid}
+              onConfirm={() => schedule.mutate()}
+            />
+          )}
         </div>
       </div>
     </div>

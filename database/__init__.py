@@ -69,6 +69,20 @@ from .admin import (
     webauthn_list,
     webauthn_touch,
 )
+from .broadcasts import (
+    advance_scheduled,
+    create_scheduled,
+    delete_scheduled,
+    due_scheduled,
+    finish_broadcast,
+    get_broadcast,
+    get_scheduled,
+    list_broadcasts,
+    list_scheduled,
+    record_broadcast,
+    set_scheduled_active,
+    set_scheduled_run_at,
+)
 from .bypass import (
     all_bypass,
     bypass_backfill_count,
@@ -176,6 +190,19 @@ __all__ = [
     "bypass_backfill_targets",
     "bypass_backfill_count",
     "bypass_coverage",
+    # broadcast history / scheduled
+    "record_broadcast",
+    "finish_broadcast",
+    "list_broadcasts",
+    "get_broadcast",
+    "create_scheduled",
+    "list_scheduled",
+    "get_scheduled",
+    "delete_scheduled",
+    "set_scheduled_active",
+    "set_scheduled_run_at",
+    "due_scheduled",
+    "advance_scheduled",
     "record_traffic_purchase",
     # admin dashboard
     "get_admin_password_hash",

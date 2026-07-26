@@ -62,7 +62,7 @@ async def main() -> None:
 
     # Probe the Incy crypt-link sidecar once (logs INCY_SELFTEST_OK/FAIL). A
     # failure is non-fatal — Incy degrades to legacy links, Happ is unaffected.
-    from app.services import incy_crypto
+    from app.services import broadcast_runner, incy_crypto
 
     await incy_crypto.selftest()
 
@@ -73,6 +73,10 @@ async def main() -> None:
         asyncio.create_task(offer_loop(bot), name="offer_loop"),
         asyncio.create_task(traffic_monitor_loop(bot), name="traffic_monitor_loop"),
         asyncio.create_task(payment_reconcile_loop(bot), name="payment_reconcile_loop"),
+        asyncio.create_task(
+            broadcast_runner.scheduled_broadcast_loop(bot),
+            name="scheduled_broadcast_loop",
+        ),
     ]
 
     runner = None

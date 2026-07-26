@@ -188,6 +188,51 @@ CREATE TABLE IF NOT EXISTS traffic_purchases (
     created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_traffic_purchases_tg ON traffic_purchases(telegram_id);
+
+-- --- Broadcast history + scheduled/recurring broadcasts -----------------
+-- Every send (manual / resend / scheduled) is journaled here so the dashboard
+-- can list the last N and re-send any of them. All timestamps TIMESTAMPTZ (UTC).
+CREATE TABLE IF NOT EXISTS broadcast_history (
+    id             BIGSERIAL PRIMARY KEY,
+    admin_id       BIGINT,
+    segment        TEXT NOT NULL,
+    text           TEXT NOT NULL DEFAULT '',
+    photo_file_id  TEXT,
+    button_text    TEXT,
+    button_url     TEXT,
+    source         TEXT NOT NULL DEFAULT 'manual',  -- manual | resend | scheduled
+    status         TEXT NOT NULL DEFAULT 'running',  -- running | done
+    total          INTEGER NOT NULL DEFAULT 0,
+    sent           INTEGER NOT NULL DEFAULT 0,
+    blocked        INTEGER NOT NULL DEFAULT 0,
+    failed         INTEGER NOT NULL DEFAULT 0,
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    finished_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_broadcast_history_created
+    ON broadcast_history(created_at DESC);
+
+-- Scheduled / recurring broadcasts. ``run_at`` is the next fire time (UTC);
+-- ``time_msk`` (HH:MM) and ``weekdays`` (CSV of 0=Mon..6=Sun) drive recurrence.
+CREATE TABLE IF NOT EXISTS scheduled_broadcasts (
+    id             BIGSERIAL PRIMARY KEY,
+    admin_id       BIGINT,
+    segment        TEXT NOT NULL,
+    text           TEXT NOT NULL DEFAULT '',
+    photo_file_id  TEXT,
+    button_text    TEXT,
+    button_url     TEXT,
+    kind           TEXT NOT NULL,                    -- once | daily | weekly
+    run_at         TIMESTAMPTZ NOT NULL,             -- next fire time (UTC)
+    time_msk       TEXT,                             -- 'HH:MM' (recurring display)
+    weekdays       TEXT,                             -- CSV 0..6 (weekly)
+    active         BOOLEAN NOT NULL DEFAULT TRUE,
+    run_count      INTEGER NOT NULL DEFAULT 0,
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    last_run_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_scheduled_due
+    ON scheduled_broadcasts(run_at) WHERE active;
 """
 
 

@@ -180,6 +180,17 @@ export const endpoints = {
     api.post<{ ok: boolean }>("/broadcasts/test-self", payload),
   broadcastSend: (payload: BroadcastPayload) =>
     api.post<{ ok: boolean; total: number }>("/broadcasts", payload),
+  broadcastHistory: (limit = 500) =>
+    api.get<BroadcastHistoryRow[]>(`/broadcasts/history?limit=${limit}`),
+  broadcastResend: (id: number) =>
+    api.post<{ ok: boolean; total: number }>(`/broadcasts/${id}/resend`),
+  scheduledList: () => api.get<ScheduledRow[]>("/broadcasts/scheduled"),
+  scheduledCreate: (payload: SchedulePayload) =>
+    api.post<ScheduledRow>("/broadcasts/scheduled", payload),
+  scheduledToggle: (id: number) =>
+    api.post<{ ok: boolean; active: boolean }>(`/broadcasts/scheduled/${id}/toggle`),
+  scheduledCancel: (id: number) =>
+    api.post<{ ok: boolean }>(`/broadcasts/scheduled/${id}/cancel`),
 
   // settings
   settings: () => api.get<Settings>("/settings"),
@@ -197,4 +208,49 @@ export interface BroadcastPayload {
   photo_file_id?: string;
   button_text?: string;
   button_url?: string;
+}
+
+export type ScheduleKind = "once" | "daily" | "weekly";
+
+export interface SchedulePayload extends BroadcastPayload {
+  kind: ScheduleKind;
+  run_at_local?: string; // 'YYYY-MM-DDTHH:MM' (Moscow time) — for kind=once
+  time_msk?: string; // 'HH:MM' (Moscow time) — for daily/weekly
+  weekdays?: string; // CSV of 0..6 (Mon..Sun) — for weekly
+}
+
+export interface BroadcastHistoryRow {
+  id: number;
+  admin_id: number | null;
+  segment: string;
+  text: string;
+  photo_file_id: string | null;
+  button_text: string | null;
+  button_url: string | null;
+  source: string; // manual | resend | scheduled
+  status: string; // running | done
+  total: number;
+  sent: number;
+  blocked: number;
+  failed: number;
+  created_at: string;
+  finished_at: string | null;
+}
+
+export interface ScheduledRow {
+  id: number;
+  admin_id: number | null;
+  segment: string;
+  text: string;
+  photo_file_id: string | null;
+  button_text: string | null;
+  button_url: string | null;
+  kind: ScheduleKind;
+  run_at: string;
+  time_msk: string | null;
+  weekdays: string | null;
+  active: boolean;
+  run_count: number;
+  created_at: string;
+  last_run_at: string | null;
 }
