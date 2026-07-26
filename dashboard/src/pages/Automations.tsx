@@ -78,41 +78,57 @@ function BuiltinTab() {
 function BuiltinRow({ a, onSaved }: { a: BuiltinAutomation; onSaved: () => void }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState(a.text_override ?? a.default);
+  const [offset, setOffset] = useState(a.offset_hours ?? a.offset_default ?? 0);
   const editable = a.key !== "traffic";
   const save = useMutation({
-    mutationFn: (payload: { enabled: boolean; text: string }) => endpoints.automationSetBuiltin(a.key, payload.enabled, payload.text),
+    mutationFn: (p: { enabled: boolean; text: string; offset: number | null }) =>
+      endpoints.automationSetBuiltin(a.key, p.enabled, p.text, p.offset),
     onSuccess: () => { toast.success("Сохранено"); onSaved(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
   });
+  // Toggle preserves the current text + timing overrides.
+  const curOffset = a.timing ? (a.offset_override ?? null) : null;
   return (
     <div className={cn("card card-pad space-y-2", !a.enabled && "opacity-70")}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-semibold">{a.name}</span>
-        {a.text_override && <span className="badge-muted text-[11px]">изменён</span>}
+        {a.text_override && <span className="badge-muted text-[11px]">текст изменён</span>}
+        {a.offset_override != null && <span className="badge-muted text-[11px]">время изменено</span>}
         {!a.enabled && <span className="text-[11px] text-fg-muted">выключен</span>}
         <button className="btn-secondary ml-auto" disabled={save.isPending}
-          onClick={() => save.mutate({ enabled: !a.enabled, text: a.text_override ?? "" })}>
+          onClick={() => save.mutate({ enabled: !a.enabled, text: a.text_override ?? "", offset: curOffset })}>
           <Power className="h-4 w-4" /> {a.enabled ? "Выключить" : "Включить"}
         </button>
         {editable && (
           <button className="btn-secondary" onClick={() => setOpen((v) => !v)}>
-            {open ? "Скрыть" : "Изменить текст"}
+            {open ? "Скрыть" : "Настроить"}
           </button>
         )}
       </div>
-      <div className="text-xs text-fg-muted">🕒 {a.when}</div>
+      <div className="text-xs text-fg-muted">🕒 {a.when}{a.timing ? ` · сейчас: ${a.offset_hours} ч` : ""}</div>
       {open && editable && (
         <div className="space-y-2">
+          {a.timing && (
+            <div>
+              <label className="label mb-1 block">{a.offset_label ?? "Время, часов"}</label>
+              <input type="number" min={0} max={8760} className="input max-w-[160px]" value={offset}
+                onChange={(e) => setOffset(Math.max(0, Math.min(8760, Number(e.target.value))))} />
+            </div>
+          )}
+          <label className="label block">Текст</label>
           <textarea className="input min-h-[120px] font-mono text-sm" value={text} onChange={(e) => setText(e.target.value)} />
           <div className="text-xs text-fg-subtle">
-            HTML + премиум-эмодзи <code>![🎁](tg://emoji?id=…)</code>. Пусто = вернуть стандартный текст.
+            HTML + премиум-эмодзи <code>![🎁](tg://emoji?id=…)</code>.
           </div>
           <div className="flex gap-2">
             <button className="btn-primary" disabled={save.isPending}
-              onClick={() => save.mutate({ enabled: a.enabled, text })}>
+              onClick={() => save.mutate({ enabled: a.enabled, text, offset: a.timing ? offset : null })}>
               {save.isPending ? <Spinner className="h-4 w-4" /> : <Save className="h-4 w-4" />} Сохранить
             </button>
-            <button className="btn-secondary" onClick={() => { setText(a.default); save.mutate({ enabled: a.enabled, text: "" }); }}>
+            <button className="btn-secondary" onClick={() => {
+              setText(a.default); setOffset(a.offset_default ?? 0);
+              save.mutate({ enabled: a.enabled, text: "", offset: null });
+            }}>
               <RotateCcw className="h-4 w-4" /> Сбросить
             </button>
           </div>

@@ -307,11 +307,13 @@ CREATE INDEX IF NOT EXISTS idx_users_acquired ON users(acquired_via_stat_link_id
 -- --- Automations: overrides for built-in lifecycle messages -------------
 -- Admin can edit the text and switch off any built-in automatic message.
 CREATE TABLE IF NOT EXISTS automation_overrides (
-    key        TEXT PRIMARY KEY,
-    enabled    BOOLEAN NOT NULL DEFAULT TRUE,
-    text       TEXT,                        -- NULL = use the built-in default
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    key          TEXT PRIMARY KEY,
+    enabled      BOOLEAN NOT NULL DEFAULT TRUE,
+    text         TEXT,                      -- NULL = use the built-in default
+    offset_hours INTEGER,                   -- NULL = use the built-in default timing
+    updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE automation_overrides ADD COLUMN IF NOT EXISTS offset_hours INTEGER;
 
 -- Custom, admin-created automations (new lifecycle triggers).
 CREATE TABLE IF NOT EXISTS automations (

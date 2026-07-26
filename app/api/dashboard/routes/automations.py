@@ -61,10 +61,13 @@ async def builtin(request: web.Request) -> web.Response:
     out = []
     for item in notifications.builtin_registry():
         o = ov.get(item["key"], {})
+        eff = o.get("offset_hours")
         out.append({
             **item,
             "enabled": o.get("enabled", True),
             "text_override": o.get("text"),
+            "offset_override": eff,
+            "offset_hours": eff if eff is not None else item.get("offset_default"),
         })
     return json_ok(out)
 
@@ -72,12 +75,21 @@ async def builtin(request: web.Request) -> web.Response:
 @routes.post("/automations/builtin/{key}")
 async def set_builtin(request: web.Request) -> web.Response:
     key = request.match_info["key"]
-    if key not in {i["key"] for i in notifications.builtin_registry()}:
+    reg = {i["key"]: i for i in notifications.builtin_registry()}
+    if key not in reg:
         raise web.HTTPNotFound(reason="unknown automation")
     body = await read_json(request)
     enabled = bool(body.get("enabled", True))
     text = str(body.get("text", "")).strip() or None
-    await database.set_override(key, enabled=enabled, text=text)
+    offset_hours = None
+    if reg[key].get("timing") and body.get("offset_hours") not in ("", None):
+        try:
+            offset_hours = int(body.get("offset_hours"))
+        except (TypeError, ValueError):
+            raise web.HTTPBadRequest(reason="offset_hours must be a number")
+        if not 0 <= offset_hours <= 8760:
+            raise web.HTTPBadRequest(reason="offset_hours 0..8760")
+    await database.set_override(key, enabled=enabled, text=text, offset_hours=offset_hours)
     await database.log_audit(int(request["admin"]["sub"]), "automation_builtin", None, key)
     return json_ok({"ok": True})
 

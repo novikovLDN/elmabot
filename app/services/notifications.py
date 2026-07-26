@@ -29,7 +29,7 @@ from config import (
 from database import (
     all_bypass,
     automation_due_users,
-    due_reactivation_offers,
+    due_reactivation_offers_h,
     due_reminders,
     due_trial_funnel,
     enabled_automations,
@@ -82,6 +82,23 @@ def _text(key: str, default: str) -> str:
     return (_ov.get(key) or {}).get("text") or default
 
 
+def _offset(key: str, default: int) -> int:
+    """Effective timing (hours) for a built-in automation — override or default."""
+    v = (_ov.get(key) or {}).get("offset_hours")
+    return int(v) if v is not None else default
+
+
+# Default timing (hours) for the timing-editable built-ins.
+_OFF_SUB_3DAY = 72   # hours before paid expiry (first reminder)
+_OFF_SUB_DAYOF = 24  # hours before paid expiry (second reminder)
+_OFF_REACT = REACTIVATION_AFTER_DAYS * 24  # hours after expiry
+# Trial funnel: (anchor 'start'|'end', sign +after/-before, default hours).
+_FUNNEL_TIMING: dict[int, tuple[str, int, int]] = {
+    1: ("start", +1, 4), 2: ("end", -1, 24), 3: ("end", -1, 7),
+    4: ("end", -1, 1), 5: ("end", +1, 0), 6: ("end", +1, 72), 7: ("end", +1, 168),
+}
+
+
 async def _send_auto(bot: Bot, uid: int, raw: str, kb) -> None:
     """Send an automation message, converting premium-emoji markdown."""
     await safe_send(bot, uid, convert_tg_emoji(raw), reply_markup=kb)
@@ -112,29 +129,46 @@ _DEF_REACT = (
 
 
 def builtin_registry() -> list[dict]:
-    """Metadata for the dashboard: every built-in automatic message."""
+    """Metadata for the dashboard: every built-in automatic message.
+
+    ``offset_default`` + ``offset_label`` describe the editable timing (hours);
+    ``timing`` is False for messages that fire at a fixed moment."""
     items = [
-        {"key": "sub_3day", "name": "Продление · за 2 дня",
-         "when": "За ~2 дня до конца платной подписки", "default": _DEF_SUB_3DAY},
-        {"key": "sub_dayof", "name": "Продление · в день окончания",
-         "when": "В день окончания платной подписки (даёт −%)", "default": _DEF_SUB_DAYOF},
-        {"key": "sub_expired", "name": "Платная истекла",
-         "when": "Сразу при окончании платной подписки (даёт −%)", "default": _DEF_SUB_EXPIRED},
-        {"key": "reactivation", "name": "Возврат через 3 дня",
-         "when": f"Через {REACTIVATION_AFTER_DAYS} дня после окончания (−%)", "default": _DEF_REACT},
+        {"key": "sub_3day", "name": "Продление · первое напоминание",
+         "when": "За N часов до конца платной подписки", "default": _DEF_SUB_3DAY,
+         "timing": True, "offset_default": _OFF_SUB_3DAY,
+         "offset_label": "За сколько часов до окончания подписки"},
+        {"key": "sub_dayof", "name": "Продление · второе напоминание (даёт −%)",
+         "when": "Ближе к концу платной подписки", "default": _DEF_SUB_DAYOF,
+         "timing": True, "offset_default": _OFF_SUB_DAYOF,
+         "offset_label": "За сколько часов до окончания подписки"},
+        {"key": "sub_expired", "name": "Платная истекла (даёт −%)",
+         "when": "Сразу при окончании платной подписки", "default": _DEF_SUB_EXPIRED,
+         "timing": False},
+        {"key": "reactivation", "name": "Возврат после окончания (−%)",
+         "when": "Через N часов после окончания платной", "default": _DEF_REACT,
+         "timing": True, "offset_default": _OFF_REACT,
+         "offset_label": "Через сколько часов после окончания подписки"},
         {"key": "traffic", "name": "Обход · мало трафика",
-         "when": "При низком остатке ГБ обхода (6 уровней)", "default": "(системные уровни, текст не редактируется)"},
+         "when": "При низком остатке ГБ обхода (6 уровней)",
+         "default": "(системные уровни, текст не редактируется)", "timing": False},
     ]
-    funnel_when = {
-        1: "Через 4 часа после старта триала", 2: "За 24 часа до конца триала",
-        3: "За 7 часов до конца триала (−10%)", 4: "За 1 час до конца триала (−15%)",
-        5: "В момент окончания триала (−20%)", 6: "Через 3 дня после триала (−30%)",
-        7: "Через 7 дней после триала (−50%)",
-    }
+    funnel_disc = {3: "−10%", 4: "−15%", 5: "−20%", 6: "−30%", 7: "−50%"}
     for stage in range(1, 8):
+        anchor, sign, default = _FUNNEL_TIMING[stage]
+        if stage == 5:
+            label, editable = "В момент окончания триала", False
+        elif anchor == "start":
+            label, editable = "Через сколько часов после старта триала", True
+        elif sign < 0:
+            label, editable = "За сколько часов до конца триала", True
+        else:
+            label, editable = "Через сколько часов после конца триала", True
+        disc = f" ({funnel_disc[stage]})" if stage in funnel_disc else ""
         items.append({
-            "key": f"funnel_{stage}", "name": f"Триал-воронка · шаг {stage}",
-            "when": funnel_when[stage], "default": _FUNNEL_TEXT[stage][0],
+            "key": f"funnel_{stage}", "name": f"Триал-воронка · шаг {stage}{disc}",
+            "when": label, "default": _FUNNEL_TEXT[stage][0],
+            "timing": editable, "offset_default": default, "offset_label": label,
         })
     return items
 
@@ -142,7 +176,7 @@ def builtin_registry() -> list[dict]:
 async def _send_3day(bot: Bot) -> None:
     if not _enabled("sub_3day"):
         return
-    rows = await due_reminders("reminder_24h_sent")  # column repurposed: 3 days
+    rows = await due_reminders("reminder_24h_sent", _offset("sub_3day", _OFF_SUB_3DAY))
     for row in rows:
         await _send_auto(
             bot, row["telegram_id"], _text("sub_3day", _DEF_SUB_3DAY),
@@ -156,7 +190,7 @@ async def _send_3day(bot: Bot) -> None:
 async def _send_day_of(bot: Bot) -> None:
     if not _enabled("sub_dayof"):
         return
-    rows = await due_reminders("reminder_3h_sent")  # column repurposed: day-of
+    rows = await due_reminders("reminder_3h_sent", _offset("sub_dayof", _OFF_SUB_DAYOF))
     for row in rows:
         uid = row["telegram_id"]
         # −20% renewal offer for paid subscriptions (trials get their own −10%).
@@ -278,16 +312,12 @@ _FUNNEL_TEXT: dict[int, tuple[str, str, int | None]] = {
 
 
 def _funnel_target_stage(now, activated, expires) -> int:
-    """Highest funnel stage whose trigger time has already passed (0 = none)."""
-    triggers = {
-        1: activated + timedelta(hours=4),
-        2: expires - timedelta(hours=24),
-        3: expires - timedelta(hours=7),
-        4: expires - timedelta(hours=1),
-        5: expires,
-        6: expires + timedelta(days=3),
-        7: expires + timedelta(days=7),
-    }
+    """Highest funnel stage whose trigger time has already passed (0 = none).
+    Per-stage timing comes from overrides (``_offset``) or the built-in default."""
+    triggers = {}
+    for stage, (anchor, sign, default) in _FUNNEL_TIMING.items():
+        base = activated if anchor == "start" else expires
+        triggers[stage] = base + sign * timedelta(hours=_offset(f"funnel_{stage}", default))
     for stage in range(7, 0, -1):
         if triggers[stage] <= now:
             return stage
@@ -340,7 +370,7 @@ async def _trial_funnel(bot: Bot) -> None:
 async def _reactivation_offers(bot: Bot) -> None:
     if not _enabled("reactivation"):
         return
-    rows = await due_reactivation_offers(REACTIVATION_AFTER_DAYS)
+    rows = await due_reactivation_offers_h(_offset("reactivation", _OFF_REACT))
     for row in rows:
         uid = row["telegram_id"]
         await set_offer(uid, "reactivation", DISCOUNT_REACTIVATION_PCT, utcnow() + timedelta(days=1))

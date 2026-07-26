@@ -244,10 +244,10 @@ _REMINDER_COLUMNS = {
 }
 
 
-async def due_reminders(flag_column: str) -> list[asyncpg.Record]:
+async def due_reminders(flag_column: str, hours: int | None = None) -> list[asyncpg.Record]:
     if flag_column not in _REMINDER_COLUMNS:
         raise ValueError(f"unknown reminder column {flag_column!r}")
-    window = _REMINDER_COLUMNS[flag_column]
+    window = f"{int(hours)} hours" if hours else _REMINDER_COLUMNS[flag_column]
     pool = get_pool()
     # Paid subscriptions only: the time-based "подписка заканчивается" reminders
     # are renewal nudges. Trials get their own −10% trial-end offer instead, and
@@ -357,9 +357,13 @@ async def due_trial_end_offers() -> list[asyncpg.Record]:
 
 
 async def due_reactivation_offers(after_days: int) -> list[asyncpg.Record]:
-    """Subscriptions that expired ~``after_days`` ago (a one-day window so old
-    backlog is not spammed) — candidates for the −20% reactivation offer."""
-    days = int(after_days)
+    return await due_reactivation_offers_h(int(after_days) * 24)
+
+
+async def due_reactivation_offers_h(after_hours: int) -> list[asyncpg.Record]:
+    """Subscriptions that expired ~``after_hours`` ago (a 24h window so old
+    backlog is not spammed) — candidates for the reactivation offer."""
+    h = int(after_hours)
     pool = get_pool()
     return await pool.fetch(
         f"""
@@ -370,8 +374,8 @@ async def due_reactivation_offers(after_days: int) -> list[asyncpg.Record]:
           AND s.source <> 'trial'
           AND NOT s.react_offer_sent
           AND u.is_reachable
-          AND s.expires_at <  NOW() - INTERVAL '{days} days'
-          AND s.expires_at >= NOW() - INTERVAL '{days + 1} days'
+          AND s.expires_at <  NOW() - INTERVAL '{h} hours'
+          AND s.expires_at >= NOW() - INTERVAL '{h + 24} hours'
         """
     )
 

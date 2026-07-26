@@ -14,20 +14,28 @@ from .core import get_pool
 
 async def list_overrides() -> dict[str, dict]:
     pool = get_pool()
-    rows = await pool.fetch("SELECT key, enabled, text FROM automation_overrides")
-    return {r["key"]: {"enabled": r["enabled"], "text": r["text"]} for r in rows}
+    rows = await pool.fetch(
+        "SELECT key, enabled, text, offset_hours FROM automation_overrides"
+    )
+    return {
+        r["key"]: {"enabled": r["enabled"], "text": r["text"], "offset_hours": r["offset_hours"]}
+        for r in rows
+    }
 
 
-async def set_override(key: str, *, enabled: bool, text: str | None) -> None:
+async def set_override(
+    key: str, *, enabled: bool, text: str | None, offset_hours: int | None = None
+) -> None:
     pool = get_pool()
     await pool.execute(
         """
-        INSERT INTO automation_overrides (key, enabled, text, updated_at)
-        VALUES ($1, $2, $3, NOW())
+        INSERT INTO automation_overrides (key, enabled, text, offset_hours, updated_at)
+        VALUES ($1, $2, $3, $4, NOW())
         ON CONFLICT (key) DO UPDATE SET
-            enabled = EXCLUDED.enabled, text = EXCLUDED.text, updated_at = NOW()
+            enabled = EXCLUDED.enabled, text = EXCLUDED.text,
+            offset_hours = EXCLUDED.offset_hours, updated_at = NOW()
         """,
-        key, enabled, (text or None),
+        key, enabled, (text or None), offset_hours,
     )
 
 

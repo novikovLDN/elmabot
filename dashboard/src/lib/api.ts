@@ -120,6 +120,8 @@ export interface ReconResult { scanned: number; limit: number; candidates: Recon
 export interface BuiltinAutomation {
   key: string; name: string; when: string; default: string;
   enabled: boolean; text_override: string | null;
+  timing: boolean; offset_default?: number; offset_label?: string;
+  offset_hours?: number; offset_override?: number | null;
 }
 export interface CustomAutomation {
   id: number; name: string; trigger_type: string; delay_hours: number; enabled: boolean;
@@ -261,8 +263,8 @@ export const endpoints = {
 
   // automations
   automationsBuiltin: () => api.get<BuiltinAutomation[]>("/automations/builtin"),
-  automationSetBuiltin: (key: string, enabled: boolean, text: string) =>
-    api.post<{ ok: boolean }>(`/automations/builtin/${key}`, { enabled, text }),
+  automationSetBuiltin: (key: string, enabled: boolean, text: string, offset_hours: number | null) =>
+    api.post<{ ok: boolean }>(`/automations/builtin/${key}`, { enabled, text, offset_hours }),
   automationsList: () => api.get<CustomAutomation[]>("/automations"),
   automationCreate: (p: AutomationCreate) => api.post<CustomAutomation>("/automations", p),
   automationUpdate: (id: number, p: Record<string, unknown>) => api.post<{ ok: boolean }>(`/automations/${id}`, p),
