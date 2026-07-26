@@ -577,6 +577,17 @@ _LOYAL_2PLUS = (
     "(SELECT COUNT(*) FROM payments p "
     "WHERE p.telegram_id = u.telegram_id AND p.status = 'paid') >= 2"
 )
+_NO_TRIAL = "u.trial_used_at IS NULL"
+_REFERRED = "u.referred_by IS NOT NULL"
+_VIA_LINK = "u.acquired_via_stat_link_id IS NOT NULL"
+_ONE_TIME = (
+    "(SELECT COUNT(*) FROM payments p "
+    "WHERE p.telegram_id = u.telegram_id AND p.status = 'paid') = 1"
+)
+_BYPASS_USER = (
+    "EXISTS (SELECT 1 FROM bypass_subscriptions b "
+    "WHERE b.telegram_id = u.telegram_id AND b.panel_uuid IS NOT NULL)"
+)
 
 
 def _signup_within(days: int) -> str:
@@ -604,6 +615,10 @@ SEGMENTS: dict[str, tuple[str, str, str]] = {
                   "Зарегистрировались за последние сутки."),
     "signup_7d": ("🆕 Новые за 7 дней", _signup_within(7),
                   "Зарегистрировались за последнюю неделю."),
+    "signup_30d": ("🆕 Новые за 30 дней", _signup_within(30),
+                   "Зарегистрировались за последний месяц."),
+    "no_trial": ("🎁 Не брали пробный", _NO_TRIAL,
+                 "Ещё ни разу не активировали пробный период — предложить триал."),
     # --- Триал-воронка (конверсия) ---
     "trial_ending_1d": ("⏳ Триал кончается ≤24ч", _ACTIVE_TRIAL_ENDING_1D,
                         "Триал закончится в ближайшие 24 часа — момент для оффера."),
@@ -643,16 +658,29 @@ SEGMENTS: dict[str, tuple[str, str, str]] = {
                  "Платная закончилась ≤14 дней назад."),
     "expd_30d": ("🔚 Истекла ≤30 дней назад", _expired_within(30),
                  "Платная закончилась ≤30 дней назад."),
+    "expd_60d": ("🔚 Истекла ≤60 дней назад", _expired_within(60),
+                 "Платная закончилась ≤60 дней назад — глубокая реактивация."),
+    "expd_90d": ("🔚 Истекла ≤90 дней назад", _expired_within(90),
+                 "Платная закончилась ≤90 дней назад."),
     "paid_lapsed": ("💔 Платили, сейчас не активны", f"{_PAID_EXISTS} AND NOT {_ACTIVE_SUB}",
                     "Когда-то платили, сейчас доступа нет — реактивация."),
     # --- Апселл / особые ---
     "loyal": ("🏆 Постоянные (2+ оплаты)", _LOYAL_2PLUS,
               "Оплатили 2 и более раз — самые лояльные."),
+    "one_time": ("1️⃣ Купили один раз", _ONE_TIME,
+                 "Оплатили ровно один раз — цель для повторной продажи."),
     "vip": ("👑 VIP", _VIP, "Пользователи с VIP-статусом."),
     "has_balance": ("💼 Есть баланс", _HAS_BALANCE,
                     "На балансе есть деньги — подтолкнуть потратить на подписку."),
+    "bypass_users": ("🌐 Пользуются обходом", _BYPASS_USER,
+                     "Есть активный ключ обхода блокировок."),
     "referrers": ("🫂 Пригласившие друзей", _IS_REFERRER,
                   "Уже приглашали друзей — амбассадоры."),
+    # --- Источник привлечения ---
+    "referred": ("🤝 Пришли по приглашению", _REFERRED,
+                 "Зарегистрировались по реферальной ссылке друга."),
+    "via_link": ("🔗 Пришли по ссылке продвижения", _VIA_LINK,
+                 "Атрибутированы к маркетинговой stats-ссылке."),
 }
 
 

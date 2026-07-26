@@ -13,13 +13,14 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { cn } from "@/lib/cn";
 import { toast } from "@/store/toast";
 
-const GROUPS = ["База", "Онбординг", "Триал-воронка", "Продление", "Возврат", "Апселл"] as const;
+const GROUPS = ["База", "Онбординг", "Триал-воронка", "Продление", "Возврат", "Апселл", "Источник"] as const;
 function groupOf(key: string): (typeof GROUPS)[number] {
-  if (key.startsWith("signup_")) return "Онбординг";
+  if (key === "referred" || key === "via_link") return "Источник";
+  if (key.startsWith("signup_") || key === "no_trial") return "Онбординг";
   if (key.startsWith("exp_in_")) return "Продление";
   if (key.startsWith("expd_") || key === "paid_lapsed") return "Возврат";
   if (key.includes("trial") || key.startsWith("cold")) return "Триал-воронка";
-  if (["loyal", "vip", "has_balance", "referrers"].includes(key)) return "Апселл";
+  if (["loyal", "one_time", "vip", "has_balance", "bypass_users", "referrers"].includes(key)) return "Апселл";
   return "База";
 }
 
