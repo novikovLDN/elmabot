@@ -35,10 +35,11 @@ function triggerText(t: string, delay: number): string {
 const TABS = [
   { key: "builtin", label: "Встроенные" },
   { key: "custom", label: "Свои" },
+  { key: "help", label: "❔ Инструкция" },
 ] as const;
 
 export default function Automations() {
-  const [tab, setTab] = useState<"builtin" | "custom">("builtin");
+  const [tab, setTab] = useState<"builtin" | "custom" | "help">("builtin");
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-2">
@@ -58,7 +59,65 @@ export default function Automations() {
           </button>
         ))}
       </div>
-      {tab === "builtin" ? <BuiltinTab /> : <CustomTab />}
+      {tab === "builtin" ? <BuiltinTab /> : tab === "custom" ? <CustomTab /> : <HelpTab />}
+    </div>
+  );
+}
+
+function HelpTab() {
+  return (
+    <div className="card card-pad space-y-4 text-sm leading-relaxed">
+      <Block title="Что это">
+        Это уведомления, которые бот отправляет <b>сам</b>, по событиям — без ручной рассылки.
+        Их два вида: <b>Встроенные</b> (уже вшиты в бота: напоминания о продлении, триал-воронка,
+        подтверждение оплаты и т.д.) и <b>Свои</b> (создаёшь под свой триггер).
+      </Block>
+
+      <Block title="Встроенные — что можно менять">
+        <ul className="list-disc space-y-1 pl-5">
+          <li><b>Текст</b> — «Настроить» → правишь текст. Пусто/«Сбросить» = вернуть стандартный.</li>
+          <li><b>Время</b> (где есть) — «за сколько часов до» или «через сколько часов после» события. Напр. напоминание за 72 ч до конца подписки или шаг воронки за 6 ч до конца триала.</li>
+          <li><b>Вкл/выкл</b> — полностью отключить это уведомление.</li>
+        </ul>
+      </Block>
+
+      <Block title="Что будет, если поменять — и почему без дублей">
+        <ul className="list-disc space-y-1 pl-5">
+          <li><b>Изменил текст</b> → новый текст уходит со следующих отправок. Уже отправленным повторно НЕ придёт.</li>
+          <li><b>Перенёс время</b> → применяется только к тем, кто ещё не прошёл это событие. Кто уже получил — второй раз не получит (стоит отметка «отправлено»). <b>Дублей не будет.</b></li>
+          <li><b>Выключил</b> → бот перестаёт слать это уведомление. Логика при этом сохраняется (напр. при окончании подписки доступ всё равно отключается — просто без сообщения).</li>
+          <li><b>Сбросил</b> → возвращает стандартный текст и время.</li>
+        </ul>
+      </Block>
+
+      <Block title="Свои автоматизации">
+        Создаёшь под событие: после регистрации / после конца триала / до конца платной /
+        после конца платной / после первой оплаты / купил ГБ, но нет премиума — «через (за) N часов».
+        Можно приложить скидку (%, часы, тариф) — она выдаётся получателю при отправке.
+        <div className="mt-2">
+          <b>Гарантии:</b> одно сообщение на пользователя (не задвоится); срабатывает только для
+          событий <b>после</b> создания автоматизации — старую базу задним числом не заваливает.
+        </div>
+      </Block>
+
+      <Block title="Правила, чтобы ничего не сломать">
+        <ul className="list-disc space-y-1 pl-5">
+          <li><b>Плейсхолдеры оставляй как есть:</b> <code>{"{gb}"}</code> <code>{"{limit}"}</code> <code>{"{days}"}</code> <code>{"{rub}"}</code> <code>{"{pct}"}</code> — вместо них бот подставит числа. Удалишь — цифры не покажутся.</li>
+          <li><b>HTML-теги закрывай:</b> <code>&lt;b&gt;…&lt;/b&gt;</code>, <code>&lt;i&gt;…&lt;/i&gt;</code>, <code>&lt;a href="…"&gt;…&lt;/a&gt;</code>. Кривой тег → сообщение не уйдёт.</li>
+          <li><b>Премиум-эмодзи</b> пиши в формате <code>![🎁](tg://emoji?id=…)</code> — отправятся анимированными.</li>
+          <li><b>Не отключай без нужды</b> «Оплата · подписка активна» и «ГБ зачислены» — это подтверждения оплаты пользователю.</li>
+          <li>Время — в <b>часах</b> (0–8760). Сегмент у встроенных менять нельзя (он задан событием) — для произвольных сегментов используй «Рассылки» или «Свои».</li>
+        </ul>
+      </Block>
+    </div>
+  );
+}
+
+function Block({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="border-t border-border-subtle pt-3 first:border-0 first:pt-0">
+      <div className="mb-1 font-semibold">{title}</div>
+      <div className="text-fg-muted">{children}</div>
     </div>
   );
 }
@@ -122,7 +181,12 @@ function BuiltinRow({ a, onSaved }: { a: BuiltinAutomation; onSaved: () => void 
           </div>
           <div className="flex gap-2">
             <button className="btn-primary" disabled={save.isPending}
-              onClick={() => save.mutate({ enabled: a.enabled, text, offset: a.timing ? offset : null })}>
+              onClick={() => save.mutate({
+                enabled: a.enabled,
+                // Store an override only when it actually differs from the default.
+                text: text === a.default ? "" : text,
+                offset: a.timing && offset !== a.offset_default ? offset : null,
+              })}>
               {save.isPending ? <Spinner className="h-4 w-4" /> : <Save className="h-4 w-4" />} Сохранить
             </button>
             <button className="btn-secondary" onClick={() => {
