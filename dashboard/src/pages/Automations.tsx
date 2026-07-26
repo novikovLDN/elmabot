@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Zap, Power, Trash2, Plus, Save, RotateCcw } from "lucide-react";
+import { Zap, Power, Trash2, Pencil, Save, RotateCcw } from "lucide-react";
 import {
   endpoints, ApiError,
   type BuiltinAutomation, type CustomAutomation, type AutomationCreate,
@@ -120,8 +120,31 @@ function BuiltinRow({ a, onSaved }: { a: BuiltinAutomation; onSaved: () => void 
   );
 }
 
+type FormValues = { name: string; trigger: string; delay: number; text: string; scope: string; pct: number; hours: number };
+const EMPTY: FormValues = { name: "", trigger: "after_trial_expire", delay: 24, text: "", scope: "", pct: 20, hours: 24 };
+
+function toCreate(v: FormValues): AutomationCreate {
+  const p: AutomationCreate = { name: v.name, trigger_type: v.trigger, delay_hours: v.delay, text: v.text };
+  if (v.scope) { p.discount_scope = v.scope; p.discount_pct = v.pct; p.discount_hours = v.hours; }
+  return p;
+}
+function toUpdate(v: FormValues): Record<string, unknown> {
+  return {
+    name: v.name, trigger_type: v.trigger, delay_hours: v.delay, text: v.text,
+    discount_pct: v.scope ? v.pct : "", discount_hours: v.hours, discount_scope: v.scope || "all",
+  };
+}
+function fromAuto(a: CustomAutomation): FormValues {
+  return {
+    name: a.name, trigger: a.trigger_type, delay: a.delay_hours, text: a.text,
+    scope: a.discount_scope && a.discount_pct ? a.discount_scope : "",
+    pct: a.discount_pct ?? 20, hours: a.discount_hours ?? 24,
+  };
+}
+
 function CustomTab() {
   const qc = useQueryClient();
+  const [editing, setEditing] = useState<number | null>(null);
   const list = useQuery({ queryKey: ["automations", "custom"], queryFn: endpoints.automationsList });
   const refresh = () => qc.invalidateQueries({ queryKey: ["automations", "custom"] });
   const toggle = useMutation({
@@ -133,9 +156,22 @@ function CustomTab() {
     onSuccess: () => { toast.success("Удалено"); refresh(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
   });
+  const create = useMutation({
+    mutationFn: (v: FormValues) => endpoints.automationCreate(toCreate(v)),
+    onSuccess: () => { toast.success("Автоматизация создана"); refresh(); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
+  });
+  const update = useMutation({
+    mutationFn: (arg: { id: number; v: FormValues }) => endpoints.automationUpdate(arg.id, toUpdate(arg.v)),
+    onSuccess: () => { toast.success("Сохранено"); setEditing(null); refresh(); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
+  });
+
   return (
     <div className="space-y-4">
-      <CreateForm onCreated={refresh} />
+      <AutoForm title="Новая автоматизация" submitLabel="Создать" resetOnSubmit
+        pending={create.isPending} onSubmit={(v) => create.mutate(v)} />
+
       {list.isLoading ? <PageLoader /> : (list.data ?? []).length === 0 ? (
         <div className="card card-pad text-sm text-fg-muted">Своих автоматизаций пока нет.</div>
       ) : (
@@ -146,14 +182,24 @@ function CustomTab() {
                 <span className="font-semibold">{a.name}</span>
                 {a.discount_pct ? <span className="badge-muted text-[11px]">−{a.discount_pct}% · {a.discount_hours}ч</span> : null}
                 {!a.enabled && <span className="text-[11px] text-fg-muted">выключена</span>}
-                <button className="btn-secondary ml-auto" disabled={toggle.isPending} onClick={() => toggle.mutate(a.id)}>
+                <button className="btn-secondary ml-auto" onClick={() => setEditing(editing === a.id ? null : a.id)}>
+                  <Pencil className="h-4 w-4" /> {editing === a.id ? "Скрыть" : "Изменить"}
+                </button>
+                <button className="btn-secondary" disabled={toggle.isPending} onClick={() => toggle.mutate(a.id)}>
                   <Power className="h-4 w-4" /> {a.enabled ? "Выкл" : "Вкл"}
                 </button>
                 <ConfirmButton variant="danger" icon={Trash2} idleLabel="Удалить" confirmLabel="Точно?"
                   pending={del.isPending && del.variables === a.id} onConfirm={() => del.mutate(a.id)} />
               </div>
               <div className="text-xs text-fg-muted">🕒 {triggerText(a.trigger_type, a.delay_hours)} · отправлено {fmtNum(a.sent_count)}</div>
-              <div className="truncate text-xs text-fg-subtle">{a.text.replace(/<[^>]+>/g, "").slice(0, 100)}</div>
+              {editing === a.id ? (
+                <div className="pt-2">
+                  <AutoForm initial={fromAuto(a)} submitLabel="Сохранить"
+                    pending={update.isPending} onSubmit={(v) => update.mutate({ id: a.id, v })} />
+                </div>
+              ) : (
+                <div className="truncate text-xs text-fg-subtle">{a.text.replace(/<[^>]+>/g, "").slice(0, 100)}</div>
+              )}
             </div>
           ))}
         </div>
@@ -162,76 +208,65 @@ function CustomTab() {
   );
 }
 
-function CreateForm({ onCreated }: { onCreated: () => void }) {
-  const [name, setName] = useState("");
-  const [trigger, setTrigger] = useState("after_trial_expire");
-  const [delay, setDelay] = useState(24);
-  const [text, setText] = useState("");
-  const [scope, setScope] = useState("");
-  const [pct, setPct] = useState(20);
-  const [hours, setHours] = useState(24);
-
-  const create = useMutation({
-    mutationFn: () => {
-      const p: AutomationCreate = { name, trigger_type: trigger, delay_hours: delay, text };
-      if (scope) { p.discount_scope = scope; p.discount_pct = pct; p.discount_hours = hours; }
-      return endpoints.automationCreate(p);
-    },
-    onSuccess: () => { toast.success("Автоматизация создана"); setName(""); setText(""); onCreated(); },
-    onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
-  });
+function AutoForm({ title, initial, submitLabel, pending, resetOnSubmit, onSubmit }: {
+  title?: string; initial?: FormValues; submitLabel: string; pending: boolean;
+  resetOnSubmit?: boolean; onSubmit: (v: FormValues) => void;
+}) {
+  const [v, setV] = useState<FormValues>(initial ?? EMPTY);
+  const set = <K extends keyof FormValues>(k: K, val: FormValues[K]) => setV((p) => ({ ...p, [k]: val }));
+  const submit = () => { onSubmit(v); if (resetOnSubmit) setV(EMPTY); };
 
   return (
-    <div className="card card-pad space-y-3">
-      <div className="label">Новая автоматизация</div>
+    <div className={cn(title ? "card card-pad" : "rounded-xl border border-border-subtle p-3", "space-y-3")}>
+      {title && <div className="label">{title}</div>}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className="label mb-1 block">Название</label>
-          <input className="input" value={name} placeholder="Напр. «Догон через 2 дня»" onChange={(e) => setName(e.target.value)} />
+          <input className="input" value={v.name} placeholder="Напр. «Догон через 2 дня»" onChange={(e) => set("name", e.target.value)} />
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="label mb-1 block">Триггер</label>
-            <select className="input" value={trigger} onChange={(e) => setTrigger(e.target.value)}>
+            <select className="input" value={v.trigger} onChange={(e) => set("trigger", e.target.value)}>
               {TRIGGERS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
             </select>
           </div>
           <div>
             <label className="label mb-1 block">Через/за, часов</label>
-            <input type="number" min={0} max={8760} className="input" value={delay}
-              onChange={(e) => setDelay(Math.max(0, Math.min(8760, Number(e.target.value))))} />
+            <input type="number" min={0} max={8760} className="input" value={v.delay}
+              onChange={(e) => set("delay", Math.max(0, Math.min(8760, Number(e.target.value))))} />
           </div>
         </div>
       </div>
       <div>
         <label className="label mb-1 block">Текст (HTML + премиум-эмодзи)</label>
-        <textarea className="input min-h-[110px] font-mono text-sm" value={text}
-          onChange={(e) => setText(e.target.value)} placeholder="<b>Заголовок</b>&#10;&#10;Текст…" />
+        <textarea className="input min-h-[110px] font-mono text-sm" value={v.text}
+          onChange={(e) => set("text", e.target.value)} placeholder="<b>Заголовок</b>&#10;&#10;Текст…" />
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div>
           <label className="label mb-1 block">Скидка при отправке</label>
-          <select className="input" value={scope} onChange={(e) => setScope(e.target.value)}>
+          <select className="input" value={v.scope} onChange={(e) => set("scope", e.target.value)}>
             {SCOPES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
         </div>
-        {scope && (
+        {v.scope && (
           <>
             <div>
               <label className="label mb-1 block">%</label>
-              <input type="number" min={1} max={99} className="input" value={pct}
-                onChange={(e) => setPct(Math.max(1, Math.min(99, Number(e.target.value))))} />
+              <input type="number" min={1} max={99} className="input" value={v.pct}
+                onChange={(e) => set("pct", Math.max(1, Math.min(99, Number(e.target.value))))} />
             </div>
             <div>
               <label className="label mb-1 block">Часов действует</label>
-              <input type="number" min={1} max={8760} className="input" value={hours}
-                onChange={(e) => setHours(Math.max(1, Math.min(8760, Number(e.target.value))))} />
+              <input type="number" min={1} max={8760} className="input" value={v.hours}
+                onChange={(e) => set("hours", Math.max(1, Math.min(8760, Number(e.target.value))))} />
             </div>
           </>
         )}
       </div>
-      <button className="btn-primary" disabled={create.isPending || name.trim().length < 2 || !text.trim()} onClick={() => create.mutate()}>
-        {create.isPending ? <Spinner className="h-4 w-4" /> : <Plus className="h-4 w-4" />} Создать
+      <button className="btn-primary" disabled={pending || v.name.trim().length < 2 || !v.text.trim()} onClick={submit}>
+        {pending ? <Spinner className="h-4 w-4" /> : <Save className="h-4 w-4" />} {submitLabel}
       </button>
     </div>
   );
