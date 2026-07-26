@@ -21,12 +21,31 @@ REASONS: dict[str, str] = {
     "trial": "персональная скидка для тебя",
     "year": "скидка на годовой тариф",
     "admin": "персональная скидка",
+    "sc_1m": "скидка на тариф 1 месяц",
+    "sc_3m": "скидка на тариф 3 месяца",
+    "sc_6m": "скидка на тариф 6 месяцев",
+    "sc_12m": "скидка на годовой тариф",
 }
 
 # Offers whose discount is limited to specific tariff codes. Codes not listed
-# here apply to every plan (``applies_to`` returns True by default).
+# here apply to every plan (``applies_to`` returns True by default). The ``sc_*``
+# codes back the broadcast "scoped discount" buttons.
 SCOPED: dict[str, set[str]] = {
     "year": {"12m"},
+    "sc_1m": {"1m"},
+    "sc_3m": {"3m"},
+    "sc_6m": {"6m"},
+    "sc_12m": {"12m"},
+}
+
+# Broadcast discount-button scope -> the offer code that scopes it. "all" uses
+# the generic "promo" code (applies to every tariff).
+SCOPE_TO_CODE: dict[str, str] = {
+    "all": "promo",
+    "1m": "sc_1m",
+    "3m": "sc_3m",
+    "6m": "sc_6m",
+    "12m": "sc_12m",
 }
 
 

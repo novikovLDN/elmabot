@@ -13,6 +13,7 @@ POST /broadcasts/scheduled/{id}/cancel   delete
 All times are Moscow (MSK, UTC+3); stored UTC. See broadcast_runner.
 """
 import asyncio
+import json
 import logging
 
 from aiohttp import web
@@ -28,19 +29,42 @@ routes = web.RouteTableDef()
 
 _KINDS = ("once", "daily", "weekly")
 _PRESET_KEYS = ("buy", "channel", "referral")
+_SCOPES = ("all", "1m", "3m", "6m", "12m")
+
+
+def _parse_button_specs(raw) -> str | None:
+    """Validate incoming button specs into a JSON string for storage. Accepts
+    preset keys (strings or {kind}) and discount specs {kind:discount,pct,hours,scope}."""
+    if not isinstance(raw, list):
+        return None
+    specs: list[dict] = []
+    for b in raw:
+        if isinstance(b, str) and b in _PRESET_KEYS:
+            specs.append({"kind": b})
+        elif isinstance(b, dict):
+            kind = b.get("kind")
+            if kind in _PRESET_KEYS:
+                specs.append({"kind": kind})
+            elif kind == "discount":
+                try:
+                    pct, hours = int(b.get("pct")), int(b.get("hours"))
+                except (TypeError, ValueError):
+                    continue
+                scope = str(b.get("scope", "all"))
+                if 1 <= pct <= 99 and 1 <= hours <= 8760 and scope in _SCOPES:
+                    specs.append({"kind": "discount", "pct": pct, "hours": hours, "scope": scope})
+    return json.dumps(specs) if specs else None
 
 
 def _clean(body: dict) -> dict:
     """Normalise a broadcast spec from a request body."""
-    raw = body.get("buttons") or []
-    presets = ",".join(k for k in raw if k in _PRESET_KEYS) if isinstance(raw, list) else ""
     return {
         "segment": str(body.get("segment", "")),
         "text": str(body.get("text", "")).strip(),
         "photo_file_id": (body.get("photo_file_id") or None),
         "button_text": (body.get("button_text") or None),
         "button_url": (body.get("button_url") or None),
-        "buttons": presets or None,
+        "buttons": _parse_button_specs(body.get("buttons") or []),
         "text_b": (str(body.get("text_b", "")).strip() or None),
         "is_ab": bool(body.get("is_ab")),
     }

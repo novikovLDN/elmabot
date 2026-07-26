@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Send, TestTube2, Clock } from "lucide-react";
 import {
   endpoints, ApiError,
-  type BroadcastPayload, type SchedulePayload, type ScheduleKind,
+  type BroadcastPayload, type SchedulePayload, type ScheduleKind, type BroadcastButton,
 } from "@/lib/api";
 import { fmtNum } from "@/lib/format";
 import { Spinner } from "@/components/Spinner";
@@ -18,6 +18,18 @@ const PRESETS = [
   { key: "channel", label: "📣 Перейти в канал" },
   { key: "referral", label: "🫂 Пригласить друга" },
 ];
+const SCOPES = [
+  { key: "all", label: "Все тарифы" },
+  { key: "1m", label: "1 месяц" },
+  { key: "3m", label: "3 месяца" },
+  { key: "6m", label: "6 месяцев" },
+  { key: "12m", label: "1 год" },
+];
+type DiscBtn = { pct: number; hours: number; scope: string };
+function discLabel(d: DiscBtn): string {
+  const s = SCOPES.find((x) => x.key === d.scope)?.label ?? d.scope;
+  return `−${d.pct}% · ${s} · ${d.hours} ч`;
+}
 const KINDS: { key: ScheduleKind; label: string }[] = [
   { key: "once", label: "Однократно" },
   { key: "daily", label: "Ежедневно" },
@@ -35,6 +47,10 @@ export default function BroadcastCreate() {
   const [btnText, setBtnText] = useState("");
   const [btnUrl, setBtnUrl] = useState("");
   const [presets, setPresets] = useState<Set<string>>(new Set());
+  const [discBtns, setDiscBtns] = useState<DiscBtn[]>([]);
+  const [dPct, setDPct] = useState(20);
+  const [dHours, setDHours] = useState(24);
+  const [dScope, setDScope] = useState("all");
   const [abTest, setAbTest] = useState(false);
   const [textB, setTextB] = useState("");
 
@@ -52,7 +68,17 @@ export default function BroadcastCreate() {
     setPhoto(clone.data.photo_file_id || "");
     setBtnText(clone.data.button_text || "");
     setBtnUrl(clone.data.button_url || "");
-    setPresets(new Set((clone.data.buttons || "").split(",").filter(Boolean)));
+    const raw = (clone.data.buttons || "").trim();
+    if (raw.startsWith("[")) {
+      try {
+        const specs = JSON.parse(raw) as Array<{ kind: string; pct?: number; hours?: number; scope?: string }>;
+        setPresets(new Set(specs.filter((s) => s.kind !== "discount").map((s) => s.kind)));
+        setDiscBtns(specs.filter((s) => s.kind === "discount").map((s) => ({ pct: s.pct ?? 20, hours: s.hours ?? 24, scope: s.scope ?? "all" })));
+      } catch { setPresets(new Set()); setDiscBtns([]); }
+    } else {
+      setPresets(new Set(raw.split(",").filter(Boolean)));
+      setDiscBtns([]);
+    }
     setAbTest(clone.data.is_ab);
     setTextB(clone.data.text_b || "");
   }, [clone.data]);
@@ -74,10 +100,16 @@ export default function BroadcastCreate() {
     photo_file_id: photo || undefined,
     button_text: btnText || undefined,
     button_url: btnUrl || undefined,
-    buttons: presets.size ? [...presets] : undefined,
+    buttons: buttonSpecs(),
     text_b: abTest && mode === "now" ? textB || undefined : undefined,
     is_ab: abTest && mode === "now" && !!textB.trim(),
   });
+
+  const buttonSpecs = (): BroadcastButton[] | undefined => {
+    const arr: BroadcastButton[] = [...presets].map((k) => ({ kind: k } as BroadcastButton));
+    discBtns.forEach((d) => arr.push({ kind: "discount", pct: d.pct, hours: d.hours, scope: d.scope }));
+    return arr.length ? arr : undefined;
+  };
 
   const togglePreset = (k: string) =>
     setPresets((prev) => {
@@ -201,6 +233,49 @@ export default function BroadcastCreate() {
           </div>
           <div className="mt-1 text-xs text-fg-muted">
             Прикрепляются под сообщением к пользователям (можно вместе со своей кнопкой-ссылкой).
+          </div>
+        </div>
+
+        {/* Кнопки со скидкой */}
+        <div className="space-y-2 rounded-xl border border-border-subtle p-3">
+          <label className="label block">Кнопки со скидкой</label>
+          <p className="text-xs text-fg-muted">
+            По нажатию пользователь получает скидку на выбранное время и открывает тарифы. «Все тарифы» — на всё,
+            иначе скидка действует только на выбранный тариф (сам тариф не меняется).
+          </p>
+          {discBtns.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {discBtns.map((d, i) => (
+                <span key={i} className="flex items-center gap-1 rounded-lg bg-bg-elevated px-2 py-1 text-xs">
+                  {discLabel(d)}
+                  <button type="button" className="text-fg-subtle hover:text-danger"
+                    onClick={() => setDiscBtns((p) => p.filter((_, j) => j !== i))}>✕</button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="label mb-1 block">%</label>
+              <input type="number" min={1} max={99} className="input w-16" value={dPct}
+                onChange={(e) => setDPct(Math.min(99, Math.max(1, Number(e.target.value))))} />
+            </div>
+            <div>
+              <label className="label mb-1 block">Часов</label>
+              <input type="number" min={1} max={8760} className="input w-20" value={dHours}
+                onChange={(e) => setDHours(Math.min(8760, Math.max(1, Number(e.target.value))))} />
+            </div>
+            <div>
+              <label className="label mb-1 block">Тариф</label>
+              <select className="input" value={dScope} onChange={(e) => setDScope(e.target.value)}>
+                {SCOPES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+              </select>
+            </div>
+            <button type="button" className="btn-secondary"
+              disabled={discBtns.length >= 4}
+              onClick={() => setDiscBtns((p) => [...p, { pct: dPct, hours: dHours, scope: dScope }])}>
+              + Добавить
+            </button>
           </div>
         </div>
 

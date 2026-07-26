@@ -269,10 +269,14 @@ export interface BroadcastPayload {
   photo_file_id?: string;
   button_text?: string;
   button_url?: string;
-  buttons?: string[]; // preset CTA keys: buy | channel | referral
+  buttons?: BroadcastButton[];
   text_b?: string; // A/B variant B
   is_ab?: boolean;
 }
+
+export type BroadcastButton =
+  | { kind: "buy" | "channel" | "referral" }
+  | { kind: "discount"; pct: number; hours: number; scope: string };
 
 export type ScheduleKind = "once" | "daily" | "weekly";
 

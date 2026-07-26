@@ -7,6 +7,7 @@ think in **Moscow time (MSK, UTC+3, no DST)** — that's what the dashboard show
 MSK↔UTC here so the DB stays UTC-only.
 """
 import asyncio
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -47,23 +48,47 @@ BUTTON_PRESETS = {
     "referral": "🫂 Пригласить друга",
 }
 
+# Discount-button scope -> tariff title (for the button label).
+_SCOPE_TITLE = {"1m": "1 месяц", "3m": "3 месяца", "6m": "6 месяцев", "12m": "1 год"}
 
-def build_markup(
-    button_text: str | None, button_url: str | None, buttons: str | None = None
-):
-    """Recipient keyboard: an optional custom URL button plus any preset CTAs
-    (``buttons`` is a CSV of BUTTON_PRESETS keys). None if nothing to attach."""
+
+def _disc_label(pct: int, scope: str) -> str:
+    if scope == "all":
+        return f"🔥 Купить со скидкой −{pct}%"
+    return f"🎯 {_SCOPE_TITLE.get(scope, scope)} −{pct}%"
+
+
+def _parse_buttons(buttons) -> list[dict]:
+    """Normalise the ``buttons`` field into a list of specs. Accepts a JSON
+    array (new), a legacy CSV of preset keys, or an already-parsed list."""
+    if not buttons:
+        return []
+    if isinstance(buttons, list):
+        return [b if isinstance(b, dict) else {"kind": str(b)} for b in buttons]
+    s = str(buttons).strip()
+    if s.startswith("["):
+        try:
+            data = json.loads(s)
+            return [b if isinstance(b, dict) else {"kind": str(b)} for b in data]
+        except (ValueError, TypeError):
+            return []
+    return [{"kind": k.strip()} for k in s.split(",") if k.strip()]
+
+
+def build_markup(button_text: str | None, button_url: str | None, buttons=None):
+    """Recipient keyboard: an optional custom URL button plus preset / discount
+    buttons (``buttons`` is a JSON array or legacy CSV). None if nothing."""
     kb = InlineKeyboardBuilder()
     has_any = False
     if button_text and button_url:
         kb.button(text=button_text, url=button_url)
         has_any = True
-    for key in (buttons or "").split(","):
-        key = key.strip()
-        if key == "buy":
+    for s in _parse_buttons(buttons):
+        kind = s.get("kind")
+        if kind == "buy":
             kb.button(text=BUTTON_PRESETS["buy"], callback_data="buyaccess")
             has_any = True
-        elif key == "channel":
+        elif kind == "channel":
             from config import CHANNEL_URL
 
             if CHANNEL_URL:
@@ -71,8 +96,24 @@ def build_markup(
             else:
                 kb.button(text=BUTTON_PRESETS["channel"], callback_data="chan:soon")
             has_any = True
-        elif key == "referral":
+        elif kind == "referral":
             kb.button(text=BUTTON_PRESETS["referral"], callback_data="menu:referral")
+            has_any = True
+        elif kind == "discount":
+            try:
+                pct, hours = int(s["pct"]), int(s["hours"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            scope = s.get("scope", "all")
+            if not (0 < pct < 100 and 0 < hours <= 8760):
+                continue
+            if scope != "all" and scope not in _SCOPE_TITLE:
+                continue
+            kb.button(
+                text=_disc_label(pct, scope),
+                callback_data=f"disc:{pct}:{hours}:{scope}",
+                style="success",
+            )
             has_any = True
     if not has_any:
         return None

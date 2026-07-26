@@ -182,6 +182,31 @@ async def cb_yearpromo(call: CallbackQuery) -> None:
     await call.message.answer(text, reply_markup=markup)
 
 
+@router.callback_query(F.data.startswith("disc:"))
+async def cb_disc(call: CallbackQuery) -> None:
+    """Broadcast discount button: grant a time-limited discount (optionally
+    scoped to one tariff) and open the tariff screen. Callback:
+    ``disc:{pct}:{hours}:{scope}`` with scope in all|1m|3m|6m|12m."""
+    parts = call.data.split(":")
+    if len(parts) != 4:
+        await call.answer()
+        return
+    try:
+        pct, hours = int(parts[1]), int(parts[2])
+    except ValueError:
+        await call.answer()
+        return
+    scope = parts[3]
+    code = discounts.SCOPE_TO_CODE.get(scope)
+    if code is None or not (0 < pct < 100) or not (0 < hours <= 8760):
+        await call.answer()
+        return
+    await set_offer(call.from_user.id, code, pct, utcnow() + timedelta(hours=hours))
+    text, markup = await _tariffs_view(call.from_user.id)
+    await call.message.answer(text, reply_markup=markup)
+    await call.answer(f"Скидка −{pct}% активирована!")
+
+
 @router.callback_query(F.data == "buyaccess")
 async def cb_buyaccess(call: CallbackQuery) -> None:
     """Broadcast "Купить доступ" button: open the tariff list. Sends a fresh
