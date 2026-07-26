@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Users, CreditCard, Megaphone, Share2, Gift,
+  LayoutDashboard, LineChart, Users, CreditCard, Megaphone, Share2, Gift,
   ScrollText, Settings, type LucideIcon,
 } from "lucide-react";
 
@@ -11,6 +11,7 @@ export const sections: NavSection[] = [
     label: "Главное",
     items: [
       { to: "", label: "Главная", icon: LayoutDashboard },
+      { to: "analytics", label: "Аналитика", icon: LineChart },
       { to: "users", label: "Пользователи", icon: Users },
       { to: "payments", label: "Платежи", icon: CreditCard },
     ],

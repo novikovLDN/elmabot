@@ -7,6 +7,7 @@ import { EntryOverlay } from "./components/EntryOverlay";
 import Login from "./pages/Login";
 import SetupPassword from "./pages/SetupPassword";
 import Dashboard from "./pages/Dashboard";
+import Analytics from "./pages/Analytics";
 import Users from "./pages/Users";
 import Payments from "./pages/Payments";
 import Broadcasts from "./pages/Broadcasts";
@@ -37,6 +38,7 @@ export default function App() {
         ) : (
           <Route element={<Layout />}>
             <Route index element={<Dashboard />} />
+            <Route path="analytics" element={<Analytics />} />
             <Route path="users" element={<Users />} />
             <Route path="payments" element={<Payments />} />
             <Route path="broadcasts" element={<Broadcasts />} />
