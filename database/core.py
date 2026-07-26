@@ -241,6 +241,11 @@ CREATE INDEX IF NOT EXISTS idx_scheduled_due
 -- Optional preset CTA buttons (CSV of keys: buy | channel | referral).
 ALTER TABLE broadcast_history ADD COLUMN IF NOT EXISTS buttons TEXT;
 ALTER TABLE scheduled_broadcasts ADD COLUMN IF NOT EXISTS buttons TEXT;
+-- A/B test: a second text variant, split 50/50 by user id, per-variant counts.
+ALTER TABLE broadcast_history ADD COLUMN IF NOT EXISTS text_b TEXT;
+ALTER TABLE broadcast_history ADD COLUMN IF NOT EXISTS is_ab  BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE broadcast_history ADD COLUMN IF NOT EXISTS sent_a INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE broadcast_history ADD COLUMN IF NOT EXISTS sent_b INTEGER NOT NULL DEFAULT 0;
 
 -- --- Admin web-push (VAPID) ---------------------------------------------
 CREATE TABLE IF NOT EXISTS admin_push_subscriptions (

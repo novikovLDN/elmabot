@@ -9,6 +9,7 @@ MSK↔UTC here so the DB stays UTC-only.
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -105,37 +106,65 @@ async def run_broadcast(
     button_text: str | None = None,
     button_url: str | None = None,
     buttons: str | None = None,
+    text_b: str | None = None,
+    is_ab: bool = False,
     source: str = "manual",
 ) -> dict:
     """Journal, fan out, record the result and DM every admin the summary.
-    Returns ``{id, total}``. Streams live progress on the event bus."""
+    Returns ``{id, total}``. Streams live progress on the event bus.
+
+    A/B: with ``is_ab`` + ``text_b`` set, recipients split 50/50 by user id
+    (even→A, odd→B); each half gets its variant and per-variant delivery is
+    recorded (sent_a / sent_b)."""
     text = (text or "").strip()
+    text_b = (text_b or "").strip() or None
+    ab = bool(is_ab and text_b)
     user_ids = await database.recipients(segment)
     total = len(user_ids)
     bid = await database.record_broadcast(
         admin_id=admin_id, segment=segment, text=text, photo_file_id=photo_file_id,
         button_text=button_text, button_url=button_url, buttons=buttons,
-        total=total, source=source,
+        total=total, source=source, text_b=text_b if ab else None, is_ab=ab,
     )
     label = database.SEGMENTS.get(segment, (segment, ""))[0]
     markup = build_markup(button_text, button_url, buttons)
-    send_one = build_sender(bot, text, photo_file_id, markup)
 
     bus.publish({
         "type": "broadcast:created", "id": bid, "segment": segment,
         "total": total, "source": source,
     })
 
-    async def progress(res) -> None:
-        bus.publish({
-            "type": "broadcast:progress", "id": bid, "segment": segment,
-            "sent": res.sent, "blocked": res.blocked, "failed": res.failed,
-            "total": total,
-        })
+    def _progress(base_sent: int):
+        async def progress(r) -> None:
+            bus.publish({
+                "type": "broadcast:progress", "id": bid, "segment": segment,
+                "sent": base_sent + r.sent, "blocked": r.blocked,
+                "failed": r.failed, "total": total,
+            })
+        return progress
 
-    res = await broadcaster.broadcast(user_ids, send_one, progress=progress)
+    sent_a = sent_b = 0
+    if ab:
+        ids_a = [u for u in user_ids if u % 2 == 0]
+        ids_b = [u for u in user_ids if u % 2 == 1]
+        ra = await broadcaster.broadcast(
+            ids_a, build_sender(bot, text, photo_file_id, markup), progress=_progress(0)
+        )
+        rb = await broadcaster.broadcast(
+            ids_b, build_sender(bot, text_b, photo_file_id, markup), progress=_progress(ra.sent)
+        )
+        sent_a, sent_b = ra.sent, rb.sent
+        res = SimpleNamespace(
+            sent=ra.sent + rb.sent, blocked=ra.blocked + rb.blocked,
+            failed=ra.failed + rb.failed,
+        )
+    else:
+        send_one = build_sender(bot, text, photo_file_id, markup)
+        res = await broadcaster.broadcast(user_ids, send_one, progress=_progress(0))
+
     await database.finish_broadcast(
-        bid, sent=res.sent, blocked=res.blocked, failed=res.failed
+        bid, sent=res.sent, blocked=res.blocked, failed=res.failed,
+        sent_a=sent_a, sent_b=sent_b,
     )
     bus.publish({
         "type": "broadcast:done", "id": bid, "segment": segment,

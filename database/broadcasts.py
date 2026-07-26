@@ -22,6 +22,8 @@ async def record_broadcast(
     total: int,
     source: str = "manual",
     buttons: str | None = None,
+    text_b: str | None = None,
+    is_ab: bool = False,
 ) -> int:
     """Journal a broadcast at start (status 'running'); returns its id."""
     pool = get_pool()
@@ -29,27 +31,28 @@ async def record_broadcast(
         """
         INSERT INTO broadcast_history
             (admin_id, segment, text, photo_file_id, button_text, button_url,
-             buttons, source, status, total)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'running', $9)
+             buttons, source, status, total, text_b, is_ab)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'running', $9, $10, $11)
         RETURNING id
         """,
         admin_id, segment, text, photo_file_id, button_text, button_url,
-        buttons, source, total,
+        buttons, source, total, text_b, is_ab,
     )
 
 
 async def finish_broadcast(
-    broadcast_id: int, *, sent: int, blocked: int, failed: int
+    broadcast_id: int, *, sent: int, blocked: int, failed: int,
+    sent_a: int = 0, sent_b: int = 0,
 ) -> None:
     pool = get_pool()
     await pool.execute(
         """
         UPDATE broadcast_history
         SET status = 'done', sent = $2, blocked = $3, failed = $4,
-            finished_at = NOW()
+            sent_a = $5, sent_b = $6, finished_at = NOW()
         WHERE id = $1
         """,
-        broadcast_id, sent, blocked, failed,
+        broadcast_id, sent, blocked, failed, sent_a, sent_b,
     )
 
 
@@ -59,7 +62,7 @@ async def list_broadcasts(limit: int = 500) -> list[asyncpg.Record]:
         """
         SELECT id, admin_id, segment, text, photo_file_id, button_text,
                button_url, buttons, source, status, total, sent, blocked, failed,
-               created_at, finished_at
+               text_b, is_ab, sent_a, sent_b, created_at, finished_at
         FROM broadcast_history
         ORDER BY created_at DESC
         LIMIT $1

@@ -41,6 +41,8 @@ def _clean(body: dict) -> dict:
         "button_text": (body.get("button_text") or None),
         "button_url": (body.get("button_url") or None),
         "buttons": presets or None,
+        "text_b": (str(body.get("text_b", "")).strip() or None),
+        "is_ab": bool(body.get("is_ab")),
     }
 
 
@@ -130,7 +132,7 @@ async def resend(request: web.Request) -> web.Response:
         bot, admin_id=admin_id, source="resend", segment=row["segment"],
         text=row["text"], photo_file_id=row["photo_file_id"],
         button_text=row["button_text"], button_url=row["button_url"],
-        buttons=row["buttons"],
+        buttons=row["buttons"], text_b=row["text_b"], is_ab=row["is_ab"],
     ))
     return json_ok({"ok": True, "segment": row["segment"], "total": total}, status=202)
 

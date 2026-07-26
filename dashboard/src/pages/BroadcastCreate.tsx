@@ -35,6 +35,8 @@ export default function BroadcastCreate() {
   const [btnText, setBtnText] = useState("");
   const [btnUrl, setBtnUrl] = useState("");
   const [presets, setPresets] = useState<Set<string>>(new Set());
+  const [abTest, setAbTest] = useState(false);
+  const [textB, setTextB] = useState("");
 
   // Clone: prefill message/photo/button from a past broadcast (segment is left
   // for the admin to re-pick, so nobody re-sends to the wrong audience).
@@ -51,6 +53,8 @@ export default function BroadcastCreate() {
     setBtnText(clone.data.button_text || "");
     setBtnUrl(clone.data.button_url || "");
     setPresets(new Set((clone.data.buttons || "").split(",").filter(Boolean)));
+    setAbTest(clone.data.is_ab);
+    setTextB(clone.data.text_b || "");
   }, [clone.data]);
 
   const [mode, setMode] = useState<"now" | "schedule">(params.get("schedule") ? "schedule" : "now");
@@ -71,6 +75,8 @@ export default function BroadcastCreate() {
     button_text: btnText || undefined,
     button_url: btnUrl || undefined,
     buttons: presets.size ? [...presets] : undefined,
+    text_b: abTest && mode === "now" ? textB || undefined : undefined,
+    is_ab: abTest && mode === "now" && !!textB.trim(),
   });
 
   const togglePreset = (k: string) =>
@@ -164,6 +170,20 @@ export default function BroadcastCreate() {
             </div>
           </div>
         </div>
+
+        {mode === "now" && (
+          <div className="space-y-2">
+            <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+              <input type="checkbox" checked={abTest} onChange={(e) => setAbTest(e.target.checked)} />
+              A/B тест — два варианта текста, поровну по аудитории
+            </label>
+            {abTest && (
+              <textarea className="input min-h-[120px] font-mono text-sm" value={textB}
+                onChange={(e) => setTextB(e.target.value)}
+                placeholder="Вариант B (вариант A — в поле выше)" />
+            )}
+          </div>
+        )}
 
         <div>
           <label className="label mb-1 block">Готовые кнопки</label>

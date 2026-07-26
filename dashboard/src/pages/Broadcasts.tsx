@@ -137,6 +137,7 @@ function HistoryTab() {
             <div className="flex items-center gap-2">
               <span className="font-medium">{b.segment}</span>
               <span className="rounded bg-bg-elevated px-1.5 py-0.5 text-[11px] text-fg-muted">{SOURCE_LABEL[b.source] ?? b.source}</span>
+              {b.is_ab && <span className="rounded bg-bg-elevated px-1.5 py-0.5 text-[11px] text-accent">A/B · A {fmtNum(b.sent_a)} / B {fmtNum(b.sent_b)}</span>}
               {b.status === "running" && <span className="text-[11px] text-accent">идёт…</span>}
             </div>
             <div className="truncate text-xs text-fg-muted">

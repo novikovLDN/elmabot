@@ -261,6 +261,8 @@ export interface BroadcastPayload {
   button_text?: string;
   button_url?: string;
   buttons?: string[]; // preset CTA keys: buy | channel | referral
+  text_b?: string; // A/B variant B
+  is_ab?: boolean;
 }
 
 export type ScheduleKind = "once" | "daily" | "weekly";
@@ -287,6 +289,10 @@ export interface BroadcastHistoryRow {
   sent: number;
   blocked: number;
   failed: number;
+  text_b: string | null;
+  is_ab: boolean;
+  sent_a: number;
+  sent_b: number;
   created_at: string;
   finished_at: string | null;
 }
