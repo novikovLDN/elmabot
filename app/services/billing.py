@@ -17,7 +17,6 @@ from app import emoji
 from app.tariffs import TARIFFS, Tariff, get_tariff
 from app.utils import safe_send
 from database import (
-    adjust_balance,
     clear_offer,
     create_gift,
     credit_referral,
@@ -27,11 +26,10 @@ from database import (
     mark_payment_paid,
     record_traffic_purchase,
     redeem_gift_record,
-    referral_stats,
     try_spend_balance,
 )
 
-from . import auto_msg, bypass_service, cashback, subscription_service
+from . import auto_msg, bypass_service, subscription_service
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +59,6 @@ async def complete_purchase(
 
     if first_purchase:
         await _reward_referrer(bot, user_id)
-    await _credit_cashback(bot, user_id, amount_paid)
     return sub
 
 
@@ -71,8 +68,8 @@ async def complete_balance_purchase(
     """Pay for a subscription from the user's balance. Returns the subscription
     on success, or None if the balance doesn't cover the price.
 
-    No payment row is written (balance was funded earlier — not new revenue) and
-    no cashback is paid (would loop balance → cashback → balance)."""
+    No payment row is written — the balance was funded earlier (admin top-up),
+    so spending it is not new revenue."""
     ok = await try_spend_balance(user_id, amount_kopecks, meta=f"tariff {tariff.code}")
     if not ok:
         return None
@@ -81,38 +78,6 @@ async def complete_balance_purchase(
     sub = await subscription_service.create_or_renew(user_id, new_expires, source="payment")
     await clear_offer(user_id)
     return sub
-
-
-async def _credit_cashback(bot: Bot, buyer_id: int, amount_kopecks: int) -> None:
-    """Credit the buyer's referrer a % of this payment to their balance.
-
-    Percent is the referrer's fixed override, else their «Круг Амбассадоров»
-    tier. Best-effort — a cashback failure never affects the purchase."""
-    try:
-        if amount_kopecks <= 0:
-            return
-        buyer = await get_user(buyer_id)
-        referrer_id = buyer["referred_by"] if buyer else None
-        if not referrer_id:
-            return
-        referrer = await get_user(referrer_id)
-        if referrer is None:
-            return
-        stats = await referral_stats(referrer_id)
-        pct = cashback.effective_percent(
-            int(stats.get("purchased", 0)), referrer["cashback_fixed_percent"]
-        )
-        reward = round(amount_kopecks * pct / 100)
-        if pct <= 0 or reward <= 0:
-            return
-        await adjust_balance(referrer_id, reward, "cashback", meta=f"from {buyer_id}")
-        enabled, tmpl = await auto_msg.resolve("cashback", _DEF_CASHBACK)
-        if enabled:
-            await safe_send(
-                bot, referrer_id, auto_msg.render(tmpl, rub=reward // 100, pct=pct),
-            )
-    except Exception:  # noqa: BLE001 - cashback must never break a purchase
-        logger.exception("cashback crediting failed for buyer %s", buyer_id)
 
 
 _GB = 1024 ** 3
@@ -136,7 +101,6 @@ async def complete_traffic_purchase(
     new_limit = await bypass_service.provision_traffic(user_id, gb * _GB)
     await mark_payment_paid(user_id, invoice_id, amount_paid)
     await record_traffic_purchase(user_id, gb, amount_paid, provider, invoice_id)
-    await _credit_cashback(bot, user_id, amount_paid)
 
     kb = InlineKeyboardBuilder()
     kb.button(text="👤 Личный кабинет", callback_data="menu:cabinet")
@@ -197,10 +161,6 @@ _DEF_REFERRER_TRIAL = (
     "🎉 <b>Ваш друг активировал ELMA</b>\n\n"
     "Пробный доступ уже запущен ✨\n\n"
     "Если он оформит подписку — вы получите +{days} бонусных дней автоматически"
-)
-_DEF_CASHBACK = (
-    "💸 <b>Кешбэк +{rub} ₽</b>\n\n"
-    "Твой реферал оплатил подписку — начислили {pct}% на баланс 🤍"
 )
 _DEF_GIFT_ACTIVATED = (
     "🎁 <b>Твой подарок активирован!</b>\n\n"

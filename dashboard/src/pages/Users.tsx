@@ -96,7 +96,6 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
   const [discPct, setDiscPct] = useState(20);
   const [discDays, setDiscDays] = useState(3);
   const [balDelta, setBalDelta] = useState(100);
-  const [cbPct, setCbPct] = useState(20);
   const detail = useQuery({ queryKey: ["users", "detail", tg], queryFn: () => endpoints.user(tg) });
 
   const refresh = () => {
@@ -138,19 +137,8 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
     onSuccess: (r) => { toast.success(r.is_vip ? "VIP выдан" : "VIP снят"); refresh(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
   });
-  const cbFix = useMutation({
-    mutationFn: () => endpoints.cashbackFix(tg, cbPct),
-    onSuccess: () => { toast.success(`Фикс-кешбэк ${cbPct}%`); refresh(); },
-    onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
-  });
-  const cbClear = useMutation({
-    mutationFn: () => endpoints.cashbackFixClear(tg),
-    onSuccess: () => { toast.success("Фикс снят — вернулся тир"); refresh(); },
-    onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
-  });
 
   const u = (detail.data?.user ?? {}) as Record<string, unknown>;
-  const cb = detail.data?.cashback;
   const isVip = !!u.is_vip;
   const str = (k: string) => (u[k] == null ? "—" : String(u[k]));
   const payments = detail.data?.payments ?? [];
@@ -186,7 +174,6 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
               <KV label="Купили друзья" value={`${detail.data?.referral.purchased ?? 0}`} />
               <KV label="Баланс" value={fmtRub(Number(u.balance_kopecks ?? 0))} />
               <KV label="VIP" value={isVip ? "👑 да" : "нет"} />
-              <KV label="Кешбэк" value={cb ? `${cb.effective_percent}%${cb.fixed_percent != null ? " (фикс)" : ` · ${cb.tier_name}`}` : "—"} />
             </div>
 
             {/* access control — every action double-confirmed */}
@@ -250,27 +237,13 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
               </div>
             </div>
 
-            {/* VIP + fixed cashback */}
-            <div className="card card-pad space-y-3">
+            {/* VIP */}
+            <div className="card card-pad">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2"><Crown className="h-4 w-4 text-fg-subtle" /><div className="label">VIP-статус</div></div>
                 <button className={isVip ? "btn-secondary" : "btn-info"} disabled={vip.isPending} onClick={() => vip.mutate(!isVip)}>
                   {vip.isPending ? <Spinner className="h-4 w-4" /> : <Crown className="h-4 w-4" />} {isVip ? "Снять VIP" : "Выдать VIP"}
                 </button>
-              </div>
-              <div className="border-t border-border-subtle pt-3">
-                <div className="label mb-1">Фикс-кешбэк {cb && cb.fixed_percent != null ? `(сейчас ${cb.fixed_percent}%)` : `(тир: ${cb?.tier_percent ?? 10}%)`}</div>
-                <div className="flex items-center gap-2">
-                  <input type="number" min={0} max={100} className="input w-20" value={cbPct}
-                    onChange={(e) => setCbPct(Math.min(100, Math.max(0, Number(e.target.value))))} />
-                  <span className="text-sm text-fg-muted">%</span>
-                  <button className="btn-info ml-auto" disabled={cbFix.isPending} onClick={() => cbFix.mutate()}>
-                    {cbFix.isPending ? <Spinner className="h-4 w-4" /> : <Percent className="h-4 w-4" />} Зафиксировать
-                  </button>
-                  {cb && cb.fixed_percent != null && (
-                    <button className="btn-secondary" disabled={cbClear.isPending} onClick={() => cbClear.mutate()}>Сбросить</button>
-                  )}
-                </div>
               </div>
             </div>
 

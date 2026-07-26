@@ -15,7 +15,7 @@ import config
 from app import emoji
 from app.format import fmt_date
 from app.keyboards import cabinet_keyboard, main_menu_keyboard
-from app.services import bypass_service, cashback, happ_crypto
+from app.services import bypass_service, happ_crypto
 from app.utils import safe_edit, send_screen, show_screen
 from config import (
     DEVICE_LIMIT,
@@ -234,14 +234,11 @@ async def _cabinet_view(uid: int):
                 f"<blockquote expandable><code>{html.escape(crypt4)}</code></blockquote>"
             )
 
-    # Loyalty: balance + referral cashback tier.
+    # Balance (top-up by admin / spend on a subscription). No cashback — the
+    # referral reward is +N bonus days on a friend's purchase.
     bal = await get_balance(uid)
-    ref = await referral_stats(uid)
-    tier_pct, tier_name = cashback.tier_for(int(ref["purchased"]))
-    text += f"\n\n💼 <b>Баланс: {bal // 100} ₽</b>"
     if bal > 0:
-        text += " — можно оплатить подписку"
-    text += f"\n🏅 Кешбэк с друзей: <b>{tier_pct}%</b> ({tier_name})"
+        text += f"\n\n💼 <b>Баланс: {bal // 100} ₽</b> — можно оплатить подписку"
 
     return text, cabinet_keyboard(has_active_sub=active, has_bypass=has_bypass)
 
