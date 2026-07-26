@@ -23,6 +23,7 @@ from app.services import billing, discounts, payments, platega
 from app.utils import convert_tg_emoji, safe_edit, safe_send
 from database import (
     create_pending_payment,
+    get_balance,
     get_user,
     is_payment_paid,
     mark_payment_refunded,
@@ -213,11 +214,15 @@ async def cb_tariff(call: CallbackQuery) -> None:
     else:
         price = f"{final} ₽"
 
+    bal_kop = await get_balance(call.from_user.id)
+    balance_rub = final if bal_kop >= final * 100 else None
+    bal_line = f"\n💼 Баланс: {bal_kop // 100} ₽" if bal_kop > 0 else ""
+
     text = (
         "⭐️ <b>Оформление подписки ELMA</b>\n\n"
         f"💰 Стоимость: {price}\n"
         f"📅 Период: {tariff.title}\n"
-        "🌐 Устройств: до 5\n\n"
+        f"🌐 Устройств: до 5{bal_line}\n\n"
         "Предупредим за 3 дня до окончания —\n"
         "ничего не пропустишь.\n\n"
         "Как оплатить? 👇"
@@ -225,7 +230,7 @@ async def cb_tariff(call: CallbackQuery) -> None:
     await safe_edit(
         call.message,
         text,
-        reply_markup=payment_methods_keyboard(code, back_data="menu:buy"),
+        reply_markup=payment_methods_keyboard(code, back_data="menu:buy", balance_rub=balance_rub),
     )
     await call.answer()
 
@@ -235,7 +240,7 @@ async def cb_method(call: CallbackQuery) -> None:
     """Create a Platega payment for the chosen method and hand back a pay link."""
     _, method, code = call.data.split(":", 2)
     tariff = tariffs.get_tariff(code)
-    if tariff is None or method not in _PLATEGA_METHODS:
+    if tariff is None or (method != "balance" and method not in _PLATEGA_METHODS):
         await call.answer()
         return
 
@@ -246,6 +251,28 @@ async def cb_method(call: CallbackQuery) -> None:
         if discounts.applies_to(offer, code)
         else tariff.price_rub
     )
+
+    # Pay from balance — provisions directly, no Platega, no new-revenue row.
+    if method == "balance":
+        try:
+            sub = await billing.complete_balance_purchase(
+                call.bot, call.from_user.id, tariff, final * 100
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("balance purchase failed for %s", call.from_user.id)
+            await call.answer("Ошибка оплаты, попробуй позже", show_alert=True)
+            return
+        if sub is None:
+            await call.answer("Недостаточно средств на балансе", show_alert=True)
+            return
+        await safe_edit(
+            call.message,
+            f"✅ <b>Оплачено с баланса — {final} ₽</b>\n\n"
+            "Подписка активна! Ключ — в разделе «Подключиться» 👇",
+            reply_markup=back_to_menu(),
+        )
+        await call.answer("Готово 🎉")
+        return
 
     if not config.PAYMENTS_ENABLED:
         await safe_edit(

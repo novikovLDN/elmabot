@@ -28,6 +28,7 @@ from database import (
     record_traffic_purchase,
     redeem_gift_record,
     referral_stats,
+    try_spend_balance,
 )
 
 from . import bypass_service, cashback, subscription_service
@@ -61,6 +62,24 @@ async def complete_purchase(
     if first_purchase:
         await _reward_referrer(bot, user_id)
     await _credit_cashback(bot, user_id, amount_paid)
+    return sub
+
+
+async def complete_balance_purchase(
+    bot: Bot, user_id: int, tariff: Tariff, amount_kopecks: int
+) -> asyncpg.Record | None:
+    """Pay for a subscription from the user's balance. Returns the subscription
+    on success, or None if the balance doesn't cover the price.
+
+    No payment row is written (balance was funded earlier — not new revenue) and
+    no cashback is paid (would loop balance → cashback → balance)."""
+    ok = await try_spend_balance(user_id, amount_kopecks, meta=f"tariff {tariff.code}")
+    if not ok:
+        return None
+    current = await get_subscription(user_id)
+    new_expires = subscription_service.next_expiry(current, tariff.days)
+    sub = await subscription_service.create_or_renew(user_id, new_expires, source="payment")
+    await clear_offer(user_id)
     return sub
 
 

@@ -80,14 +80,19 @@ def _support_url() -> str:
 
 
 def payment_methods_keyboard(
-    code: str, back_data: str, *, prefix: str = "pay"
+    code: str, back_data: str, *, prefix: str = "pay",
+    balance_rub: int | None = None,
 ) -> InlineKeyboardMarkup:
-    """СБП / Карта — both placeholders until a provider is wired.
+    """СБП / Карта, plus an optional "pay from balance" button.
 
     ``prefix`` is ``pay`` for a self-purchase or ``giftpay`` for a gift, so the
-    handlers stay separate; ``code`` is the chosen tariff.
+    handlers stay separate; ``code`` is the chosen tariff. ``balance_rub`` shows
+    a balance-pay button (self-purchase only) when the balance covers the price.
     """
     kb = InlineKeyboardBuilder()
+    if prefix == "pay" and balance_rub is not None:
+        kb.button(text=f"💰 Оплатить с баланса ({balance_rub} ₽)",
+                  callback_data=f"pay:balance:{code}", style="success")
     kb.button(text="СБП", callback_data=f"{prefix}:sbp:{code}", icon_custom_emoji_id=emoji.SBP)
     kb.button(text="Банковская карта", callback_data=f"{prefix}:card:{code}",
               icon_custom_emoji_id=emoji.CARD)
