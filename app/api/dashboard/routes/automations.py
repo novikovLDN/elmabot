@@ -19,7 +19,10 @@ from .broadcasts import _parse_button_specs
 
 routes = web.RouteTableDef()
 
-_TRIGGERS = ("after_signup", "after_trial_expire", "before_sub_expire", "after_sub_expire")
+_TRIGGERS = (
+    "after_signup", "after_trial_expire", "before_sub_expire", "after_sub_expire",
+    "after_first_purchase", "after_bypass_purchase",
+)
 _SCOPES = ("all", "1m", "3m", "6m", "12m")
 
 

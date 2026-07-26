@@ -16,6 +16,8 @@ const TRIGGERS = [
   { key: "after_trial_expire", label: "После конца триала (не купил)", verb: "через" },
   { key: "before_sub_expire", label: "До конца платной", verb: "за" },
   { key: "after_sub_expire", label: "После конца платной", verb: "через" },
+  { key: "after_first_purchase", label: "После первой оплаты", verb: "через" },
+  { key: "after_bypass_purchase", label: "Купил ГБ, но нет премиума", verb: "через" },
 ];
 const SCOPES = [
   { key: "", label: "Без скидки" },

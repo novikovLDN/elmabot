@@ -136,6 +136,27 @@ async def automation_due_users(
             + unsent + " LIMIT $3"
         )
         rows = await pool.fetch(sql, since, automation_id, limit)
+    elif trigger_type == "after_first_purchase":
+        first = ("(SELECT MIN(p.paid_at) FROM payments p "
+                 "WHERE p.telegram_id = u.telegram_id AND p.status = 'paid')")
+        sql = (
+            "SELECT u.telegram_id FROM users u WHERE u.is_reachable "
+            f"AND {first} <= now() - interval '{hrs} hours' AND {first} >= $1 "
+            + unsent + " LIMIT $3"
+        )
+        rows = await pool.fetch(sql, since, automation_id, limit)
+    elif trigger_type == "after_bypass_purchase":
+        # Bought a GB pack but has no active premium — cross-sell premium.
+        first = ("(SELECT MIN(tp.created_at) FROM traffic_purchases tp "
+                 "WHERE tp.telegram_id = u.telegram_id)")
+        sql = (
+            "SELECT u.telegram_id FROM users u WHERE u.is_reachable "
+            f"AND {first} <= now() - interval '{hrs} hours' AND {first} >= $1 "
+            "AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.telegram_id = u.telegram_id "
+            "AND s.status = 'active' AND s.source <> 'trial') "
+            + unsent + " LIMIT $3"
+        )
+        rows = await pool.fetch(sql, since, automation_id, limit)
     else:
         return []
     return [r["telegram_id"] for r in rows]
