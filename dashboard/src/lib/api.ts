@@ -110,6 +110,12 @@ export interface AuditRow {
 }
 export interface Segment { key: string; label: string; count: number; }
 
+export interface StatLinkRow {
+  id: number; slug: string; name: string; clicks: number; active: boolean;
+  created_at: string; link: string;
+  new_users: number; trials: number; paid: number; revenue_kopecks: number;
+}
+
 export interface PromoRow {
   code: string; kind: string;
   discount_pct: number | null; discount_days: number | null; grant_days: number | null;
@@ -208,6 +214,12 @@ export const endpoints = {
     api.post<{ ok: boolean; active: boolean }>(`/broadcasts/scheduled/${id}/toggle`),
   scheduledCancel: (id: number) =>
     api.post<{ ok: boolean }>(`/broadcasts/scheduled/${id}/cancel`),
+
+  // marketing stats-links
+  linksList: () => api.get<StatLinkRow[]>("/links"),
+  linkCreate: (name: string) => api.post<StatLinkRow>("/links", { name }),
+  linkToggle: (id: number) => api.post<{ ok: boolean; active: boolean }>(`/links/${id}/toggle`),
+  linkDelete: (id: number) => api.post<{ ok: boolean }>(`/links/${id}/delete`),
 
   // promo codes
   promoList: () => api.get<PromoRow[]>("/promo"),

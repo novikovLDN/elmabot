@@ -50,6 +50,8 @@ from config import (
     TRIAL_DAYS,
 )
 from database import (
+    attribute_user,
+    bump_stat_link_click,
     get_bypass,
     get_subscription,
     set_referral,
@@ -316,6 +318,14 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
         kb.adjust(1)
         await message.answer(msg, reply_markup=kb.as_markup())
         return
+
+    # Marketing stats-link attribution: /start s-<slug>. Counts the click and,
+    # for a new user, stamps the acquisition source (immutable). Falls through
+    # to the normal onboarding below.
+    if args.startswith("s-"):
+        link_id = await bump_stat_link_click(args[2:])
+        if is_new and link_id:
+            await attribute_user(user.id, link_id)
 
     if is_new:
         logger.info("New user onboarded: %s (@%s)", user.id, user.username)

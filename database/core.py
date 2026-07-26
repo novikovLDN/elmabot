@@ -274,6 +274,22 @@ CREATE TABLE IF NOT EXISTS promo_redemptions (
     created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_promo_redemptions ON promo_redemptions(code, telegram_id);
+
+-- --- Marketing stats-links (acquisition attribution) --------------------
+-- /start s-<slug> — track a channel/post's funnel: clicks → signup → trial →
+-- paid. The first click by a NEW user stamps users.acquired_via_stat_link_id
+-- (immutable), so the funnel below is a simple join.
+CREATE TABLE IF NOT EXISTS stats_links (
+    id          BIGSERIAL PRIMARY KEY,
+    slug        TEXT UNIQUE NOT NULL,
+    name        TEXT NOT NULL,
+    clicks      INTEGER NOT NULL DEFAULT 0,
+    active      BOOLEAN NOT NULL DEFAULT TRUE,
+    created_by  BIGINT,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS acquired_via_stat_link_id BIGINT;
+CREATE INDEX IF NOT EXISTS idx_users_acquired ON users(acquired_via_stat_link_id);
 """
 
 

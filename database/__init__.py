@@ -83,6 +83,16 @@ from .broadcasts import (
     set_scheduled_active,
     set_scheduled_run_at,
 )
+from .marketing import (
+    attribute_user,
+    bump_stat_link_click,
+    create_stat_link,
+    delete_stat_link,
+    get_stat_link_by_slug,
+    list_stat_links,
+    set_stat_link_active,
+    stat_link_funnel,
+)
 from .promo import (
     create_promo,
     delete_promo,
@@ -233,6 +243,15 @@ __all__ = [
     "set_promo_active",
     "delete_promo",
     "redeem_promo",
+    # marketing stats-links
+    "create_stat_link",
+    "list_stat_links",
+    "get_stat_link_by_slug",
+    "set_stat_link_active",
+    "delete_stat_link",
+    "bump_stat_link_click",
+    "attribute_user",
+    "stat_link_funnel",
     "record_traffic_purchase",
     # admin dashboard
     "get_admin_password_hash",
