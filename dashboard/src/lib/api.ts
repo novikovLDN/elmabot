@@ -117,6 +117,22 @@ export interface ReconCandidate {
 }
 export interface ReconResult { scanned: number; limit: number; candidates: ReconCandidate[]; }
 
+export interface BuiltinAutomation {
+  key: string; name: string; when: string; default: string;
+  enabled: boolean; text_override: string | null;
+}
+export interface CustomAutomation {
+  id: number; name: string; trigger_type: string; delay_hours: number; enabled: boolean;
+  text: string; discount_pct: number | null; discount_hours: number | null;
+  discount_scope: string | null; buttons: string | null;
+  sent_count: number; created_at: string; updated_at: string;
+}
+export interface AutomationCreate {
+  name: string; trigger_type: string; delay_hours: number; text: string;
+  discount_pct?: number | null; discount_hours?: number | null; discount_scope?: string;
+  buttons?: BroadcastButton[];
+}
+
 export interface StatLinkRow {
   id: number; slug: string; name: string; clicks: number; active: boolean;
   created_at: string; link: string;
@@ -242,6 +258,16 @@ export const endpoints = {
   promoCreate: (p: PromoCreate) => api.post<PromoRow>("/promo", p),
   promoToggle: (code: string) => api.post<{ ok: boolean; active: boolean }>(`/promo/${code}/toggle`),
   promoDelete: (code: string) => api.post<{ ok: boolean }>(`/promo/${code}/delete`),
+
+  // automations
+  automationsBuiltin: () => api.get<BuiltinAutomation[]>("/automations/builtin"),
+  automationSetBuiltin: (key: string, enabled: boolean, text: string) =>
+    api.post<{ ok: boolean }>(`/automations/builtin/${key}`, { enabled, text }),
+  automationsList: () => api.get<CustomAutomation[]>("/automations"),
+  automationCreate: (p: AutomationCreate) => api.post<CustomAutomation>("/automations", p),
+  automationUpdate: (id: number, p: Record<string, unknown>) => api.post<{ ok: boolean }>(`/automations/${id}`, p),
+  automationToggle: (id: number) => api.post<{ ok: boolean; enabled: boolean }>(`/automations/${id}/toggle`),
+  automationDelete: (id: number) => api.post<{ ok: boolean }>(`/automations/${id}/delete`),
 
   // reconciliation (panel vs DB expiry)
   reconcile: (limit = 100) => api.get<ReconResult>(`/reconciliation/candidates?limit=${limit}`),

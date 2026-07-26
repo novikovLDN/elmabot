@@ -84,6 +84,17 @@ from .broadcasts import (
     set_scheduled_active,
     set_scheduled_run_at,
 )
+from .automations import (
+    automation_due_users,
+    create_automation,
+    delete_automation,
+    enabled_automations,
+    list_automations,
+    list_overrides,
+    mark_automation_sent,
+    set_override,
+    update_automation,
+)
 from .balance import (
     adjust_balance,
     balance_ledger,
@@ -270,6 +281,16 @@ __all__ = [
     "set_vip",
     "set_cashback_fixed",
     "record_traffic_purchase",
+    # automations
+    "list_overrides",
+    "set_override",
+    "create_automation",
+    "update_automation",
+    "list_automations",
+    "enabled_automations",
+    "delete_automation",
+    "automation_due_users",
+    "mark_automation_sent",
     # admin dashboard
     "get_admin_password_hash",
     "set_admin_password",

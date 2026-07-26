@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, LineChart, Users, CreditCard, Megaphone, Share2, Gift,
-  Ticket, Link2, ScrollText, Settings, type LucideIcon,
+  Ticket, Link2, Zap, ScrollText, Settings, type LucideIcon,
 } from "lucide-react";
 
 export interface NavItem { to: string; label: string; icon: LucideIcon; }
@@ -20,6 +20,7 @@ export const sections: NavSection[] = [
     label: "Маркетинг",
     items: [
       { to: "broadcasts", label: "Рассылки", icon: Megaphone },
+      { to: "automations", label: "Автосообщения", icon: Zap },
       { to: "referrals", label: "Рефералы", icon: Share2 },
       { to: "gifts", label: "Гифты", icon: Gift },
       { to: "promo", label: "Промокоды", icon: Ticket },

@@ -304,6 +304,39 @@ CREATE TABLE IF NOT EXISTS stats_links (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS acquired_via_stat_link_id BIGINT;
 CREATE INDEX IF NOT EXISTS idx_users_acquired ON users(acquired_via_stat_link_id);
 
+-- --- Automations: overrides for built-in lifecycle messages -------------
+-- Admin can edit the text and switch off any built-in automatic message.
+CREATE TABLE IF NOT EXISTS automation_overrides (
+    key        TEXT PRIMARY KEY,
+    enabled    BOOLEAN NOT NULL DEFAULT TRUE,
+    text       TEXT,                        -- NULL = use the built-in default
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Custom, admin-created automations (new lifecycle triggers).
+CREATE TABLE IF NOT EXISTS automations (
+    id             BIGSERIAL PRIMARY KEY,
+    name           TEXT NOT NULL,
+    trigger_type   TEXT NOT NULL,           -- after_signup | after_trial_expire
+                                            -- | before_sub_expire | after_sub_expire
+    delay_hours    INTEGER NOT NULL DEFAULT 0,
+    enabled        BOOLEAN NOT NULL DEFAULT TRUE,
+    text           TEXT NOT NULL DEFAULT '',
+    discount_pct   INTEGER,
+    discount_hours INTEGER,
+    discount_scope TEXT,                    -- all | 1m | 3m | 6m | 12m
+    buttons        TEXT,                    -- JSON array of button specs
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    updated_at     TIMESTAMPTZ DEFAULT NOW()
+);
+-- One send per (automation, user) — the once-only guarantee.
+CREATE TABLE IF NOT EXISTS automation_sends (
+    automation_id BIGINT NOT NULL,
+    telegram_id   BIGINT NOT NULL,
+    sent_at       TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (automation_id, telegram_id)
+);
+
 -- --- Balance ledger (loyalty economy) -----------------------------------
 -- Every balance movement is journaled: admin adjustments, referral cashback,
 -- and spends at checkout.

@@ -16,6 +16,7 @@ import config
 from . import auth, passkey
 from .routes import (
     audit,
+    automations,
     broadcasts,
     bypass,
     gifts,
@@ -60,7 +61,7 @@ def build_api(bot) -> web.Application:
     api["bot"] = bot
     api.add_routes(auth.routes)
     api.add_routes(passkey.routes)
-    for module in (stats, users, payments, referrals, broadcasts, gifts, audit, settings, bypass, promo, links, reconciliation):
+    for module in (stats, users, payments, referrals, broadcasts, gifts, audit, settings, bypass, promo, links, reconciliation, automations):
         api.add_routes(module.routes)
     return api
 
