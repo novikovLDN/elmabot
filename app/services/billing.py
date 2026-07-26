@@ -31,7 +31,7 @@ from database import (
     try_spend_balance,
 )
 
-from . import bypass_service, cashback, subscription_service
+from . import auto_msg, bypass_service, cashback, subscription_service
 
 logger = logging.getLogger(__name__)
 
@@ -106,11 +106,11 @@ async def _credit_cashback(bot: Bot, buyer_id: int, amount_kopecks: int) -> None
         if pct <= 0 or reward <= 0:
             return
         await adjust_balance(referrer_id, reward, "cashback", meta=f"from {buyer_id}")
-        await safe_send(
-            bot, referrer_id,
-            f"💸 <b>Кешбэк +{reward // 100} ₽</b>\n\n"
-            f"Твой реферал оплатил подписку — начислили {pct}% на баланс 🤍",
-        )
+        enabled, tmpl = await auto_msg.resolve("cashback", _DEF_CASHBACK)
+        if enabled:
+            await safe_send(
+                bot, referrer_id, auto_msg.render(tmpl, rub=reward // 100, pct=pct),
+            )
     except Exception:  # noqa: BLE001 - cashback must never break a purchase
         logger.exception("cashback crediting failed for buyer %s", buyer_id)
 
@@ -142,15 +142,12 @@ async def complete_traffic_purchase(
     kb.button(text="👤 Личный кабинет", callback_data="menu:cabinet")
     kb.button(text="📲 Подключиться", callback_data="dev:menu")
     kb.adjust(1)
-    await safe_send(
-        bot,
-        user_id,
-        "✅ <b>Трафик обхода зачислен</b>\n\n"
-        f"➕ {gb} ГБ добавлено.\n"
-        f"📦 Всего лимит: <b>{new_limit // _GB} ГБ</b>.\n\n"
-        "Ключ обхода и остаток трафика — в личном кабинете 👇",
-        reply_markup=kb.as_markup(),
-    )
+    enabled, tmpl = await auto_msg.resolve("traffic_added", _DEF_TRAFFIC_ADDED)
+    if enabled:
+        await safe_send(
+            bot, user_id, auto_msg.render(tmpl, gb=gb, limit=new_limit // _GB),
+            reply_markup=kb.as_markup(),
+        )
 
 
 async def finalize_confirmed_payment(bot: Bot, payment) -> None:
@@ -182,6 +179,35 @@ async def finalize_confirmed_payment(bot: Bot, payment) -> None:
     await push_service.check_revenue_milestones()
 
 
+# Default texts for the bot's event-driven automatic notifications. All are
+# editable/toggleable from the dashboard ("Автосообщения" → Встроенные) via
+# auto_msg.resolve; the ``{placeholders}`` are filled by auto_msg.render.
+_DEF_TRAFFIC_ADDED = (
+    "✅ <b>Трафик обхода зачислен</b>\n\n"
+    "➕ {gb} ГБ добавлено.\n"
+    "📦 Всего лимит: <b>{limit} ГБ</b>.\n\n"
+    "Ключ обхода и остаток трафика — в личном кабинете 👇"
+)
+_DEF_REFERRAL_BONUS = (
+    "💎 <b>Ваш друг остался в ELMA</b>\n\n"
+    "Подписка успешно оформлена ✨\n"
+    "Вам начислено +{days} бонусных дней"
+)
+_DEF_REFERRER_TRIAL = (
+    "🎉 <b>Ваш друг активировал ELMA</b>\n\n"
+    "Пробный доступ уже запущен ✨\n\n"
+    "Если он оформит подписку — вы получите +{days} бонусных дней автоматически"
+)
+_DEF_CASHBACK = (
+    "💸 <b>Кешбэк +{rub} ₽</b>\n\n"
+    "Твой реферал оплатил подписку — начислили {pct}% на баланс 🤍"
+)
+_DEF_GIFT_ACTIVATED = (
+    "🎁 <b>Твой подарок активирован!</b>\n\n"
+    "Получатель уже в сети —\nбез лагов и обрывов 🤍"
+)
+
+
 _PURCHASE_OK_TEXT = (
     "🌐 <b>Подписка ELMA подтверждена</b>\n\n"
     "Твой доступ активирован ☁️\n"
@@ -204,7 +230,9 @@ async def notify_purchase_activated(bot: Bot, user_id: int) -> None:
     kb.button(text="Личный кабинет", callback_data="menu:cabinet",
               icon_custom_emoji_id=emoji.CABINET)
     kb.adjust(1)
-    await safe_send(bot, user_id, _PURCHASE_OK_TEXT, reply_markup=kb.as_markup())
+    enabled, text = await auto_msg.resolve("purchase_ok", _PURCHASE_OK_TEXT)
+    if enabled:
+        await safe_send(bot, user_id, auto_msg.render(text), reply_markup=kb.as_markup())
 
 
 async def _reward_referrer(bot: Bot, buyer_id: int) -> None:
@@ -220,13 +248,12 @@ async def _reward_referrer(bot: Bot, buyer_id: int) -> None:
         sub = await subscription_service.create_or_renew(
             referrer_id, new_expires, source="referral"
         )
-        await safe_send(
-            bot,
-            referrer_id,
-            "💎 <b>Ваш друг остался в ELMA</b>\n\n"
-            "Подписка успешно оформлена ✨\n"
-            f"Вам начислено +{config.REFERRAL_BONUS_DAYS} бонусных дней",
-        )
+        enabled, tmpl = await auto_msg.resolve("referral_bonus", _DEF_REFERRAL_BONUS)
+        if enabled:
+            await safe_send(
+                bot, referrer_id,
+                auto_msg.render(tmpl, days=config.REFERRAL_BONUS_DAYS),
+            )
     except Exception:  # noqa: BLE001 - never fail the buyer's purchase on this
         logger.exception("Failed to reward referrer %s", referrer_id)
 
@@ -237,14 +264,11 @@ async def notify_referrer_on_trial(bot: Bot, user_id: int) -> None:
     referrer_id = user["referred_by"] if user else None
     if not referrer_id:
         return
-    await safe_send(
-        bot,
-        referrer_id,
-        "🎉 <b>Ваш друг активировал ELMA</b>\n\n"
-        "Пробный доступ уже запущен ✨\n\n"
-        f"Если он оформит подписку — вы получите +{config.REFERRAL_BONUS_DAYS} "
-        "бонусных дней автоматически",
-    )
+    enabled, tmpl = await auto_msg.resolve("referrer_trial", _DEF_REFERRER_TRIAL)
+    if enabled:
+        await safe_send(
+            bot, referrer_id, auto_msg.render(tmpl, days=config.REFERRAL_BONUS_DAYS),
+        )
 
 
 # --- Gifts (ready; gift creation is gated behind payment) -----------------
@@ -288,10 +312,7 @@ async def redeem_gift(bot: Bot, user_id: int, code: str) -> Tariff | None:
     current = await get_subscription(user_id)
     new_expires = subscription_service.next_expiry(current, tariff.days)
     await subscription_service.create_or_renew(user_id, new_expires, source="gift")
-    await safe_send(
-        bot,
-        rec["created_by"],
-        "🎁 <b>Твой подарок активирован!</b>\n\n"
-        "Получатель уже в сети —\nбез лагов и обрывов 🤍",
-    )
+    enabled, text = await auto_msg.resolve("gift_activated", _DEF_GIFT_ACTIVATED)
+    if enabled:
+        await safe_send(bot, rec["created_by"], auto_msg.render(text))
     return tariff

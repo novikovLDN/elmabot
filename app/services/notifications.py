@@ -152,6 +152,25 @@ def builtin_registry() -> list[dict]:
         {"key": "traffic", "name": "Обход · мало трафика",
          "when": "При низком остатке ГБ обхода (6 уровней)",
          "default": "(системные уровни, текст не редактируется)", "timing": False},
+        # --- Событийные (транзакционные) ---
+        {"key": "purchase_ok", "name": "Оплата · подписка активна",
+         "when": "Сразу после успешной оплаты подписки",
+         "default": billing._PURCHASE_OK_TEXT, "timing": False},
+        {"key": "traffic_added", "name": "Оплата · ГБ обхода зачислены",
+         "when": "После покупки пакета ГБ · плейсхолдеры {gb} {limit}",
+         "default": billing._DEF_TRAFFIC_ADDED, "timing": False},
+        {"key": "referral_bonus", "name": "Реферал · бонус за друга",
+         "when": "Когда приглашённый друг впервые оплатил · {days}",
+         "default": billing._DEF_REFERRAL_BONUS, "timing": False},
+        {"key": "referrer_trial", "name": "Реферал · друг активировал триал",
+         "when": "Когда приглашённый активировал пробный · {days}",
+         "default": billing._DEF_REFERRER_TRIAL, "timing": False},
+        {"key": "cashback", "name": "Кешбэк за реферала",
+         "when": "Когда реферал оплатил (кешбэк на баланс) · {rub} {pct}",
+         "default": billing._DEF_CASHBACK, "timing": False},
+        {"key": "gift_activated", "name": "Подарок активирован (дарителю)",
+         "when": "Когда получатель активировал подарок",
+         "default": billing._DEF_GIFT_ACTIVATED, "timing": False},
     ]
     funnel_disc = {3: "−10%", 4: "−15%", 5: "−20%", 6: "−30%", 7: "−50%"}
     for stage in range(1, 8):
