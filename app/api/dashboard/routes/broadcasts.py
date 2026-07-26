@@ -94,6 +94,19 @@ async def history(request: web.Request) -> web.Response:
     return json_ok([dict(r) for r in rows])
 
 
+@routes.get("/broadcasts/item/{id}")
+async def get_one(request: web.Request) -> web.Response:
+    """Single broadcast — used to prefill the "clone" wizard."""
+    try:
+        bid = int(request.match_info["id"])
+    except ValueError:
+        raise web.HTTPBadRequest(reason="bad id")
+    row = await database.get_broadcast(bid)
+    if row is None:
+        raise web.HTTPNotFound(reason="broadcast not found")
+    return json_ok(dict(row))
+
+
 @routes.post("/broadcasts/{id}/resend")
 async def resend(request: web.Request) -> web.Response:
     bot = request.config_dict["bot"]

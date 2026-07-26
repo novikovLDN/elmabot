@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Send, TestTube2, Clock } from "lucide-react";
@@ -29,6 +29,22 @@ export default function BroadcastCreate() {
   const [photo, setPhoto] = useState("");
   const [btnText, setBtnText] = useState("");
   const [btnUrl, setBtnUrl] = useState("");
+
+  // Clone: prefill message/photo/button from a past broadcast (segment is left
+  // for the admin to re-pick, so nobody re-sends to the wrong audience).
+  const cloneId = params.get("clone");
+  const clone = useQuery({
+    queryKey: ["broadcasts", "clone", cloneId],
+    queryFn: () => endpoints.broadcastGet(Number(cloneId)),
+    enabled: !!cloneId,
+  });
+  useEffect(() => {
+    if (!clone.data) return;
+    setText(clone.data.text || "");
+    setPhoto(clone.data.photo_file_id || "");
+    setBtnText(clone.data.button_text || "");
+    setBtnUrl(clone.data.button_url || "");
+  }, [clone.data]);
 
   const [mode, setMode] = useState<"now" | "schedule">(params.get("schedule") ? "schedule" : "now");
   const [kind, setKind] = useState<ScheduleKind>("once");
@@ -92,7 +108,12 @@ export default function BroadcastCreate() {
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <button onClick={() => navigate(-1)} className="btn-ghost px-2 text-sm"><ArrowLeft className="h-4 w-4" /> Назад</button>
-      <h1 className="text-2xl font-bold tracking-tight">Новая рассылка</h1>
+      <h1 className="text-2xl font-bold tracking-tight">{cloneId ? "Копия рассылки" : "Новая рассылка"}</h1>
+      {cloneId && (
+        <div className="rounded-xl bg-bg-elevated px-3 py-2 text-xs text-fg-muted">
+          📋 Текст, фото и кнопка скопированы из рассылки #{cloneId}. <b>Сегмент выберите заново</b>, чтобы не отправить той же аудитории.
+        </div>
+      )}
 
       <div className="card card-pad space-y-4">
         <div>

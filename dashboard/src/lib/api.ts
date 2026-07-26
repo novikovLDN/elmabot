@@ -182,6 +182,8 @@ export const endpoints = {
     api.post<{ ok: boolean; total: number }>("/broadcasts", payload),
   broadcastHistory: (limit = 500) =>
     api.get<BroadcastHistoryRow[]>(`/broadcasts/history?limit=${limit}`),
+  broadcastGet: (id: number) =>
+    api.get<BroadcastHistoryRow>(`/broadcasts/item/${id}`),
   broadcastResend: (id: number) =>
     api.post<{ ok: boolean; total: number }>(`/broadcasts/${id}/resend`),
   scheduledList: () => api.get<ScheduledRow[]>("/broadcasts/scheduled"),

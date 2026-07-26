@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
-import { Radio, History, Clock, Info, RefreshCw, Play, Pause, Trash2 } from "lucide-react";
+import { Radio, History, Clock, Info, RefreshCw, Play, Pause, Trash2, Pencil } from "lucide-react";
 import {
   endpoints, ApiError,
   type Segment, type BroadcastHistoryRow, type ScheduledRow,
@@ -147,6 +147,9 @@ function HistoryTab() {
             <div>👥 {fmtNum(b.total)} · 📨 {fmtNum(b.sent)}</div>
             <div className="text-fg-muted">🚫 {fmtNum(b.blocked)} · ⚠️ {fmtNum(b.failed)}</div>
           </div>
+          <Link to={`/broadcasts/new?clone=${b.id}`} className="btn-secondary" title="Изменить и отправить">
+            <Pencil className="h-4 w-4" /> Изменить
+          </Link>
           <ConfirmButton
             variant="secondary" icon={RefreshCw} idleLabel="Повтор" confirmLabel="Точно повторить?"
             pending={resend.isPending && resend.variables === b.id}

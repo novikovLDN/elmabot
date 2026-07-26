@@ -539,6 +539,21 @@ def _expired_within(days: int) -> str:
     )
 
 
+def _trial_expired_within(days: int) -> str:
+    return (
+        f"u.trial_used_at IS NOT NULL AND NOT {_PAID_EXISTS} "
+        f"AND u.trial_expires_at > now() - interval '{days} days' "
+        "AND u.trial_expires_at <= now()"
+    )
+
+
+def _cold_since(days: int) -> str:
+    return (
+        f"u.trial_used_at IS NULL AND NOT {_SUB_EXISTS} "
+        f"AND u.created_at <= now() - interval '{days} days'"
+    )
+
+
 SEGMENTS: dict[str, tuple[str, str]] = {
     # --- База ---
     "all": ("Все пользователи", "TRUE"),
@@ -562,12 +577,19 @@ SEGMENTS: dict[str, tuple[str, str]] = {
         "❄️ Холодные (без триала и покупок)",
         f"u.trial_used_at IS NULL AND NOT {_SUB_EXISTS}",
     ),
+    "trial_expired_7d": ("Триал истёк ≤7 дн, без покупки", _trial_expired_within(7)),
+    "trial_expired_30d": ("Триал истёк ≤30 дн, без покупки", _trial_expired_within(30)),
+    "cold_7d": ("❄️ Холодные ≥7 дней", _cold_since(7)),
+    "cold_30d": ("❄️ Холодные ≥30 дней", _cold_since(30)),
     # --- Продление (платные, истекают скоро) ---
+    "exp_in_1d": ("🔔 Платная истекает ≤24ч", _paid_expiring_within(1)),
     "exp_in_3d": ("🔔 Платная истекает ≤3 дней", _paid_expiring_within(3)),
     "exp_in_7d": ("🔔 Платная истекает ≤7 дней", _paid_expiring_within(7)),
     # --- Возврат (истёкшие) ---
     "expd_3d": ("🔚 Истекла ≤3 дней назад", _expired_within(3)),
     "expd_7d": ("🔚 Истекла ≤7 дней назад", _expired_within(7)),
+    "expd_14d": ("🔚 Истекла ≤14 дней назад", _expired_within(14)),
+    "expd_30d": ("🔚 Истекла ≤30 дней назад", _expired_within(30)),
     "paid_lapsed": ("💔 Платили, сейчас не активны", f"{_PAID_EXISTS} AND NOT {_ACTIVE_SUB}"),
 }
 
