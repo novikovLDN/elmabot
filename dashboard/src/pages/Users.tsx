@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, X, ShieldPlus, ShieldX, Users as UsersIcon, Wallet } from "lucide-react";
+import { Search, X, ShieldPlus, ShieldX, Users as UsersIcon, Wallet, Percent } from "lucide-react";
 import { endpoints, ApiError } from "@/lib/api";
 import { fmtDate, fmtDateTime, fmtNum, fmtRub } from "@/lib/format";
 import { PageLoader } from "@/components/Spinner";
@@ -93,6 +93,8 @@ export function Pagination({ page, pages, onChange }: { page: number; pages: num
 function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
   const qc = useQueryClient();
   const [days, setDays] = useState(30);
+  const [discPct, setDiscPct] = useState(20);
+  const [discDays, setDiscDays] = useState(3);
   const detail = useQuery({ queryKey: ["users", "detail", tg], queryFn: () => endpoints.user(tg) });
 
   const refresh = () => {
@@ -109,10 +111,21 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
     onSuccess: () => { toast.success("Доступ отозван"); refresh(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
   });
+  const setDisc = useMutation({
+    mutationFn: () => endpoints.setDiscount(tg, discPct, discDays),
+    onSuccess: () => { toast.success(`Скидка −${discPct}% на ${discDays} дн.`); refresh(); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
+  });
+  const clearDisc = useMutation({
+    mutationFn: () => endpoints.clearDiscount(tg),
+    onSuccess: () => { toast.success("Скидка снята"); refresh(); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
+  });
 
   const u = (detail.data?.user ?? {}) as Record<string, unknown>;
   const str = (k: string) => (u[k] == null ? "—" : String(u[k]));
   const payments = detail.data?.payments ?? [];
+  const offerActive = !!u.offer_pct && !!u.offer_expires_at && new Date(u.offer_expires_at as string) > new Date();
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-sm animate-fade-in" onClick={onClose}>
@@ -158,6 +171,34 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
               <ConfirmButton className="w-full" variant="secondary" icon={ShieldX}
                 idleLabel="Отозвать доступ" confirmLabel="Точно отозвать доступ?"
                 pending={revoke.isPending} onConfirm={() => revoke.mutate()} />
+            </div>
+
+            {/* personal discount (offer) */}
+            <div className="card card-pad space-y-3">
+              <div className="label">Персональная скидка</div>
+              {offerActive ? (
+                <div className="rounded-xl bg-bg-elevated px-3 py-2 text-sm">
+                  Активна: <b>−{String(u.offer_pct)}%</b> до {fmtDateTime(u.offer_expires_at as string)}
+                </div>
+              ) : (
+                <div className="text-xs text-fg-muted">Скидки нет — применится на экране покупки.</div>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="number" min={1} max={99} className="input w-20" value={discPct}
+                  onChange={(e) => setDiscPct(Math.min(99, Math.max(1, Number(e.target.value))))} />
+                <span className="text-sm text-fg-muted">% на</span>
+                <input type="number" min={1} max={365} className="input w-20" value={discDays}
+                  onChange={(e) => setDiscDays(Math.min(365, Math.max(1, Number(e.target.value))))} />
+                <span className="text-sm text-fg-muted">дн.</span>
+                <ConfirmButton className="ml-auto" variant="info" icon={Percent}
+                  idleLabel="Дать скидку" confirmLabel={`−${discPct}% на ${discDays} дн.?`}
+                  pending={setDisc.isPending} onConfirm={() => setDisc.mutate()} />
+              </div>
+              {offerActive && (
+                <ConfirmButton className="w-full" variant="secondary" icon={X}
+                  idleLabel="Снять скидку" confirmLabel="Точно снять?"
+                  pending={clearDisc.isPending} onConfirm={() => clearDisc.mutate()} />
+              )}
             </div>
 
             {/* full payment history */}

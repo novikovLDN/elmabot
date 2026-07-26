@@ -85,3 +85,37 @@ async def revoke(request: web.Request) -> web.Response:
     await database.log_audit(int(request["admin"]["sub"]), "revoke", tg)
     bus.publish({"type": "admin:revoke", "telegram_id": tg})
     return json_ok({"ok": True})
+
+
+@routes.post("/users/{tg}/discount")
+async def set_discount(request: web.Request) -> web.Response:
+    """Give the user a personal discount (offer) applied on the buy screen."""
+    from datetime import datetime, timedelta, timezone
+
+    tg = _tg(request)
+    body = await read_json(request)
+    try:
+        percent = int(body.get("percent"))
+        days = int(body.get("days", 1))
+    except (TypeError, ValueError):
+        raise web.HTTPBadRequest(reason="percent required")
+    if not 1 <= percent <= 99:
+        raise web.HTTPBadRequest(reason="percent 1..99")
+    if not 1 <= days <= 365:
+        raise web.HTTPBadRequest(reason="days 1..365")
+
+    expires = datetime.now(timezone.utc) + timedelta(days=days)
+    await database.set_offer(tg, "admin", percent, expires)
+    await database.log_audit(
+        int(request["admin"]["sub"]), "discount_set", tg, f"-{percent}% {days}d"
+    )
+    bus.publish({"type": "admin:discount", "telegram_id": tg, "percent": percent})
+    return json_ok({"ok": True, "expires_at": expires})
+
+
+@routes.post("/users/{tg}/discount/clear")
+async def clear_discount(request: web.Request) -> web.Response:
+    tg = _tg(request)
+    await database.clear_offer(tg)
+    await database.log_audit(int(request["admin"]["sub"]), "discount_clear", tg)
+    return json_ok({"ok": True})

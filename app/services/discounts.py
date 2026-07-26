@@ -20,6 +20,7 @@ REASONS: dict[str, str] = {
     "promo": "акционная скидка",
     "trial": "персональная скидка для тебя",
     "year": "скидка на годовой тариф",
+    "admin": "персональная скидка",
 }
 
 # Offers whose discount is limited to specific tariff codes. Codes not listed
