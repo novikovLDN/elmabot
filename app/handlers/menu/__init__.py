@@ -15,7 +15,7 @@ import config
 from app import emoji
 from app.format import fmt_date
 from app.keyboards import cabinet_keyboard, main_menu_keyboard
-from app.services import bypass_service, happ_crypto
+from app.services import bypass_service, cashback, happ_crypto
 from app.utils import safe_edit, send_screen, show_screen
 from config import (
     DEVICE_LIMIT,
@@ -25,7 +25,7 @@ from config import (
     SUPPORT_USERNAME,
     TERMS_URL,
 )
-from database import get_subscription, referral_stats
+from database import get_balance, get_subscription, referral_stats
 
 _GB = 1024 ** 3
 
@@ -233,6 +233,16 @@ async def _cabinet_view(uid: int):
                 "\n🔑 Ключ обхода (импортируй в Happ):\n"
                 f"<blockquote expandable><code>{html.escape(crypt4)}</code></blockquote>"
             )
+
+    # Loyalty: balance + referral cashback tier.
+    bal = await get_balance(uid)
+    ref = await referral_stats(uid)
+    tier_pct, tier_name = cashback.tier_for(int(ref["purchased"]))
+    text += f"\n\n💼 <b>Баланс: {bal // 100} ₽</b>"
+    if bal > 0:
+        text += " — можно оплатить подписку"
+    text += f"\n🏅 Кешбэк с друзей: <b>{tier_pct}%</b> ({tier_name})"
+
     return text, cabinet_keyboard(has_active_sub=active, has_bypass=has_bypass)
 
 
