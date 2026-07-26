@@ -109,7 +109,7 @@ export interface AuditRow {
   id: number; admin_id: number; action: string; target_id: number | null;
   detail: string | null; created_at: string; target_username: string | null;
 }
-export interface Segment { key: string; label: string; count: number; }
+export interface Segment { key: string; label: string; count: number; description?: string; }
 
 export interface ReconCandidate {
   telegram_id: number; issue: string;

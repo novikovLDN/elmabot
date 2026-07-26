@@ -569,43 +569,90 @@ def _cold_since(days: int) -> str:
     )
 
 
-SEGMENTS: dict[str, tuple[str, str]] = {
+_NO_ACTIVE = f"NOT {_ACTIVE_SUB}"
+_HAS_BALANCE = "u.balance_kopecks > 0"
+_VIP = "u.is_vip"
+_IS_REFERRER = "EXISTS (SELECT 1 FROM referrals r WHERE r.referrer_id = u.telegram_id)"
+_LOYAL_2PLUS = (
+    "(SELECT COUNT(*) FROM payments p "
+    "WHERE p.telegram_id = u.telegram_id AND p.status = 'paid') >= 2"
+)
+
+
+def _signup_within(days: int) -> str:
+    return f"u.created_at >= now() - interval '{days} days'"
+
+
+# code -> (label, SQL WHERE over `users u`, human description shown as a hint).
+# All implicitly filtered to reachable users in recipients().
+SEGMENTS: dict[str, tuple[str, str, str]] = {
     # --- База ---
-    "all": ("Все пользователи", "TRUE"),
-    "active": ("Активная подписка (все)", _ACTIVE_SUB),
-    "active_paid": ("💳 Платная (активная)", _ACTIVE_PAID),
-    "active_trial": ("🆓 Триал (активный)", _ACTIVE_TRIAL),
-    "paid_ever": ("💎 Покупали хоть раз", _PAID_EXISTS),
+    "all": ("Все пользователи", "TRUE",
+            "Абсолютно все, кому бот может доставить сообщение."),
+    "active": ("✅ Активная подписка (все)", _ACTIVE_SUB,
+               "У кого сейчас есть активный доступ — платный или триал."),
+    "active_paid": ("💳 Платная активная", _ACTIVE_PAID,
+                    "Активная ПЛАТНАЯ подписка (без триалов)."),
+    "active_trial": ("🆓 Триал активный", _ACTIVE_TRIAL,
+                     "Сейчас на бесплатном пробном периоде."),
+    "paid_ever": ("💎 Покупали хоть раз", _PAID_EXISTS,
+                  "Хоть раз оплачивали — тёплая база для апселла."),
+    "no_sub": ("🚫 Без активной подписки", _NO_ACTIVE,
+               "Сейчас нет активного доступа (были клиентами или нет)."),
+    # --- Онбординг (новые) ---
+    "signup_1d": ("🆕 Новые за 24ч", _signup_within(1),
+                  "Зарегистрировались за последние сутки."),
+    "signup_7d": ("🆕 Новые за 7 дней", _signup_within(7),
+                  "Зарегистрировались за последнюю неделю."),
     # --- Триал-воронка (конверсия) ---
-    "trial_ending_1d": ("⏳ Триал кончается ≤24ч", _ACTIVE_TRIAL_ENDING_1D),
-    "trial_no_buy": (
-        "Триал без покупки",
-        f"u.trial_used_at IS NOT NULL AND NOT {_PAID_EXISTS}",
-    ),
+    "trial_ending_1d": ("⏳ Триал кончается ≤24ч", _ACTIVE_TRIAL_ENDING_1D,
+                        "Триал закончится в ближайшие 24 часа — момент для оффера."),
+    "trial_no_buy": ("Триал без покупки",
+                     f"u.trial_used_at IS NOT NULL AND NOT {_PAID_EXISTS}",
+                     "Брали триал, но так и не купили."),
     "trial_expired_recent": (
         "Триал истёк ≤3 дн, без покупки",
         f"u.trial_used_at IS NOT NULL AND NOT {_PAID_EXISTS} "
         "AND u.trial_expires_at > now() - interval '3 days' "
         "AND u.trial_expires_at <= now()",
-    ),
-    "cold": (
-        "❄️ Холодные (без триала и покупок)",
-        f"u.trial_used_at IS NULL AND NOT {_SUB_EXISTS}",
-    ),
-    "trial_expired_7d": ("Триал истёк ≤7 дн, без покупки", _trial_expired_within(7)),
-    "trial_expired_30d": ("Триал истёк ≤30 дн, без покупки", _trial_expired_within(30)),
-    "cold_7d": ("❄️ Холодные ≥7 дней", _cold_since(7)),
-    "cold_30d": ("❄️ Холодные ≥30 дней", _cold_since(30)),
+        "Триал закончился ≤3 дней назад, покупки не было — горячий момент."),
+    "trial_expired_7d": ("Триал истёк ≤7 дн, без покупки", _trial_expired_within(7),
+                         "Триал закончился ≤7 дней назад, без покупки."),
+    "trial_expired_30d": ("Триал истёк ≤30 дн, без покупки", _trial_expired_within(30),
+                          "Триал закончился ≤30 дней назад, без покупки."),
+    "cold": ("❄️ Холодные (без триала и покупок)",
+             f"u.trial_used_at IS NULL AND NOT {_SUB_EXISTS}",
+             "Пришли, но не брали триал и не покупали."),
+    "cold_7d": ("❄️ Холодные ≥7 дней", _cold_since(7),
+                "Холодные, зарегистрированы ≥7 дней назад."),
+    "cold_30d": ("❄️ Холодные ≥30 дней", _cold_since(30),
+                 "Холодные, зарегистрированы ≥30 дней назад."),
     # --- Продление (платные, истекают скоро) ---
-    "exp_in_1d": ("🔔 Платная истекает ≤24ч", _paid_expiring_within(1)),
-    "exp_in_3d": ("🔔 Платная истекает ≤3 дней", _paid_expiring_within(3)),
-    "exp_in_7d": ("🔔 Платная истекает ≤7 дней", _paid_expiring_within(7)),
+    "exp_in_1d": ("🔔 Платная истекает ≤24ч", _paid_expiring_within(1),
+                  "Платная подписка закончится в ближайшие 24 часа."),
+    "exp_in_3d": ("🔔 Платная истекает ≤3 дней", _paid_expiring_within(3),
+                  "Платная подписка закончится в ближайшие 3 дня."),
+    "exp_in_7d": ("🔔 Платная истекает ≤7 дней", _paid_expiring_within(7),
+                  "Платная подписка закончится в ближайшую неделю."),
     # --- Возврат (истёкшие) ---
-    "expd_3d": ("🔚 Истекла ≤3 дней назад", _expired_within(3)),
-    "expd_7d": ("🔚 Истекла ≤7 дней назад", _expired_within(7)),
-    "expd_14d": ("🔚 Истекла ≤14 дней назад", _expired_within(14)),
-    "expd_30d": ("🔚 Истекла ≤30 дней назад", _expired_within(30)),
-    "paid_lapsed": ("💔 Платили, сейчас не активны", f"{_PAID_EXISTS} AND NOT {_ACTIVE_SUB}"),
+    "expd_3d": ("🔚 Истекла ≤3 дней назад", _expired_within(3),
+                "Платная закончилась ≤3 дней назад — легко вернуть."),
+    "expd_7d": ("🔚 Истекла ≤7 дней назад", _expired_within(7),
+                "Платная закончилась ≤7 дней назад."),
+    "expd_14d": ("🔚 Истекла ≤14 дней назад", _expired_within(14),
+                 "Платная закончилась ≤14 дней назад."),
+    "expd_30d": ("🔚 Истекла ≤30 дней назад", _expired_within(30),
+                 "Платная закончилась ≤30 дней назад."),
+    "paid_lapsed": ("💔 Платили, сейчас не активны", f"{_PAID_EXISTS} AND NOT {_ACTIVE_SUB}",
+                    "Когда-то платили, сейчас доступа нет — реактивация."),
+    # --- Апселл / особые ---
+    "loyal": ("🏆 Постоянные (2+ оплаты)", _LOYAL_2PLUS,
+              "Оплатили 2 и более раз — самые лояльные."),
+    "vip": ("👑 VIP", _VIP, "Пользователи с VIP-статусом."),
+    "has_balance": ("💼 Есть баланс", _HAS_BALANCE,
+                    "На балансе есть деньги — подтолкнуть потратить на подписку."),
+    "referrers": ("🫂 Пригласившие друзей", _IS_REFERRER,
+                  "Уже приглашали друзей — амбассадоры."),
 }
 
 

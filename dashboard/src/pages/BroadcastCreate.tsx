@@ -145,6 +145,9 @@ export default function BroadcastCreate() {
             ))}
           </select>
           <div className="mt-1 text-xs text-fg-muted">Получателей: <b>{fmtNum(count)}</b></div>
+          {segs.data?.find((s) => s.key === segment)?.description && (
+            <div className="mt-1 text-xs text-fg-subtle">💡 {segs.data.find((s) => s.key === segment)!.description}</div>
+          )}
         </div>
 
         <div>

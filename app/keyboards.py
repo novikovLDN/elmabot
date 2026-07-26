@@ -291,8 +291,8 @@ def admin_broadcast_segments() -> InlineKeyboardMarkup:
             rows.append(pending)
             pending = 0
 
-    for code, (label, _sql) in SEGMENTS.items():
-        kb.button(text=label, callback_data=f"bcast:{code}")
+    for code, entry in SEGMENTS.items():
+        kb.button(text=entry[0], callback_data=f"bcast:{code}")
         fam = "exp" if code.startswith("exp_") else "expd" if code.startswith("expd_") else None
         if fam is None:
             flush()

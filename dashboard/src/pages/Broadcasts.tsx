@@ -13,11 +13,13 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { cn } from "@/lib/cn";
 import { toast } from "@/store/toast";
 
-const GROUPS = ["База", "Триал-воронка", "Продление", "Возврат"] as const;
+const GROUPS = ["База", "Онбординг", "Триал-воронка", "Продление", "Возврат", "Апселл"] as const;
 function groupOf(key: string): (typeof GROUPS)[number] {
+  if (key.startsWith("signup_")) return "Онбординг";
   if (key.startsWith("exp_in_")) return "Продление";
   if (key.startsWith("expd_") || key === "paid_lapsed") return "Возврат";
-  if (key.includes("trial") || key === "cold") return "Триал-воронка";
+  if (key.includes("trial") || key.startsWith("cold")) return "Триал-воронка";
+  if (["loyal", "vip", "has_balance", "referrers"].includes(key)) return "Апселл";
   return "База";
 }
 
@@ -104,9 +106,12 @@ function SegmentsTab() {
           <div className="card divide-y divide-border-subtle overflow-hidden">
             {grouped[g].map((s) => (
               <button key={s.key} onClick={() => navigate(`/broadcasts/new?segment=${s.key}`)}
-                className="flex w-full items-center justify-between px-4 py-3 text-left text-sm transition hover:bg-bg-elevated">
-                <span className="font-medium">{s.label}</span>
-                <span className="font-bold text-accent">{fmtNum(s.count)}</span>
+                className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left text-sm transition hover:bg-bg-elevated">
+                <span className="min-w-0">
+                  <span className="font-medium">{s.label}</span>
+                  {s.description && <span className="mt-0.5 block text-xs text-fg-muted">{s.description}</span>}
+                </span>
+                <span className="shrink-0 font-bold text-accent">{fmtNum(s.count)}</span>
               </button>
             ))}
           </div>

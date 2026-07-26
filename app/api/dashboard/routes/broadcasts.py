@@ -49,8 +49,13 @@ def _clean(body: dict) -> dict:
 @routes.get("/broadcasts/segments")
 async def segments(request: web.Request) -> web.Response:
     out = []
-    for key, (label, _where) in database.SEGMENTS.items():
-        out.append({"key": key, "label": label, "count": await database.segment_count(key)})
+    for key, entry in database.SEGMENTS.items():
+        label, _where = entry[0], entry[1]
+        desc = entry[2] if len(entry) > 2 else ""
+        out.append({
+            "key": key, "label": label, "description": desc,
+            "count": await database.segment_count(key),
+        })
     return json_ok(out)
 
 
