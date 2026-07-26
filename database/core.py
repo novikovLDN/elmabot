@@ -43,6 +43,11 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_code       TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_pct        INTEGER;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_expires_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_funnel_stage SMALLINT NOT NULL DEFAULT 0;
+-- Loyalty economy: balance (kopecks), VIP flag, and an optional fixed cashback
+-- % that overrides the referral tier when set.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_kopecks        BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_vip                 BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS cashback_fixed_percent INTEGER;
 
 CREATE TABLE IF NOT EXISTS referrals (
     referred_id BIGINT PRIMARY KEY REFERENCES users(telegram_id),
@@ -293,6 +298,20 @@ CREATE TABLE IF NOT EXISTS stats_links (
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS acquired_via_stat_link_id BIGINT;
 CREATE INDEX IF NOT EXISTS idx_users_acquired ON users(acquired_via_stat_link_id);
+
+-- --- Balance ledger (loyalty economy) -----------------------------------
+-- Every balance movement is journaled: admin adjustments, referral cashback,
+-- and spends at checkout.
+CREATE TABLE IF NOT EXISTS balance_ledger (
+    id            BIGSERIAL PRIMARY KEY,
+    telegram_id   BIGINT NOT NULL,
+    delta_kopecks BIGINT NOT NULL,
+    reason        TEXT NOT NULL,            -- admin | cashback | purchase
+    meta          TEXT,
+    created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_balance_ledger_tg
+    ON balance_ledger(telegram_id, created_at DESC);
 """
 
 

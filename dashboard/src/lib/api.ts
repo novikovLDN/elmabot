@@ -89,6 +89,7 @@ export interface UserDetail {
   user: Record<string, unknown>;
   payments: Array<Record<string, unknown>>;
   referral: { invited: number; purchased: number };
+  cashback?: { fixed_percent: number | null; tier_percent: number; tier_name: string; effective_percent: number };
 }
 export interface PaymentRow {
   telegram_id: number; username: string | null; amount_kopecks: number;
@@ -178,6 +179,14 @@ export const endpoints = {
   setDiscount: (tg: number, percent: number, days: number) =>
     api.post<{ ok: boolean; expires_at: string }>(`/users/${tg}/discount`, { percent, days }),
   clearDiscount: (tg: number) => api.post<{ ok: boolean }>(`/users/${tg}/discount/clear`),
+  adjustBalance: (tg: number, delta_rubles: number) =>
+    api.post<{ ok: boolean; balance_kopecks: number }>(`/users/${tg}/balance`, { delta_rubles }),
+  setVip: (tg: number, on: boolean) =>
+    api.post<{ ok: boolean; is_vip: boolean }>(`/users/${tg}/vip`, { on }),
+  cashbackFix: (tg: number, percent: number) =>
+    api.post<{ ok: boolean }>(`/users/${tg}/cashback-fix`, { percent }),
+  cashbackFixClear: (tg: number) =>
+    api.post<{ ok: boolean }>(`/users/${tg}/cashback-fix/clear`),
 
   // payments
   payments: (page: number, limit = 30) =>

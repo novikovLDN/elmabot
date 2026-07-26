@@ -170,6 +170,7 @@ async def user_detail(telegram_id: int) -> dict[str, Any] | None:
         SELECT u.telegram_id, u.username, u.language, u.created_at, u.is_reachable,
                u.trial_used_at, u.trial_expires_at, u.referred_by,
                u.offer_code, u.offer_pct, u.offer_expires_at,
+               u.balance_kopecks, u.is_vip, u.cashback_fixed_percent,
                s.status AS sub_status, s.source AS sub_source, s.expires_at,
                s.subscription_url, s.panel_uuid, s.created_at AS sub_created_at,
                (SELECT COUNT(*) FROM payments p

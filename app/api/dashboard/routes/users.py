@@ -33,15 +33,27 @@ async def list_users(request: web.Request) -> web.Response:
 
 @routes.get("/users/{tg}")
 async def user(request: web.Request) -> web.Response:
+    from app.services import cashback
+
     tg = _tg(request)
     detail = await database.user_detail(tg)
     if detail is None:
         raise web.HTTPNotFound(reason="user not found")
+    referral = await database.referral_stats(tg)
+    paid_refs = int(referral.get("purchased", 0))
+    fixed = detail.get("cashback_fixed_percent")
+    tier_pct, tier_name = cashback.tier_for(paid_refs)
     return json_ok(
         {
             "user": detail,
             "payments": await database.user_payments(tg, 50),
-            "referral": await database.referral_stats(tg),
+            "referral": referral,
+            "cashback": {
+                "fixed_percent": fixed,
+                "tier_percent": tier_pct,
+                "tier_name": tier_name,
+                "effective_percent": cashback.effective_percent(paid_refs, fixed),
+            },
         }
     )
 
@@ -118,4 +130,55 @@ async def clear_discount(request: web.Request) -> web.Response:
     tg = _tg(request)
     await database.clear_offer(tg)
     await database.log_audit(int(request["admin"]["sub"]), "discount_clear", tg)
+    return json_ok({"ok": True})
+
+
+@routes.post("/users/{tg}/balance")
+async def adjust_balance(request: web.Request) -> web.Response:
+    tg = _tg(request)
+    body = await read_json(request)
+    try:
+        delta_rub = int(body.get("delta_rubles"))
+    except (TypeError, ValueError):
+        raise web.HTTPBadRequest(reason="delta_rubles required")
+    if delta_rub == 0:
+        raise web.HTTPBadRequest(reason="delta must be non-zero")
+    delta_kop = delta_rub * 100
+    if delta_kop < 0 and await database.get_balance(tg) + delta_kop < 0:
+        raise web.HTTPBadRequest(reason="баланс не может стать отрицательным")
+    new_balance = await database.adjust_balance(tg, delta_kop, "admin")
+    await database.log_audit(int(request["admin"]["sub"]), "balance_adjust", tg, f"{delta_rub:+d} ₽")
+    return json_ok({"ok": True, "balance_kopecks": new_balance})
+
+
+@routes.post("/users/{tg}/vip")
+async def set_vip(request: web.Request) -> web.Response:
+    tg = _tg(request)
+    body = await read_json(request)
+    on = bool(body.get("on", True))
+    await database.set_vip(tg, on)
+    await database.log_audit(int(request["admin"]["sub"]), "vip_set" if on else "vip_clear", tg)
+    return json_ok({"ok": True, "is_vip": on})
+
+
+@routes.post("/users/{tg}/cashback-fix")
+async def cashback_fix(request: web.Request) -> web.Response:
+    tg = _tg(request)
+    body = await read_json(request)
+    try:
+        percent = int(body.get("percent"))
+    except (TypeError, ValueError):
+        raise web.HTTPBadRequest(reason="percent required")
+    if not 0 <= percent <= 100:
+        raise web.HTTPBadRequest(reason="percent 0..100")
+    await database.set_cashback_fixed(tg, percent)
+    await database.log_audit(int(request["admin"]["sub"]), "cashback_fix", tg, f"{percent}%")
+    return json_ok({"ok": True, "cashback_fixed_percent": percent})
+
+
+@routes.post("/users/{tg}/cashback-fix/clear")
+async def cashback_fix_clear(request: web.Request) -> web.Response:
+    tg = _tg(request)
+    await database.set_cashback_fixed(tg, None)
+    await database.log_audit(int(request["admin"]["sub"]), "cashback_fix_clear", tg)
     return json_ok({"ok": True})
