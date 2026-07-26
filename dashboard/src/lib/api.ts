@@ -200,6 +200,13 @@ export const endpoints = {
   // settings
   settings: () => api.get<Settings>("/settings"),
 
+  // admin web-push
+  pushKey: () => api.get<{ enabled: boolean; public_key: string; count: number }>("/settings/push/key"),
+  pushSubscribe: (subscription: unknown) =>
+    api.post<{ ok: boolean }>("/settings/push/subscribe", { subscription }),
+  pushUnsubscribe: (endpoint: string) =>
+    api.post<{ ok: boolean }>("/settings/push/unsubscribe", { endpoint }),
+
   // bypass migration
   bypassPreview: () =>
     api.get<{ enabled: boolean; eligible: number; running: boolean }>("/bypass/backfill/preview"),

@@ -123,6 +123,11 @@ async def run_broadcast(
     )
     for aid in config.ADMIN_IDS:
         await safe_send(bot, aid, summary)
+
+    # Best-effort admin web-push (no-op if push disabled/unavailable).
+    from . import push_service
+
+    await push_service.notify_broadcast_done(res.sent, total, res.failed)
     return {"id": bid, "total": total}
 
 

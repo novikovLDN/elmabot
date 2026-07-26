@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Fingerprint, Globe, KeyRound, LogOut, Plus, Trash2 } from "lucide-react";
+import { Fingerprint, Globe, KeyRound, LogOut, Plus, Trash2, Bell, BellOff } from "lucide-react";
 import { endpoints, ApiError } from "@/lib/api";
 import { fmtDate, fmtNum } from "@/lib/format";
 import { logout } from "@/lib/auth";
 import { registerPasskey } from "@/lib/passkey";
+import { enablePush, disablePush, pushSubscribed, pushSupported } from "@/lib/push";
 import { useEventStream } from "@/lib/ws";
 import { PageLoader, Spinner } from "@/components/Spinner";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -41,6 +42,8 @@ export default function Settings() {
         <Row k="Реф. бонус" v={`${d.referral_bonus_days} дн.`} />
         <Row k="Приём платежей" v={d.payments_enabled ? "включён" : "выключен"} />
       </div>
+
+      <PushCard />
 
       <div className="card card-pad">
         <div className="label mb-2">Тарифы</div>
@@ -183,6 +186,53 @@ function BypassBackfill() {
         pending={run.isPending || running} disabled={eligible === 0}
         onConfirm={() => run.mutate()}
       />
+    </div>
+  );
+}
+
+function PushCard() {
+  const key = useQuery({ queryKey: ["push", "key"], queryFn: endpoints.pushKey });
+  const sub = useQuery({ queryKey: ["push", "subscribed"], queryFn: pushSubscribed, enabled: pushSupported() });
+  const on = useMutation({
+    mutationFn: () => enablePush(),
+    onSuccess: () => { toast.success("Push включён на этом устройстве"); sub.refetch(); key.refetch(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Ошибка"),
+  });
+  const off = useMutation({
+    mutationFn: () => disablePush(),
+    onSuccess: () => { toast.success("Push выключён"); sub.refetch(); key.refetch(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Ошибка"),
+  });
+
+  const serverOff = key.data && !key.data.enabled;
+  const isSub = !!sub.data;
+
+  return (
+    <div className="card card-pad space-y-3">
+      <div className="flex items-center gap-2">
+        <Bell className="h-4 w-4 text-fg-subtle" />
+        <div className="label">Push-уведомления</div>
+      </div>
+      <p className="text-sm text-fg-muted">
+        Пуш в это приложение при достижении дневного дохода (5к/10к/…/40к ₽ по МСК)
+        и по завершении рассылки. Работает после установки дашборда как приложения (PWA).
+      </p>
+      {!pushSupported() ? (
+        <div className="text-xs text-fg-muted">Браузер не поддерживает push.</div>
+      ) : serverOff ? (
+        <div className="text-xs text-fg-muted">
+          Выключено на сервере — задайте <code>VAPID_PUBLIC_KEY</code> / <code>VAPID_PRIVATE_KEY</code>.
+        </div>
+      ) : isSub ? (
+        <button className="btn-secondary" disabled={off.isPending} onClick={() => off.mutate()}>
+          {off.isPending ? <Spinner className="h-4 w-4" /> : <BellOff className="h-4 w-4" />} Выключить на этом устройстве
+        </button>
+      ) : (
+        <button className="btn-primary" disabled={on.isPending} onClick={() => on.mutate()}>
+          {on.isPending ? <Spinner className="h-4 w-4" /> : <Bell className="h-4 w-4" />} Включить на этом устройстве
+        </button>
+      )}
+      {key.data?.enabled && <div className="text-xs text-fg-subtle">Активных подписок: {fmtNum(key.data.count)}</div>}
     </div>
   );
 }

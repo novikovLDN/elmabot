@@ -249,6 +249,17 @@ _dash_host = (
 WEBAUTHN_RP_ID = _get_str("WEBAUTHN_RP_ID", "") or _dash_host
 WEBAUTHN_RP_NAME = _get_str("WEBAUTHN_RP_NAME", f"{BRAND_NAME} Admin")
 
+# --- Admin web-push (VAPID) ---
+# Optional browser push to the admin PWA. Disabled unless BOTH VAPID keys are
+# set. Generate a pair once: `python -m py_vapid` (or any VAPID keygen), put the
+# base64url public/private keys here and a mailto: subject.
+VAPID_PUBLIC_KEY = _get_str("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = _get_str("VAPID_PRIVATE_KEY", "")
+VAPID_SUBJECT = _get_str("VAPID_SUBJECT", "mailto:admin@example.com")
+PUSH_ENABLED = bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)
+# Daily revenue milestones (₽, per MSK day) that fire a celebratory push once.
+REVENUE_MILESTONES = [5000, 10000, 15000, 20000, 25000, 30000, 35000, 40000]
+
 # --- Scheduler tuning ---
 REMINDER_INTERVAL_SECONDS = _get_int("REMINDER_INTERVAL_SECONDS", 600)
 EXPIRY_INTERVAL_SECONDS = _get_int("EXPIRY_INTERVAL_SECONDS", 600)

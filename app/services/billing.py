@@ -115,11 +115,16 @@ async def finalize_confirmed_payment(bot: Bot, payment) -> None:
             bot, tg, gb, invoice_id=invoice_id, amount_paid=amount,
             provider=payment["provider"],
         )
-        return
+    else:
+        tariff = get_tariff(code) or TARIFFS[0]
+        await complete_purchase(bot, tg, tariff, invoice_id=invoice_id, amount_paid=amount)
+        await notify_purchase_activated(bot, tg)
 
-    tariff = get_tariff(code) or TARIFFS[0]
-    await complete_purchase(bot, tg, tariff, invoice_id=invoice_id, amount_paid=amount)
-    await notify_purchase_activated(bot, tg)
+    # Best-effort admin web-push for daily revenue milestones (guarded/no-op if
+    # push is disabled or unavailable). Never affects payment settlement.
+    from app.services import push_service
+
+    await push_service.check_revenue_milestones()
 
 
 _PURCHASE_OK_TEXT = (

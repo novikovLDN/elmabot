@@ -233,6 +233,22 @@ CREATE TABLE IF NOT EXISTS scheduled_broadcasts (
 );
 CREATE INDEX IF NOT EXISTS idx_scheduled_due
     ON scheduled_broadcasts(run_at) WHERE active;
+
+-- --- Admin web-push (VAPID) ---------------------------------------------
+CREATE TABLE IF NOT EXISTS admin_push_subscriptions (
+    endpoint    TEXT PRIMARY KEY,
+    admin_id    BIGINT,
+    p256dh      TEXT NOT NULL,
+    auth        TEXT NOT NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+-- One row per (MSK day, milestone) so each revenue milestone pushes once/day.
+CREATE TABLE IF NOT EXISTS push_milestones (
+    day_key    TEXT NOT NULL,
+    milestone  INTEGER NOT NULL,
+    fired_at   TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (day_key, milestone)
+);
 """
 
 
