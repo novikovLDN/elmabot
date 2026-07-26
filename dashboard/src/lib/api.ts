@@ -176,6 +176,7 @@ export const endpoints = {
   user: (tg: number) => api.get<UserDetail>(`/users/${tg}`),
   grant: (tg: number, days: number) => api.post<{ ok: boolean }>(`/users/${tg}/grant`, { days }),
   revoke: (tg: number) => api.post<{ ok: boolean }>(`/users/${tg}/revoke`),
+  reissue: (tg: number) => api.post<{ ok: boolean }>(`/users/${tg}/reissue`),
   setDiscount: (tg: number, percent: number, days: number) =>
     api.post<{ ok: boolean; expires_at: string }>(`/users/${tg}/discount`, { percent, days }),
   clearDiscount: (tg: number) => api.post<{ ok: boolean }>(`/users/${tg}/discount/clear`),

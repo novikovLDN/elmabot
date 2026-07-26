@@ -99,6 +99,31 @@ async def revoke(request: web.Request) -> web.Response:
     return json_ok({"ok": True})
 
 
+@routes.post("/users/{tg}/reissue")
+async def reissue(request: web.Request) -> web.Response:
+    """Rotate the user's VPN keys (new subscription url); notify them."""
+    from app.services import subscription_service
+    from app.utils import safe_send
+
+    tg = _tg(request)
+    try:
+        sub = await subscription_service.reissue(tg)
+    except Exception as exc:  # noqa: BLE001 - panel failure
+        raise web.HTTPBadGateway(reason=f"reissue failed: {exc}")
+    if sub is None:
+        raise web.HTTPBadRequest(reason="нет активной подписки")
+
+    await database.log_audit(int(request["admin"]["sub"]), "reissue", tg)
+    bot = request.config_dict["bot"]
+    await safe_send(
+        bot, tg,
+        "🔑 <b>Ключ доступа перевыпущен</b>\n\n"
+        "Старая ссылка больше не работает. Открой «Подключиться» и импортируй "
+        "новый ключ на своих устройствах.",
+    )
+    return json_ok({"ok": True})
+
+
 @routes.post("/users/{tg}/discount")
 async def set_discount(request: web.Request) -> web.Response:
     """Give the user a personal discount (offer) applied on the buy screen."""

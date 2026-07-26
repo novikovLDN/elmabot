@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, X, ShieldPlus, ShieldX, Users as UsersIcon, Wallet, Percent, Crown, Coins } from "lucide-react";
+import { Search, X, ShieldPlus, ShieldX, Users as UsersIcon, Wallet, Percent, Crown, Coins, RefreshCw } from "lucide-react";
 import { endpoints, ApiError } from "@/lib/api";
 import { fmtDate, fmtDateTime, fmtNum, fmtRub } from "@/lib/format";
 import { PageLoader, Spinner } from "@/components/Spinner";
@@ -113,6 +113,11 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
     onSuccess: () => { toast.success("Доступ отозван"); refresh(); },
     onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
   });
+  const reissue = useMutation({
+    mutationFn: () => endpoints.reissue(tg),
+    onSuccess: () => { toast.success("Ключ перевыпущен"); refresh(); },
+    onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
+  });
   const setDisc = useMutation({
     mutationFn: () => endpoints.setDiscount(tg, discPct, discDays),
     onSuccess: () => { toast.success(`Скидка −${discPct}% на ${discDays} дн.`); refresh(); },
@@ -198,6 +203,9 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
               <ConfirmButton className="w-full" variant="secondary" icon={ShieldX}
                 idleLabel="Отозвать доступ" confirmLabel="Точно отозвать доступ?"
                 pending={revoke.isPending} onConfirm={() => revoke.mutate()} />
+              <ConfirmButton className="w-full" variant="secondary" icon={RefreshCw}
+                idleLabel="Перевыпустить ключ" confirmLabel="Точно перевыпустить? Старая ссылка перестанет работать"
+                pending={reissue.isPending} onConfirm={() => reissue.mutate()} />
             </div>
 
             {/* personal discount (offer) */}

@@ -230,3 +230,21 @@ async def deprovision(panel_uuid: str | None) -> None:
         await remnawave.delete_user(panel_uuid)
     except Exception:  # noqa: BLE001 - cleanup is best-effort
         logger.exception("Failed to delete panel user %s", panel_uuid)
+
+
+async def reissue(telegram_id: int) -> asyncpg.Record | None:
+    """Rotate the user's keys: delete the panel entity and provision a fresh one
+    (new vless uuid / subscription url) for the same expiry. Returns the new
+    subscription row, or None if there's no active subscription.
+
+    Deleting first means ``create_or_renew`` can't adopt the old panel record,
+    so the client gets genuinely new keys."""
+    sub = await get_subscription(telegram_id)
+    if sub is None or sub["status"] != "active":
+        return None
+    if sub["panel_uuid"]:
+        await deprovision(sub["panel_uuid"])
+    await clear_panel_uuid(telegram_id)
+    return await create_or_renew(
+        telegram_id, sub["expires_at"], source=sub["source"] or "admin"
+    )
