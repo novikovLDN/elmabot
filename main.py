@@ -55,6 +55,7 @@ async def main() -> None:
             BotCommand(command="account", description="Личный кабинет"),
             BotCommand(command="invite", description="Реферальная программа"),
             BotCommand(command="gift", description="Подарить подписку"),
+            BotCommand(command="promo", description="Ввести промокод"),
             BotCommand(command="help", description="Помощь"),
             BotCommand(command="about", description="О сервисе"),
         ]

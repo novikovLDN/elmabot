@@ -83,6 +83,14 @@ from .broadcasts import (
     set_scheduled_active,
     set_scheduled_run_at,
 )
+from .promo import (
+    create_promo,
+    delete_promo,
+    get_promo,
+    list_promos,
+    redeem_promo,
+    set_promo_active,
+)
 from .push import (
     claim_milestone,
     delete_push_sub,
@@ -218,6 +226,13 @@ __all__ = [
     "push_sub_count",
     "revenue_kopecks_since",
     "claim_milestone",
+    # promo codes
+    "create_promo",
+    "list_promos",
+    "get_promo",
+    "set_promo_active",
+    "delete_promo",
+    "redeem_promo",
     "record_traffic_purchase",
     # admin dashboard
     "get_admin_password_hash",

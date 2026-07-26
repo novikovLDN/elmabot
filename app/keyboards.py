@@ -41,9 +41,10 @@ def main_menu_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
     kb.button(text="Реферальная программа", callback_data="menu:referral",
               icon_custom_emoji_id=emoji.REFERRAL)
     kb.button(text="Подарить", callback_data="gift:open", icon_custom_emoji_id=emoji.GIFT)
+    kb.button(text="🎟 Промокод", callback_data="promo:enter")
     kb.button(text="Помощь", callback_data="help:open", icon_custom_emoji_id=emoji.HELP)
     kb.button(text="О сервисе", callback_data="about:open", icon_custom_emoji_id=emoji.ABOUT)
-    kb.adjust(1, 1, 1, *buy_row, 2, 2)
+    kb.adjust(1, 1, 1, *buy_row, 2, 1, 2)
     return kb.as_markup()
 
 

@@ -109,6 +109,18 @@ export interface AuditRow {
   detail: string | null; created_at: string; target_username: string | null;
 }
 export interface Segment { key: string; label: string; count: number; }
+
+export interface PromoRow {
+  code: string; kind: string;
+  discount_pct: number | null; discount_days: number | null; grant_days: number | null;
+  max_uses: number | null; per_user_limit: number; uses: number;
+  active: boolean; expires_at: string | null; created_by: number | null; created_at: string;
+}
+export interface PromoCreate {
+  code: string; kind: "discount" | "days";
+  discount_pct?: number; discount_days?: number; grant_days?: number;
+  max_uses?: number | null; per_user_limit?: number; expires_days?: number | null;
+}
 export interface Settings {
   admin: { telegram_id: number; username: string | null };
   brand: string; trial_days: number; device_limit: number;
@@ -196,6 +208,12 @@ export const endpoints = {
     api.post<{ ok: boolean; active: boolean }>(`/broadcasts/scheduled/${id}/toggle`),
   scheduledCancel: (id: number) =>
     api.post<{ ok: boolean }>(`/broadcasts/scheduled/${id}/cancel`),
+
+  // promo codes
+  promoList: () => api.get<PromoRow[]>("/promo"),
+  promoCreate: (p: PromoCreate) => api.post<PromoRow>("/promo", p),
+  promoToggle: (code: string) => api.post<{ ok: boolean; active: boolean }>(`/promo/${code}/toggle`),
+  promoDelete: (code: string) => api.post<{ ok: boolean }>(`/promo/${code}/delete`),
 
   // settings
   settings: () => api.get<Settings>("/settings"),

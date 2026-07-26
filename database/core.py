@@ -249,6 +249,31 @@ CREATE TABLE IF NOT EXISTS push_milestones (
     fired_at   TIMESTAMPTZ DEFAULT NOW(),
     PRIMARY KEY (day_key, milestone)
 );
+
+-- --- Promo codes --------------------------------------------------------
+-- A code the user redeems (/promo, menu, or /start promo_<code>) for either a
+-- personal discount (offer) or bonus subscription days.
+CREATE TABLE IF NOT EXISTS promo_codes (
+    code           TEXT PRIMARY KEY,           -- stored lowercased
+    kind           TEXT NOT NULL,              -- 'discount' | 'days'
+    discount_pct   INTEGER,                    -- discount: percent off
+    discount_days  INTEGER,                    -- discount: how long the offer lives
+    grant_days     INTEGER,                    -- days: bonus subscription days
+    max_uses       INTEGER,                    -- NULL = unlimited total
+    per_user_limit INTEGER NOT NULL DEFAULT 1,
+    uses           INTEGER NOT NULL DEFAULT 0,
+    active         BOOLEAN NOT NULL DEFAULT TRUE,
+    expires_at     TIMESTAMPTZ,
+    created_by     BIGINT,
+    created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS promo_redemptions (
+    id           BIGSERIAL PRIMARY KEY,
+    code         TEXT NOT NULL,
+    telegram_id  BIGINT NOT NULL,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_promo_redemptions ON promo_redemptions(code, telegram_id);
 """
 
 

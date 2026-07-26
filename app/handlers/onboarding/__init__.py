@@ -304,6 +304,19 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
             await message.answer(GIFT_REDEEMED, reply_markup=devices_keyboard())
             return
 
+    # Promo-code deep link: /start promo_<code>.
+    if args.startswith("promo_"):
+        from app.services import promo_service
+
+        _, msg, show_buy = await promo_service.apply_promo(message.bot, user.id, args[6:])
+        kb = InlineKeyboardBuilder()
+        if show_buy:
+            kb.button(text="Выбрать тариф", callback_data="menu:buy")
+        kb.button(text="🏠 Главное меню", callback_data="menu:main")
+        kb.adjust(1)
+        await message.answer(msg, reply_markup=kb.as_markup())
+        return
+
     if is_new:
         logger.info("New user onboarded: %s (@%s)", user.id, user.username)
         referrer_id = _parse_ref(args)
