@@ -39,12 +39,44 @@ def _now() -> datetime:
 
 # --- Sending ---------------------------------------------------------------
 
-def build_markup(button_text: str | None, button_url: str | None):
+# Preset CTA buttons the dashboard wizard can attach (key -> label).
+BUTTON_PRESETS = {
+    "buy": "🛒 Купить доступ",
+    "channel": "📣 Перейти в канал",
+    "referral": "🫂 Пригласить друга",
+}
+
+
+def build_markup(
+    button_text: str | None, button_url: str | None, buttons: str | None = None
+):
+    """Recipient keyboard: an optional custom URL button plus any preset CTAs
+    (``buttons`` is a CSV of BUTTON_PRESETS keys). None if nothing to attach."""
+    kb = InlineKeyboardBuilder()
+    has_any = False
     if button_text and button_url:
-        kb = InlineKeyboardBuilder()
         kb.button(text=button_text, url=button_url)
-        return kb.as_markup()
-    return None
+        has_any = True
+    for key in (buttons or "").split(","):
+        key = key.strip()
+        if key == "buy":
+            kb.button(text=BUTTON_PRESETS["buy"], callback_data="buyaccess")
+            has_any = True
+        elif key == "channel":
+            from config import CHANNEL_URL
+
+            if CHANNEL_URL:
+                kb.button(text=BUTTON_PRESETS["channel"], url=CHANNEL_URL)
+            else:
+                kb.button(text=BUTTON_PRESETS["channel"], callback_data="chan:soon")
+            has_any = True
+        elif key == "referral":
+            kb.button(text=BUTTON_PRESETS["referral"], callback_data="menu:referral")
+            has_any = True
+    if not has_any:
+        return None
+    kb.adjust(1)
+    return kb.as_markup()
 
 
 def build_sender(bot, text: str, photo: str | None, markup):
@@ -72,6 +104,7 @@ async def run_broadcast(
     photo_file_id: str | None = None,
     button_text: str | None = None,
     button_url: str | None = None,
+    buttons: str | None = None,
     source: str = "manual",
 ) -> dict:
     """Journal, fan out, record the result and DM every admin the summary.
@@ -81,10 +114,11 @@ async def run_broadcast(
     total = len(user_ids)
     bid = await database.record_broadcast(
         admin_id=admin_id, segment=segment, text=text, photo_file_id=photo_file_id,
-        button_text=button_text, button_url=button_url, total=total, source=source,
+        button_text=button_text, button_url=button_url, buttons=buttons,
+        total=total, source=source,
     )
     label = database.SEGMENTS.get(segment, (segment, ""))[0]
-    markup = build_markup(button_text, button_url)
+    markup = build_markup(button_text, button_url, buttons)
     send_one = build_sender(bot, text, photo_file_id, markup)
 
     bus.publish({
@@ -231,6 +265,7 @@ async def scheduled_broadcast_loop(bot) -> None:
                     photo_file_id=row["photo_file_id"],
                     button_text=row["button_text"],
                     button_url=row["button_url"],
+                    buttons=row["buttons"],
                     source="scheduled",
                 ))
                 logger.info("Fired scheduled broadcast %s (%s)", row["id"], row["kind"])

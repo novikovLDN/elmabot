@@ -21,6 +21,7 @@ async def record_broadcast(
     button_url: str | None,
     total: int,
     source: str = "manual",
+    buttons: str | None = None,
 ) -> int:
     """Journal a broadcast at start (status 'running'); returns its id."""
     pool = get_pool()
@@ -28,12 +29,12 @@ async def record_broadcast(
         """
         INSERT INTO broadcast_history
             (admin_id, segment, text, photo_file_id, button_text, button_url,
-             source, status, total)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, 'running', $8)
+             buttons, source, status, total)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'running', $9)
         RETURNING id
         """,
         admin_id, segment, text, photo_file_id, button_text, button_url,
-        source, total,
+        buttons, source, total,
     )
 
 
@@ -57,7 +58,7 @@ async def list_broadcasts(limit: int = 500) -> list[asyncpg.Record]:
     return await pool.fetch(
         """
         SELECT id, admin_id, segment, text, photo_file_id, button_text,
-               button_url, source, status, total, sent, blocked, failed,
+               button_url, buttons, source, status, total, sent, blocked, failed,
                created_at, finished_at
         FROM broadcast_history
         ORDER BY created_at DESC
@@ -88,18 +89,19 @@ async def create_scheduled(
     run_at,
     time_msk: str | None,
     weekdays: str | None,
+    buttons: str | None = None,
 ) -> asyncpg.Record:
     pool = get_pool()
     return await pool.fetchrow(
         """
         INSERT INTO scheduled_broadcasts
             (admin_id, segment, text, photo_file_id, button_text, button_url,
-             kind, run_at, time_msk, weekdays)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             kind, run_at, time_msk, weekdays, buttons)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *
         """,
         admin_id, segment, text, photo_file_id, button_text, button_url,
-        kind, run_at, time_msk, weekdays,
+        kind, run_at, time_msk, weekdays, buttons,
     )
 
 

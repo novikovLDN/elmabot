@@ -13,6 +13,11 @@ import { cn } from "@/lib/cn";
 import { toast } from "@/store/toast";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const PRESETS = [
+  { key: "buy", label: "🛒 Купить доступ" },
+  { key: "channel", label: "📣 Перейти в канал" },
+  { key: "referral", label: "🫂 Пригласить друга" },
+];
 const KINDS: { key: ScheduleKind; label: string }[] = [
   { key: "once", label: "Однократно" },
   { key: "daily", label: "Ежедневно" },
@@ -29,6 +34,7 @@ export default function BroadcastCreate() {
   const [photo, setPhoto] = useState("");
   const [btnText, setBtnText] = useState("");
   const [btnUrl, setBtnUrl] = useState("");
+  const [presets, setPresets] = useState<Set<string>>(new Set());
 
   // Clone: prefill message/photo/button from a past broadcast (segment is left
   // for the admin to re-pick, so nobody re-sends to the wrong audience).
@@ -44,6 +50,7 @@ export default function BroadcastCreate() {
     setPhoto(clone.data.photo_file_id || "");
     setBtnText(clone.data.button_text || "");
     setBtnUrl(clone.data.button_url || "");
+    setPresets(new Set((clone.data.buttons || "").split(",").filter(Boolean)));
   }, [clone.data]);
 
   const [mode, setMode] = useState<"now" | "schedule">(params.get("schedule") ? "schedule" : "now");
@@ -63,7 +70,15 @@ export default function BroadcastCreate() {
     photo_file_id: photo || undefined,
     button_text: btnText || undefined,
     button_url: btnUrl || undefined,
+    buttons: presets.size ? [...presets] : undefined,
   });
+
+  const togglePreset = (k: string) =>
+    setPresets((prev) => {
+      const next = new Set(prev);
+      next.has(k) ? next.delete(k) : next.add(k);
+      return next;
+    });
 
   const schedulePayload = (): SchedulePayload => {
     const p: SchedulePayload = { ...base(true), kind };
@@ -147,6 +162,22 @@ export default function BroadcastCreate() {
               <label className="label mb-1 block">URL</label>
               <input className="input" value={btnUrl} onChange={(e) => setBtnUrl(e.target.value)} placeholder="https://" />
             </div>
+          </div>
+        </div>
+
+        <div>
+          <label className="label mb-1 block">Готовые кнопки</label>
+          <div className="flex flex-wrap gap-1.5">
+            {PRESETS.map((p) => (
+              <button key={p.key} type="button" onClick={() => togglePreset(p.key)}
+                className={cn("rounded-lg px-3 py-1.5 text-sm font-medium transition",
+                  presets.has(p.key) ? "btn-primary" : "btn-secondary")}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-1 text-xs text-fg-muted">
+            Прикрепляются под сообщением к пользователям (можно вместе со своей кнопкой-ссылкой).
           </div>
         </div>
 

@@ -27,16 +27,20 @@ logger = logging.getLogger(__name__)
 routes = web.RouteTableDef()
 
 _KINDS = ("once", "daily", "weekly")
+_PRESET_KEYS = ("buy", "channel", "referral")
 
 
 def _clean(body: dict) -> dict:
     """Normalise a broadcast spec from a request body."""
+    raw = body.get("buttons") or []
+    presets = ",".join(k for k in raw if k in _PRESET_KEYS) if isinstance(raw, list) else ""
     return {
         "segment": str(body.get("segment", "")),
         "text": str(body.get("text", "")).strip(),
         "photo_file_id": (body.get("photo_file_id") or None),
         "button_text": (body.get("button_text") or None),
         "button_url": (body.get("button_url") or None),
+        "buttons": presets or None,
     }
 
 
@@ -55,7 +59,7 @@ async def test_self(request: web.Request) -> web.Response:
     spec = _clean(body)
     if not spec["text"] and not spec["photo_file_id"]:
         raise web.HTTPBadRequest(reason="empty message")
-    markup = broadcast_runner.build_markup(spec["button_text"], spec["button_url"])
+    markup = broadcast_runner.build_markup(spec["button_text"], spec["button_url"], spec["buttons"])
     send_one = broadcast_runner.build_sender(bot, spec["text"], spec["photo_file_id"], markup)
     sent = 0
     for aid in config.ADMIN_IDS:
@@ -126,6 +130,7 @@ async def resend(request: web.Request) -> web.Response:
         bot, admin_id=admin_id, source="resend", segment=row["segment"],
         text=row["text"], photo_file_id=row["photo_file_id"],
         button_text=row["button_text"], button_url=row["button_url"],
+        buttons=row["buttons"],
     ))
     return json_ok({"ok": True, "segment": row["segment"], "total": total}, status=202)
 
@@ -172,6 +177,7 @@ async def scheduled_create(request: web.Request) -> web.Response:
         photo_file_id=spec["photo_file_id"], button_text=spec["button_text"],
         button_url=spec["button_url"], kind=kind, run_at=run_at,
         time_msk=time_msk if kind != "once" else None, weekdays=weekdays,
+        buttons=spec["buttons"],
     )
     await database.log_audit(
         admin_id, "broadcast_schedule", None, f"{kind} {spec['segment']}"

@@ -250,6 +250,7 @@ export interface BroadcastPayload {
   photo_file_id?: string;
   button_text?: string;
   button_url?: string;
+  buttons?: string[]; // preset CTA keys: buy | channel | referral
 }
 
 export type ScheduleKind = "once" | "daily" | "weekly";
@@ -269,6 +270,7 @@ export interface BroadcastHistoryRow {
   photo_file_id: string | null;
   button_text: string | null;
   button_url: string | null;
+  buttons: string | null; // CSV of preset keys
   source: string; // manual | resend | scheduled
   status: string; // running | done
   total: number;

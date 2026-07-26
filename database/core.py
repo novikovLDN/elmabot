@@ -233,6 +233,9 @@ CREATE TABLE IF NOT EXISTS scheduled_broadcasts (
 );
 CREATE INDEX IF NOT EXISTS idx_scheduled_due
     ON scheduled_broadcasts(run_at) WHERE active;
+-- Optional preset CTA buttons (CSV of keys: buy | channel | referral).
+ALTER TABLE broadcast_history ADD COLUMN IF NOT EXISTS buttons TEXT;
+ALTER TABLE scheduled_broadcasts ADD COLUMN IF NOT EXISTS buttons TEXT;
 
 -- --- Admin web-push (VAPID) ---------------------------------------------
 CREATE TABLE IF NOT EXISTS admin_push_subscriptions (
