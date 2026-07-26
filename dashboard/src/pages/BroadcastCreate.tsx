@@ -15,8 +15,16 @@ import { toast } from "@/store/toast";
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const PRESETS = [
   { key: "buy", label: "🛒 Купить доступ" },
-  { key: "channel", label: "📣 Перейти в канал" },
+  { key: "trial", label: "🎁 Активировать пробный" },
+  { key: "connect", label: "📲 Подключиться" },
+  { key: "adddevice", label: "📲 Добавить устройство" },
+  { key: "cabinet", label: "👤 Личный кабинет" },
+  { key: "traffic", label: "🌐 Купить ГБ обхода" },
   { key: "referral", label: "🫂 Пригласить друга" },
+  { key: "gift", label: "🎁 Подарить другу" },
+  { key: "promo", label: "🎟 Ввести промокод" },
+  { key: "channel", label: "📣 Перейти в канал" },
+  { key: "support", label: "💬 Поддержка" },
 ];
 const SCOPES = [
   { key: "all", label: "Все тарифы" },

@@ -28,7 +28,10 @@ logger = logging.getLogger(__name__)
 routes = web.RouteTableDef()
 
 _KINDS = ("once", "daily", "weekly")
-_PRESET_KEYS = ("buy", "channel", "referral")
+_PRESET_KEYS = (
+    "buy", "channel", "referral", "gift", "trial", "connect", "cabinet",
+    "promo", "adddevice", "traffic", "support",
+)
 _SCOPES = ("all", "1m", "3m", "6m", "12m")
 
 

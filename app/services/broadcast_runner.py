@@ -42,10 +42,24 @@ def _now() -> datetime:
 # --- Sending ---------------------------------------------------------------
 
 # Preset CTA buttons the dashboard wizard can attach (key -> label).
+# Preset buttons that route to an existing bot callback (label, callback_data).
+_CALLBACK_PRESETS = {
+    "buy": ("🛒 Купить доступ", "buyaccess"),
+    "referral": ("🫂 Пригласить друга", "menu:referral"),
+    "gift": ("🎁 Подарить другу", "gift:open"),
+    "trial": ("🎁 Активировать пробный", "onb:claim"),
+    "connect": ("📲 Подключиться", "dev:menu"),
+    "cabinet": ("👤 Личный кабинет", "menu:cabinet"),
+    "promo": ("🎟 Ввести промокод", "promo:enter"),
+    "adddevice": ("📲 Добавить устройство", "hw:add"),
+    "traffic": ("🌐 Купить ГБ обхода", "tr:open"),  # only if BYPASS_ENABLED
+}
+
+# Back-compat: some callers/tests referenced these three labels.
 BUTTON_PRESETS = {
-    "buy": "🛒 Купить доступ",
+    "buy": _CALLBACK_PRESETS["buy"][0],
     "channel": "📣 Перейти в канал",
-    "referral": "🫂 Пригласить друга",
+    "referral": _CALLBACK_PRESETS["referral"][0],
 }
 
 # Discount-button scope -> tariff title (for the button label).
@@ -85,8 +99,14 @@ def build_markup(button_text: str | None, button_url: str | None, buttons=None):
         has_any = True
     for s in _parse_buttons(buttons):
         kind = s.get("kind")
-        if kind == "buy":
-            kb.button(text=BUTTON_PRESETS["buy"], callback_data="buyaccess")
+        if kind in _CALLBACK_PRESETS:
+            if kind == "traffic":
+                from config import BYPASS_ENABLED
+
+                if not BYPASS_ENABLED:
+                    continue
+            label, cb = _CALLBACK_PRESETS[kind]
+            kb.button(text=label, callback_data=cb)
             has_any = True
         elif kind == "channel":
             from config import CHANNEL_URL
@@ -96,9 +116,12 @@ def build_markup(button_text: str | None, button_url: str | None, buttons=None):
             else:
                 kb.button(text=BUTTON_PRESETS["channel"], callback_data="chan:soon")
             has_any = True
-        elif kind == "referral":
-            kb.button(text=BUTTON_PRESETS["referral"], callback_data="menu:referral")
-            has_any = True
+        elif kind == "support":
+            from config import SUPPORT_URL
+
+            if SUPPORT_URL:
+                kb.button(text="💬 Поддержка", url=SUPPORT_URL)
+                has_any = True
         elif kind == "discount":
             try:
                 pct, hours = int(s["pct"]), int(s["hours"])
