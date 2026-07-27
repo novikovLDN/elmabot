@@ -95,15 +95,24 @@ async def test_self(request: web.Request) -> web.Response:
         raise web.HTTPBadRequest(reason="empty message")
     markup = broadcast_runner.build_markup(spec["button_text"], spec["button_url"], spec["buttons"])
     send_one = broadcast_runner.build_sender(bot, spec["text"], spec["photo_file_id"], markup)
+
+    # Send the preview to the admin who is signed in (plus any other configured
+    # admins). Using the JWT subject guarantees a valid target even if
+    # ADMIN_TELEGRAM_ID isn't set — the signed-in admin surely started the bot.
+    targets = {int(request["admin"]["sub"]), *config.ADMIN_IDS}
     sent = 0
-    for aid in config.ADMIN_IDS:
+    last_err: Exception | None = None
+    for aid in targets:
         try:
             await send_one(aid)
             sent += 1
-        except Exception:  # noqa: BLE001 - one bad admin chat shouldn't fail the test
-            pass
+        except Exception as exc:  # noqa: BLE001 - capture the real reason
+            last_err = exc
+            logger.warning("test-self send failed for %s: %s", aid, exc)
     if sent == 0:
-        raise web.HTTPBadRequest(reason="не удалось отправить тест ни одному админу")
+        detail = (str(last_err) if last_err else
+                  "не удалось отправить — запустите бота (/start) под этим аккаунтом")
+        return json_ok({"detail": "Тест не отправлен: " + detail.replace("\n", " ")[:300]}, status=400)
     return json_ok({"ok": True, "sent": sent})
 
 

@@ -12,12 +12,13 @@ import logging
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 import config
 import database
 from app.events import bus
-from app.utils import convert_tg_emoji, safe_send
+from app.utils import convert_tg_emoji, safe_send, strip_tg_emoji
 
 from . import broadcaster
 
@@ -145,22 +146,38 @@ def build_markup(button_text: str | None, button_url: str | None, buttons=None):
 
 
 def build_sender(bot, text: str, photo: str | None, markup):
-    # Convert the ![🎁](tg://emoji?id=…) markdown the admin types in the dashboard
-    # into <tg-emoji> HTML entities, so premium/animated emoji render (same as
-    # the in-Telegram admin flow). parse_mode is HTML on every send below.
-    text = convert_tg_emoji(text or "")
+    raw = text or ""
+    # Prefer premium/animated emoji (![🎁](tg://emoji?id=…) → <tg-emoji>); if the
+    # bot can't use those (invalid/unowned id → CUSTOM_EMOJI_INVALID), fall back
+    # to the plain-emoji version so the message still goes out (same as the
+    # in-Telegram admin flow). parse_mode is HTML on every send.
+    bodies = [convert_tg_emoji(raw)]
+    plain = strip_tg_emoji(raw)
+    if plain != bodies[0]:
+        bodies.append(plain)
 
-    async def send_one(uid: int) -> None:
+    async def _send(uid: int, body: str) -> None:
         if photo:
             await bot.send_photo(
-                uid, photo, caption=text or None, parse_mode="HTML",
+                uid, photo, caption=body or None, parse_mode="HTML",
                 reply_markup=markup,
             )
         else:
             await bot.send_message(
-                uid, text, parse_mode="HTML", reply_markup=markup,
+                uid, body, parse_mode="HTML", reply_markup=markup,
                 disable_web_page_preview=True,
             )
+
+    async def send_one(uid: int) -> None:
+        last: TelegramBadRequest | None = None
+        for body in bodies:
+            try:
+                await _send(uid, body)
+                return
+            except TelegramBadRequest as exc:  # bad entities/HTML — try fallback
+                last = exc
+        if last is not None:
+            raise last
 
     return send_one
 
