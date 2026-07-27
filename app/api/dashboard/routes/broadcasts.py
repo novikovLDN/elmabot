@@ -110,9 +110,19 @@ async def test_self(request: web.Request) -> web.Response:
             last_err = exc
             logger.warning("test-self send failed for %s: %s", aid, exc)
     if sent == 0:
-        detail = (str(last_err) if last_err else
-                  "не удалось отправить — запустите бота (/start) под этим аккаунтом")
-        return json_ok({"detail": "Тест не отправлен: " + detail.replace("\n", " ")[:300]}, status=400)
+        raw = (str(last_err) if last_err else "").lower()
+        if "parse entities" in raw:
+            detail = (
+                "ошибка в HTML-разметке текста. Проверьте, что все теги закрыты "
+                "(<b>…</b>, <i>…</i>, <a href=\"…\">…</a>), не перепутаны и что "
+                "символы < > & вне тегов экранированы как &lt; &gt; &amp;."
+            )
+        elif any(m in raw for m in ("chat not found", "blocked", "can't initiate", "forbidden", "deactivated")):
+            detail = "откройте бота в Telegram и нажмите /start под этим аккаунтом — бот не может написать первым."
+        else:
+            detail = (str(last_err) if last_err else
+                      "нет доступного админа. Запустите бота (/start) под этим аккаунтом.").replace("\n", " ")[:300]
+        return json_ok({"detail": "Тест не отправлен: " + detail}, status=400)
     return json_ok({"ok": True, "sent": sent})
 
 
