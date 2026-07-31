@@ -91,6 +91,9 @@ BYPASS_DEVICE_LIMIT = _get_int("BYPASS_DEVICE_LIMIT", DEVICE_LIMIT)
 # Bypass works by GB, not by time — the panel expiry sits far in the future.
 BYPASS_EXPIRE_DAYS = _get_int("BYPASS_EXPIRE_DAYS", 3650)
 BYPASS_ENABLED = bool(REMNAWAVE_BYPASS_SQUAD_UUID)
+# Free bypass allowance (MB) provisioned for a new user when they claim the
+# trial. 0 disables the bonus.
+BYPASS_TRIAL_BONUS_MB = _get_int("BYPASS_TRIAL_BONUS_MB", 500)
 
 _GB = 1024 ** 3
 

@@ -94,6 +94,22 @@ async def _create_or_adopt(telegram_id: int, limit_bytes: int) -> tuple[str, str
     return created["uuid"], created["url"]
 
 
+async def provision_trial_bonus(telegram_id: int) -> bool:
+    """Create a bypass entity with the free trial bonus (BYPASS_TRIAL_BONUS_MB),
+    once. Returns True if the bonus was granted. No-op if bypass is off, the
+    bonus is 0, or the user already has a bypass entity (never stacks)."""
+    if not config.BYPASS_ENABLED or config.BYPASS_TRIAL_BONUS_MB <= 0:
+        return False
+    row = await get_bypass(telegram_id)
+    if row and row["panel_uuid"]:
+        return False  # already has bypass — don't add the bonus again
+    bonus_bytes = config.BYPASS_TRIAL_BONUS_MB * 1024 * 1024
+    await provision_traffic(telegram_id, bonus_bytes)
+    logger.info("Granted %d MB trial bypass bonus to %s",
+                config.BYPASS_TRIAL_BONUS_MB, telegram_id)
+    return True
+
+
 async def provision_traffic(telegram_id: int, extra_bytes: int) -> int:
     """Add ``extra_bytes`` to the user's bypass entity (creating it if needed).
     Returns the new total limit in bytes. Panel call first, DB write second."""

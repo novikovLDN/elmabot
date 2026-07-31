@@ -216,10 +216,19 @@ async def activate_trial(
     if not await claim_trial(telegram_id, expire_at):
         return None
     try:
-        return await create_or_renew(telegram_id, expire_at, source="trial")
+        sub = await create_or_renew(telegram_id, expire_at, source="trial")
     except Exception:
         await release_trial(telegram_id)
         raise
+    # Bonus bypass allowance for new trial users. Best-effort — a bypass failure
+    # must never break the premium trial that was just granted.
+    try:
+        from . import bypass_service
+
+        await bypass_service.provision_trial_bonus(telegram_id)
+    except Exception:  # noqa: BLE001
+        logger.warning("trial bypass bonus failed for %s", telegram_id, exc_info=True)
+    return sub
 
 
 async def deprovision(panel_uuid: str | None) -> None:

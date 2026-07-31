@@ -30,6 +30,14 @@ from database import get_subscription, referral_stats
 _GB = 1024 ** 3
 
 
+def _fmt_traffic(b: int) -> str:
+    """Bytes as ГБ, or МБ when under 1 ГБ (so the 500 МБ trial bonus reads right)."""
+    gb = b / _GB
+    if gb < 1:
+        return f"{b / (1024 ** 2):.0f} МБ"
+    return f"{gb:.1f} ГБ"
+
+
 def _traffic_bar(used: int, limit: int, width: int = 10) -> str:
     if limit <= 0:
         return ""
@@ -223,8 +231,8 @@ async def _cabinet_view(uid: int):
         text += (
             "\n\n🌐 <b>Обход блокировок</b>\n"
             f"{_traffic_bar(used, limit)} {pct}%\n"
-            f"Использовано: {used / _GB:.1f} / {limit / _GB:.0f} ГБ · "
-            f"осталось <b>{left / _GB:.1f} ГБ</b>"
+            f"Использовано: {_fmt_traffic(used)} из {_fmt_traffic(limit)} · "
+            f"осталось <b>{_fmt_traffic(left)}</b>"
         )
         # Bypass key strictly as a Happ crypt4 deep link in a collapsed quote.
         crypt4 = happ_crypto.format_for_user(usage["subscription_url"])
