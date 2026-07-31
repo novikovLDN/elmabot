@@ -136,8 +136,13 @@ REFERRAL_BONUS_DAYS = _get_int("REFERRAL_BONUS_DAYS", 7)
 # --- Discounts (percent off) ---
 # −10% on the first purchase right after the trial ends (valid 1 day).
 DISCOUNT_TRIAL_END_PCT = _get_int("DISCOUNT_TRIAL_END_PCT", 10)
-# −20% to renew on the day a subscription ends.
+# −20% to renew on the day a subscription ends (generic renewal offer).
 DISCOUNT_SUB_END_PCT = _get_int("DISCOUNT_SUB_END_PCT", 20)
+# Escalating renewal discounts as a paid subscription runs out:
+# −15% the day it ends, −20% in the final hour, −25% right after it expired.
+DISCOUNT_SUB_DAYOF_PCT = _get_int("DISCOUNT_SUB_DAYOF_PCT", 15)     # 24h before end
+DISCOUNT_SUB_1H_PCT = _get_int("DISCOUNT_SUB_1H_PCT", 20)           # 1h before end
+DISCOUNT_SUB_EXPIRED_PCT = _get_int("DISCOUNT_SUB_EXPIRED_PCT", 25)  # at/after expiry
 # −20% to reactivate 3 days after a subscription was disconnected.
 DISCOUNT_REACTIVATION_PCT = _get_int("DISCOUNT_REACTIVATION_PCT", 20)
 # How many days after expiry the reactivation offer fires.

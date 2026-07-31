@@ -42,8 +42,14 @@ async def safe_send(
     text: str,
     *,
     reply_markup: InlineKeyboardMarkup | None = None,
+    raise_bad_request: bool = False,
     **kw,
 ) -> Message | None:
+    """Send a message, swallowing the usual "user blocked / chat gone" errors.
+
+    ``raise_bad_request=True`` re-raises a non-"chat not found"
+    ``TelegramBadRequest`` (e.g. a rejected parse-entity / premium-emoji markup)
+    so the caller can retry with a plainer rendering."""
     try:
         return await bot.send_message(
             user_id, text, parse_mode="HTML", reply_markup=reply_markup, **kw
@@ -53,6 +59,8 @@ async def safe_send(
     except TelegramBadRequest as exc:
         if "chat not found" in str(exc).lower():
             await mark_unreachable(user_id)
+        elif raise_bad_request:
+            raise
         else:
             logger.exception("safe_send failed for %s", user_id)
     return None

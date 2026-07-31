@@ -5,8 +5,9 @@ failure never kills the cycle. No APScheduler/Celery — a single process covers
 the whole lite build.
 
 Timelines:
-- PAID subs: 3 days before / day-of renewal reminders, "приостановлен" + −20% at
-  expiry, −20% reactivation 3 days after expiry.
+- PAID subs: 3 days before renewal nudge, then an escalating discount ladder —
+  −15% ~24h before expiry, −20% in the final hour, −25% right at expiry — and a
+  −20% reactivation offer 3 days after expiry.
 - TRIAL users: a dedicated 7-step conversion funnel (see ``_trial_funnel``) with
   escalating discounts; nothing else messages trial users.
 """
@@ -21,7 +22,9 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 from config import (
     DISCOUNT_REACTIVATION_PCT,
-    DISCOUNT_SUB_END_PCT,
+    DISCOUNT_SUB_1H_PCT,
+    DISCOUNT_SUB_DAYOF_PCT,
+    DISCOUNT_SUB_EXPIRED_PCT,
     EXPIRY_INTERVAL_SECONDS,
     REACTIVATION_AFTER_DAYS,
     REMINDER_INTERVAL_SECONDS,
@@ -90,7 +93,8 @@ def _offset(key: str, default: int) -> int:
 
 # Default timing (hours) for the timing-editable built-ins.
 _OFF_SUB_3DAY = 72   # hours before paid expiry (first reminder)
-_OFF_SUB_DAYOF = 24  # hours before paid expiry (second reminder)
+_OFF_SUB_DAYOF = 24  # hours before paid expiry (second reminder, −15%)
+_OFF_SUB_1H = 1      # hours before paid expiry (final-hour reminder, −20%)
 _OFF_REACT = REACTIVATION_AFTER_DAYS * 24  # hours after expiry
 # Trial funnel: (anchor 'start'|'end', sign +after/-before, default hours).
 _FUNNEL_TIMING: dict[int, tuple[str, int, int]] = {
@@ -100,8 +104,16 @@ _FUNNEL_TIMING: dict[int, tuple[str, int, int]] = {
 
 
 async def _send_auto(bot: Bot, uid: int, raw: str, kb) -> None:
-    """Send an automation message, converting premium-emoji markdown."""
-    await safe_send(bot, uid, convert_tg_emoji(raw), reply_markup=kb)
+    """Send an automation message, converting premium-emoji markdown.
+
+    Falls back to the plain-emoji rendering if Telegram rejects the premium
+    ``<tg-emoji>`` markup (e.g. an emoji id that is no longer valid), so a bad
+    id never silently drops the whole reminder."""
+    try:
+        await safe_send(bot, uid, convert_tg_emoji(raw), reply_markup=kb,
+                        raise_bad_request=True)
+    except TelegramBadRequest:
+        await safe_send(bot, uid, strip_tg_emoji(raw), reply_markup=kb)
 
 
 # Default texts for the built-in automatic messages (admin can override each).
@@ -110,15 +122,25 @@ _DEF_SUB_3DAY = (
     "Продли сейчас — срок добавится к текущему.\n"
     "Не теряй доступ 💎"
 )
+# 24h before expiry — −15% renewal offer.
 _DEF_SUB_DAYOF = (
-    "⏳ <b>Подписка заканчивается сегодня</b>\n\n"
-    "Не теряй доступ — продли за минуту."
+    "![🛍](tg://emoji?id=5406683434124859552)<b>Специально для тебя -15% скидка на продление</b>\n\n"
+    "![⏰](tg://emoji?id=5413704112220949842)Подписка заканчивается уже сегодня, "
+    "успей продлить доступ со скидкой\n\n"
+    "<b>Забрать скидку</b>![👇](tg://emoji?id=5231102735817918643)"
 )
+# 1h before expiry — −20% final-hour offer.
+_DEF_SUB_1H = (
+    "![‼️](tg://emoji?id=5440660757194744323)<b>Через 1 час подписка отключится</b>\n\n"
+    "Не теряй доступ — продли прямо сейчас ![💬](tg://emoji?id=5386691718571646404)\n\n"
+    "![🛍](tg://emoji?id=5406683434124859552)<b>Успей забрать скидку -20% — только этот час</b>\n\n"
+    "Воспользоваться скидкой !![👇](tg://emoji?id=5231102735817918643)"
+)
+# At/after expiry — −25% restore offer.
 _DEF_SUB_EXPIRED = (
-    "😔 <b>Доступ приостановлен</b>\n\n"
-    "Подписка закончилась.\n"
-    "Но всё легко исправить — один клик\n"
-    "и ты снова в сети 🤍"
+    "![⚠️](tg://emoji?id=5447644880824181073)<b>Успей вернуть доступ со скидкой -25%</b>\n\n"
+    "![🛍](tg://emoji?id=5406683434124859552)Подписка закончилась, восстанови всё за минуту\n\n"
+    "<b>Один клик — и ты снова в сети !</b>![👇](tg://emoji?id=5231102735817918643)"
 )
 _DEF_REACT = (
     "☁️ <b>Соскучился по свободному интернету?</b>\n\n"
@@ -138,11 +160,20 @@ def builtin_registry() -> list[dict]:
          "when": "За N часов до конца платной подписки", "default": _DEF_SUB_3DAY,
          "timing": True, "offset_default": _OFF_SUB_3DAY,
          "offset_label": "За сколько часов до окончания подписки"},
-        {"key": "sub_dayof", "name": "Продление · второе напоминание (даёт −%)",
-         "when": "Ближе к концу платной подписки", "default": _DEF_SUB_DAYOF,
+        {"key": "sub_dayof",
+         "name": f"Продление · второе напоминание (даёт −{DISCOUNT_SUB_DAYOF_PCT}%)",
+         "when": "Ближе к концу платной подписки (за ~24 часа)",
+         "default": _DEF_SUB_DAYOF,
          "timing": True, "offset_default": _OFF_SUB_DAYOF,
          "offset_label": "За сколько часов до окончания подписки"},
-        {"key": "sub_expired", "name": "Платная истекла (даёт −%)",
+        {"key": "sub_1h",
+         "name": f"Продление · последний час (даёт −{DISCOUNT_SUB_1H_PCT}%)",
+         "when": "За час до конца платной подписки",
+         "default": _DEF_SUB_1H,
+         "timing": True, "offset_default": _OFF_SUB_1H,
+         "offset_label": "За сколько часов до окончания подписки"},
+        {"key": "sub_expired",
+         "name": f"Платная истекла (даёт −{DISCOUNT_SUB_EXPIRED_PCT}%)",
          "when": "Сразу при окончании платной подписки", "default": _DEF_SUB_EXPIRED,
          "timing": False},
         {"key": "reactivation", "name": "Возврат после окончания (−%)",
@@ -209,14 +240,30 @@ async def _send_day_of(bot: Bot) -> None:
     rows = await due_reminders("reminder_3h_sent", _offset("sub_dayof", _OFF_SUB_DAYOF))
     for row in rows:
         uid = row["telegram_id"]
-        # −20% renewal offer for paid subscriptions (trials get their own −10%).
+        # −15% renewal offer for paid subscriptions (trials get their own funnel).
         if row["source"] != "trial":
-            await set_offer(uid, "sub_end", DISCOUNT_SUB_END_PCT, utcnow() + timedelta(days=1))
+            await set_offer(uid, "sub_end", DISCOUNT_SUB_DAYOF_PCT, utcnow() + timedelta(days=1))
         await _send_auto(bot, uid, _text("sub_dayof", _DEF_SUB_DAYOF),
-                         offer_keyboard("🔄 Продлить подписку", pct=DISCOUNT_SUB_END_PCT))
+                         offer_keyboard("🎁 Забрать скидку", pct=DISCOUNT_SUB_DAYOF_PCT))
         await mark_reminder_sent(uid, "reminder_3h_sent")
     if rows:
         logger.info("Sent %d day-of reminders", len(rows))
+
+
+async def _send_1h(bot: Bot) -> None:
+    if not _enabled("sub_1h"):
+        return
+    rows = await due_reminders("reminder_1h_sent", _offset("sub_1h", _OFF_SUB_1H))
+    for row in rows:
+        uid = row["telegram_id"]
+        # −20% final-hour offer for paid subscriptions (trials get their own funnel).
+        if row["source"] != "trial":
+            await set_offer(uid, "sub_end", DISCOUNT_SUB_1H_PCT, utcnow() + timedelta(days=1))
+        await _send_auto(bot, uid, _text("sub_1h", _DEF_SUB_1H),
+                         offer_keyboard("🎁 Забрать скидку", pct=DISCOUNT_SUB_1H_PCT))
+        await mark_reminder_sent(uid, "reminder_1h_sent")
+    if rows:
+        logger.info("Sent %d final-hour reminders", len(rows))
 
 
 async def reminder_loop(bot: Bot) -> None:
@@ -225,6 +272,7 @@ async def reminder_loop(bot: Bot) -> None:
             await _refresh_ov()
             await _send_3day(bot)
             await _send_day_of(bot)
+            await _send_1h(bot)
         except Exception:  # noqa: BLE001 - keep the loop alive
             logger.exception("reminder_loop iteration failed")
         await asyncio.sleep(REMINDER_INTERVAL_SECONDS)
@@ -245,11 +293,11 @@ async def expiry_cleanup_loop(bot: Bot) -> None:
                     continue
                 if not _enabled("sub_expired"):
                     continue  # message off — но деактивация панели уже сделана
-                # −20% restore offer right at expiry.
-                await set_offer(uid, "sub_end", DISCOUNT_SUB_END_PCT, utcnow() + timedelta(days=1))
+                # −25% restore offer right at expiry.
+                await set_offer(uid, "sub_end", DISCOUNT_SUB_EXPIRED_PCT, utcnow() + timedelta(days=1))
                 await _send_auto(
                     bot, uid, _text("sub_expired", _DEF_SUB_EXPIRED),
-                    offer_keyboard("🔑 Восстановить доступ −20%", pct=DISCOUNT_SUB_END_PCT),
+                    offer_keyboard("🎁 Забрать скидку", pct=DISCOUNT_SUB_EXPIRED_PCT),
                 )
             if rows:
                 logger.info("Expired %d subscriptions", len(rows))

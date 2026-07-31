@@ -19,8 +19,9 @@ logger = logging.getLogger(__name__)
 _UPSERT_SUB = """
 INSERT INTO subscriptions (
     telegram_id, panel_uuid, vless_uuid, subscription_url, expires_at,
-    status, source, reminder_24h_sent, reminder_3h_sent, activated_at
-) VALUES ($1, $2, $3, $4, $5, 'active', $6, FALSE, FALSE, NOW())
+    status, source, reminder_24h_sent, reminder_3h_sent, reminder_1h_sent,
+    activated_at
+) VALUES ($1, $2, $3, $4, $5, 'active', $6, FALSE, FALSE, FALSE, NOW())
 ON CONFLICT (telegram_id) DO UPDATE SET
     panel_uuid        = EXCLUDED.panel_uuid,
     vless_uuid        = EXCLUDED.vless_uuid,
@@ -30,6 +31,7 @@ ON CONFLICT (telegram_id) DO UPDATE SET
     source            = EXCLUDED.source,
     reminder_24h_sent = FALSE,
     reminder_3h_sent  = FALSE,
+    reminder_1h_sent  = FALSE,
     trial_1h_sent     = FALSE,
     activated_at      = NOW()
 RETURNING *
@@ -241,6 +243,7 @@ async def revoke_subscription(telegram_id: int) -> asyncpg.Record | None:
 _REMINDER_COLUMNS = {
     "reminder_24h_sent": "3 days",
     "reminder_3h_sent": "1 day",
+    "reminder_1h_sent": "1 hour",
 }
 
 
