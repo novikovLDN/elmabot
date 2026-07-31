@@ -132,7 +132,9 @@ python main.py
 | `DEVICE_LIMIT` | лимит устройств на пользователя (default 5) |
 | `TRAFFIC_LIMIT_BYTES` | лимит трафика в байтах, `0` = безлимит (default 0) |
 | `REFERRAL_BONUS_DAYS` | бонус инвайтеру за купившего друга (default 7) |
-| `DISCOUNT_TRIAL_END_PCT` / `DISCOUNT_SUB_END_PCT` / `DISCOUNT_REACTIVATION_PCT` | скидки в % (default 10/20/20) |
+| `DISCOUNT_TRIAL_END_PCT` / `DISCOUNT_SUB_END_PCT` | скидки в % (default 10/20) |
+| `DISCOUNT_SUB_DAYOF_PCT` / `DISCOUNT_SUB_1H_PCT` / `DISCOUNT_SUB_EXPIRED_PCT` | лестница скидок к концу платной: за 24ч / за 1ч / при окончании (default 15/20/25) |
+| `DISCOUNT_REACT_1_PCT` / `DISCOUNT_REACT_2_PCT` / `DISCOUNT_REACT_3_PCT` | лестница возврата после окончания: 7ч / 24ч / 72ч (default 25/30/40) |
 | `REACTIVATION_AFTER_DAYS` | через сколько дней после истечения слать оффер реактивации (default 3) |
 | `APP_IOS_URL` / `APP_ANDROID_URL` / `APP_MACOS_URL` / `APP_WINDOWS_URL` / `APP_ANDROIDTV_URL` | ссылки на скачивание клиента на экранах подключения (по умолчанию — публичный Happ) |
 | `APP_IOS_RU_URL` / `APP_IOS_INTL_URL` | ссылки Happ для iOS: Россия / другой регион (по умолчанию обе = `APP_IOS_URL`) |

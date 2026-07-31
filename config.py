@@ -143,7 +143,12 @@ DISCOUNT_SUB_END_PCT = _get_int("DISCOUNT_SUB_END_PCT", 20)
 DISCOUNT_SUB_DAYOF_PCT = _get_int("DISCOUNT_SUB_DAYOF_PCT", 15)     # 24h before end
 DISCOUNT_SUB_1H_PCT = _get_int("DISCOUNT_SUB_1H_PCT", 20)           # 1h before end
 DISCOUNT_SUB_EXPIRED_PCT = _get_int("DISCOUNT_SUB_EXPIRED_PCT", 25)  # at/after expiry
-# −20% to reactivate 3 days after a subscription was disconnected.
+# Win-back ladder after a paid subscription lapses — three escalating offers at
+# 7h / 24h / 72h past expiry, with growing discounts to pull the user back.
+DISCOUNT_REACT_1_PCT = _get_int("DISCOUNT_REACT_1_PCT", 25)  # ~7h after expiry
+DISCOUNT_REACT_2_PCT = _get_int("DISCOUNT_REACT_2_PCT", 30)  # ~24h after expiry
+DISCOUNT_REACT_3_PCT = _get_int("DISCOUNT_REACT_3_PCT", 40)  # ~72h after expiry
+# Legacy single-offer knob (kept for env compatibility; superseded by the ladder).
 DISCOUNT_REACTIVATION_PCT = _get_int("DISCOUNT_REACTIVATION_PCT", 20)
 # How many days after expiry the reactivation offer fires.
 REACTIVATION_AFTER_DAYS = _get_int("REACTIVATION_AFTER_DAYS", 3)

@@ -6,8 +6,8 @@ the whole lite build.
 
 Timelines:
 - PAID subs: 3 days before renewal nudge, then an escalating discount ladder —
-  −15% ~24h before expiry, −20% in the final hour, −25% right at expiry — and a
-  −20% reactivation offer 3 days after expiry.
+  −15% ~24h before expiry, −20% in the final hour, −25% right at expiry — then a
+  win-back ladder after expiry: −25% at ~7h, −30% at ~24h, −40% at ~72h.
 - TRIAL users: a dedicated 7-step conversion funnel (see ``_trial_funnel``) with
   escalating discounts; nothing else messages trial users.
 """
@@ -21,18 +21,19 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 import config
 from config import (
-    DISCOUNT_REACTIVATION_PCT,
+    DISCOUNT_REACT_1_PCT,
+    DISCOUNT_REACT_2_PCT,
+    DISCOUNT_REACT_3_PCT,
     DISCOUNT_SUB_1H_PCT,
     DISCOUNT_SUB_DAYOF_PCT,
     DISCOUNT_SUB_EXPIRED_PCT,
     EXPIRY_INTERVAL_SECONDS,
-    REACTIVATION_AFTER_DAYS,
     REMINDER_INTERVAL_SECONDS,
 )
 from database import (
     all_bypass,
     automation_due_users,
-    due_reactivation_offers_h,
+    due_reactivation_ladder,
     due_reminders,
     due_trial_funnel,
     enabled_automations,
@@ -41,7 +42,7 @@ from database import (
     list_overrides,
     mark_automation_sent,
     mark_expired,
-    mark_react_offer_sent,
+    set_react_stage,
     mark_reminder_sent,
     mark_unreachable,
     pending_payments_recent,
@@ -95,7 +96,10 @@ def _offset(key: str, default: int) -> int:
 _OFF_SUB_3DAY = 72   # hours before paid expiry (first reminder)
 _OFF_SUB_DAYOF = 24  # hours before paid expiry (second reminder, −15%)
 _OFF_SUB_1H = 1      # hours before paid expiry (final-hour reminder, −20%)
-_OFF_REACT = REACTIVATION_AFTER_DAYS * 24  # hours after expiry
+# Win-back ladder: default hours after paid expiry for each escalating step.
+_OFF_REACT_1 = 7
+_OFF_REACT_2 = 24
+_OFF_REACT_3 = 72
 # Trial funnel: (anchor 'start'|'end', sign +after/-before, default hours).
 _FUNNEL_TIMING: dict[int, tuple[str, int, int]] = {
     1: ("start", +1, 4), 2: ("end", -1, 24), 3: ("end", -1, 7),
@@ -142,12 +146,34 @@ _DEF_SUB_EXPIRED = (
     "![🛍](tg://emoji?id=5406683434124859552)Подписка закончилась, восстанови всё за минуту\n\n"
     "<b>Один клик — и ты снова в сети !</b>![👇](tg://emoji?id=5231102735817918643)"
 )
-_DEF_REACT = (
-    "☁️ <b>Соскучился по свободному интернету?</b>\n\n"
-    "Ты был с нами — и мы помним 🤍\n\n"
-    f"Возвращайся со скидкой {DISCOUNT_REACTIVATION_PCT}% —\n"
-    "это только для тебя."
+# Win-back ladder — three escalating offers after a paid subscription lapses.
+_DEF_REACT_1 = (  # ~7h after expiry, −25%
+    "![🛍](tg://emoji?id=5406683434124859552)<b>-25% на все тарифы ждут тебя!</b>\n\n"
+    "![💎](tg://emoji?id=5235630047959727475)Осталось буквально несколько часов "
+    "чтобы воспользоваться скидкой\n\n"
+    "<b>Не теряй ни минуты, забирай скидку прямо сейчас</b>! "
+    "![👇](tg://emoji?id=5231102735817918643)"
 )
+_DEF_REACT_2 = (  # ~24h after expiry, −30%
+    "![🛍](tg://emoji?id=5406683434124859552)<b>-30% твой подарок на все тарифы</b>\n\n"
+    "Бесплатные VPN сейчас блокируют первыми ![🛰](tg://emoji?id=5321304062715517873)\n\n"
+    "<b>ELMA хочет тебя защитить. Оставайся с нами</b>"
+    "![👇](tg://emoji?id=5231102735817918643)"
+)
+_DEF_REACT_3 = (  # ~72h after expiry, −40%
+    "<b>−40% твой подарок от ELMA !</b>![🛍](tg://emoji?id=5406683434124859552)\n\n"
+    "Мы давно тебя не видели и решили порадовать !"
+    "![💎](tg://emoji?id=5235630047959727475)\n\n"
+    "<b>Самая большая скидка на все тарифы — только сейчас</b> "
+    "![👇](tg://emoji?id=5231102735817918643)"
+)
+
+# stage -> (default hours after expiry, discount pct, default text)
+_REACT_STEPS: dict[int, tuple[int, int, str]] = {
+    1: (_OFF_REACT_1, DISCOUNT_REACT_1_PCT, _DEF_REACT_1),
+    2: (_OFF_REACT_2, DISCOUNT_REACT_2_PCT, _DEF_REACT_2),
+    3: (_OFF_REACT_3, DISCOUNT_REACT_3_PCT, _DEF_REACT_3),
+}
 
 
 def builtin_registry() -> list[dict]:
@@ -176,9 +202,20 @@ def builtin_registry() -> list[dict]:
          "name": f"Платная истекла (даёт −{DISCOUNT_SUB_EXPIRED_PCT}%)",
          "when": "Сразу при окончании платной подписки", "default": _DEF_SUB_EXPIRED,
          "timing": False},
-        {"key": "reactivation", "name": "Возврат после окончания (−%)",
-         "when": "Через N часов после окончания платной", "default": _DEF_REACT,
-         "timing": True, "offset_default": _OFF_REACT,
+        {"key": "react_1",
+         "name": f"Возврат · шаг 1 (даёт −{DISCOUNT_REACT_1_PCT}%)",
+         "when": "Через ~7 часов после окончания платной", "default": _DEF_REACT_1,
+         "timing": True, "offset_default": _OFF_REACT_1,
+         "offset_label": "Через сколько часов после окончания подписки"},
+        {"key": "react_2",
+         "name": f"Возврат · шаг 2 (даёт −{DISCOUNT_REACT_2_PCT}%)",
+         "when": "Через ~24 часа после окончания платной", "default": _DEF_REACT_2,
+         "timing": True, "offset_default": _OFF_REACT_2,
+         "offset_label": "Через сколько часов после окончания подписки"},
+        {"key": "react_3",
+         "name": f"Возврат · шаг 3 (даёт −{DISCOUNT_REACT_3_PCT}%)",
+         "when": "Через ~72 часа после окончания платной", "default": _DEF_REACT_3,
+         "timing": True, "offset_default": _OFF_REACT_3,
          "offset_label": "Через сколько часов после окончания подписки"},
         {"key": "traffic", "name": "Обход · мало трафика",
          "when": "При низком остатке ГБ обхода (6 уровней)",
@@ -432,22 +469,37 @@ async def _trial_funnel(bot: Bot) -> None:
 
 
 async def _reactivation_offers(bot: Bot) -> None:
-    if not _enabled("reactivation"):
-        return
-    rows = await due_reactivation_offers_h(_offset("reactivation", _OFF_REACT))
+    """Win-back ladder: three escalating discount offers (default −25/−30/−40%)
+    at ~7h / 24h / 72h after a paid subscription lapsed. Modelled on the trial
+    funnel — each user advances at most one step per tick and never repeats a
+    step (``react_stage`` guards it)."""
+    # Effective per-step timing (override or default); the earliest one prefilters
+    # candidates in the DB.
+    offs = {s: _offset(f"react_{s}", d[0]) for s, d in _REACT_STEPS.items()}
+    rows = await due_reactivation_ladder(min(offs.values()))
+    now = utcnow()
+    sent = 0
     for row in rows:
         uid = row["telegram_id"]
-        await set_offer(uid, "reactivation", DISCOUNT_REACTIVATION_PCT, utcnow() + timedelta(days=1))
-        await mark_react_offer_sent(uid)
-        await _send_auto(
-            bot, uid, _text("reactivation", _DEF_REACT),
-            offer_keyboard(
-                f"🔑 Купить со скидкой −{DISCOUNT_REACTIVATION_PCT}%",
-                pct=DISCOUNT_REACTIVATION_PCT,
-            ),
-        )
-    if rows:
-        logger.info("Sent %d reactivation offers", len(rows))
+        # Highest step whose configured delay has already elapsed.
+        target = 0
+        for s in (1, 2, 3):
+            if row["expires_at"] + timedelta(hours=offs[s]) <= now:
+                target = s
+        if target <= row["react_stage"]:
+            continue
+        key = f"react_{target}"
+        _, pct, default_text = _REACT_STEPS[target]
+        if not _enabled(key):
+            await set_react_stage(uid, target)  # step off — still advance
+            continue
+        await set_offer(uid, "reactivation", pct, now + timedelta(days=1))
+        await _send_auto(bot, uid, _text(key, default_text),
+                         offer_keyboard("🎁 Забрать скидку", pct=pct))
+        await set_react_stage(uid, target)
+        sent += 1
+    if sent:
+        logger.info("Sent %d reactivation offers", sent)
 
 
 async def offer_loop(bot: Bot) -> None:
@@ -455,7 +507,7 @@ async def offer_loop(bot: Bot) -> None:
         try:
             await _refresh_ov()
             await _trial_funnel(bot)          # trial conversion (7 steps)
-            await _reactivation_offers(bot)   # paid win-back, 3 days after expiry
+            await _reactivation_offers(bot)   # paid win-back ladder (7h/24h/72h)
             await _run_custom_automations(bot)  # admin-created automations
         except Exception:  # noqa: BLE001 - keep the loop alive
             logger.exception("offer_loop iteration failed")

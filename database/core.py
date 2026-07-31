@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     reminder_3h_sent  BOOLEAN DEFAULT FALSE,
     reminder_1h_sent  BOOLEAN DEFAULT FALSE,
     react_offer_sent  BOOLEAN DEFAULT FALSE,
+    react_stage       SMALLINT NOT NULL DEFAULT 0,
     trial_1h_sent     BOOLEAN DEFAULT FALSE,
     created_at        TIMESTAMPTZ DEFAULT NOW(),
     activated_at      TIMESTAMPTZ DEFAULT NOW()
@@ -108,6 +109,10 @@ ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS created_at       TIMESTAMPTZ 
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS react_offer_sent BOOLEAN DEFAULT FALSE;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS trial_1h_sent    BOOLEAN DEFAULT FALSE;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS reminder_1h_sent BOOLEAN DEFAULT FALSE;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS react_stage      SMALLINT NOT NULL DEFAULT 0;
+-- Users who already received the old single reactivation offer start the new
+-- win-back ladder as "done" (stage 3), so upgrading never re-blasts them.
+UPDATE subscriptions SET react_stage = 3 WHERE react_offer_sent = TRUE AND react_stage = 0;
 
 CREATE TABLE IF NOT EXISTS payments (
     id             BIGSERIAL PRIMARY KEY,

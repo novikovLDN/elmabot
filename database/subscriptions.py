@@ -32,6 +32,8 @@ ON CONFLICT (telegram_id) DO UPDATE SET
     reminder_24h_sent = FALSE,
     reminder_3h_sent  = FALSE,
     reminder_1h_sent  = FALSE,
+    react_offer_sent  = FALSE,
+    react_stage       = 0,
     trial_1h_sent     = FALSE,
     activated_at      = NOW()
 RETURNING *
@@ -359,35 +361,38 @@ async def due_trial_end_offers() -> list[asyncpg.Record]:
     )
 
 
-async def due_reactivation_offers(after_days: int) -> list[asyncpg.Record]:
-    return await due_reactivation_offers_h(int(after_days) * 24)
+async def due_reactivation_ladder(
+    min_hours: int, max_days: int = 14
+) -> list[asyncpg.Record]:
+    """Expired paid, reachable subs eligible for the win-back ladder: lapsed at
+    least ``min_hours`` ago (the earliest ladder step) but no more than
+    ``max_days`` ago, and not yet through all three steps (``react_stage`` < 3).
 
-
-async def due_reactivation_offers_h(after_hours: int) -> list[asyncpg.Record]:
-    """Subscriptions that expired ~``after_hours`` ago (a 24h window so old
-    backlog is not spammed) — candidates for the reactivation offer."""
-    h = int(after_hours)
+    The upper bound keeps a first deploy / long outage from blasting the whole
+    historical backlog; ``react_stage`` guarantees each step fires at most once.
+    """
     pool = get_pool()
     return await pool.fetch(
         f"""
-        SELECT s.telegram_id
+        SELECT s.telegram_id, s.expires_at, s.react_stage
         FROM subscriptions s
         JOIN users u ON u.telegram_id = s.telegram_id
         WHERE s.status = 'expired'
           AND s.source <> 'trial'
-          AND NOT s.react_offer_sent
+          AND s.react_stage < 3
           AND u.is_reachable
-          AND s.expires_at <  NOW() - INTERVAL '{h} hours'
-          AND s.expires_at >= NOW() - INTERVAL '{h + 24} hours'
+          AND s.expires_at <  NOW() - INTERVAL '{int(min_hours)} hours'
+          AND s.expires_at >= NOW() - INTERVAL '{int(max_days)} days'
         """
     )
 
 
-async def mark_react_offer_sent(telegram_id: int) -> None:
+async def set_react_stage(telegram_id: int, stage: int) -> None:
     pool = get_pool()
     await pool.execute(
-        "UPDATE subscriptions SET react_offer_sent = TRUE WHERE telegram_id = $1",
+        "UPDATE subscriptions SET react_stage = $2 WHERE telegram_id = $1",
         telegram_id,
+        int(stage),
     )
 
 
