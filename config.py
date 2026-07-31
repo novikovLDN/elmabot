@@ -175,9 +175,13 @@ APP_ANDROIDTV_URL = _get_str(
     "https://play.google.com/store/apps/details?id=com.happproxy",
 )
 # iOS shows two Happ store links (Russia / other region) plus an optional Incy
-# link. Both Happ links default to APP_IOS_URL; the Incy download button is
-# hidden until APP_INCY_IOS_URL is set.
-APP_IOS_RU_URL = _get_str("APP_IOS_RU_URL", APP_IOS_URL)
+# link. The RU link points at the Russian App Store "Happ Proxy Utility Plus";
+# the international link defaults to APP_IOS_URL. Incy download button is hidden
+# until APP_INCY_IOS_URL is set.
+APP_IOS_RU_URL = _get_str(
+    "APP_IOS_RU_URL",
+    "https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6788279553?l=en-GB",
+)
 APP_IOS_INTL_URL = _get_str("APP_IOS_INTL_URL", APP_IOS_URL)
 # Incy download links. iOS and macOS share the App Store URL (Apple Silicon Macs
 # install the iOS app); Android has its own Play Market entry. Incy has no
