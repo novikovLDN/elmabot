@@ -65,10 +65,6 @@ def cabinet_keyboard(*, has_active_sub: bool, has_bypass: bool = False) -> Inlin
             text="Докупить ГБ обхода" if has_bypass else "Обход блокировок",
             callback_data="tr:open", style="success", icon_custom_emoji_id=emoji.GB,
         )
-    kb.button(text="Реферальная программа", callback_data="menu:referral",
-              style="primary", icon_custom_emoji_id=emoji.REFERRAL)
-    kb.button(text="Подарить", callback_data="gift:open",
-              style="primary", icon_custom_emoji_id=emoji.GIFT)
     kb.button(text="Поддержка", url=_support_url(),
               style="primary", icon_custom_emoji_id=emoji.HELP)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
@@ -201,7 +197,10 @@ def tariffs_keyboard(
             text=label, callback_data=data, icon_custom_emoji_id=icon,
             style=style or "success",
         )
-    # Promo code is applied at checkout — its natural home is the tariff screen.
+    # Gift a subscription instead of buying for yourself, and apply a promo code
+    # — both belong on the tariff/checkout screen.
+    kb.button(text="Подарить", callback_data="gift:open",
+              style="primary", icon_custom_emoji_id=emoji.GIFT)
     kb.button(text="🎟 Промокод", callback_data="promo:enter")
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
