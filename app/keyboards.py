@@ -65,18 +65,12 @@ def cabinet_keyboard(*, has_active_sub: bool, has_bypass: bool = False) -> Inlin
             text="Докупить ГБ обхода" if has_bypass else "Обход блокировок",
             callback_data="tr:open", style="success", icon_custom_emoji_id=emoji.GB,
         )
-    # The cabinet is the "everything else" hub — secondary features relocated
-    # here from the (now minimal) main menu.
-    kb.button(text="📲 Добавить устройство", callback_data="hw:add", style="primary")
     kb.button(text="Реферальная программа", callback_data="menu:referral",
               style="primary", icon_custom_emoji_id=emoji.REFERRAL)
     kb.button(text="Подарить", callback_data="gift:open",
               style="primary", icon_custom_emoji_id=emoji.GIFT)
-    kb.button(text="🎟 Промокод", callback_data="promo:enter")
     kb.button(text="Поддержка", url=_support_url(),
               style="primary", icon_custom_emoji_id=emoji.HELP)
-    kb.button(text="О сервисе", callback_data="about:open",
-              icon_custom_emoji_id=emoji.ABOUT)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
@@ -135,9 +129,10 @@ def devices_keyboard() -> InlineKeyboardMarkup:
     kb.button(text="Windows", callback_data="dl:windows", style="primary", icon_custom_emoji_id=emoji.DEV_WINDOWS)
     kb.button(text="Android TV", callback_data="dl:androidtv", style="primary", icon_custom_emoji_id=emoji.DEV_ANDROIDTV)
     kb.button(text="Apple TV", callback_data="dl:appletv", style="primary", icon_custom_emoji_id=emoji.DEV_APPLETV)
+    kb.button(text="➕ Добавить устройство", callback_data="hw:add", style="primary")
     kb.button(text="Поделиться", callback_data="share:open", style="primary", icon_custom_emoji_id=emoji.SHARE)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
-    kb.adjust(2, 2, 2, 1, 1)
+    kb.adjust(2, 2, 2, 1, 1, 1)
     return kb.as_markup()
 
 
@@ -206,6 +201,8 @@ def tariffs_keyboard(
             text=label, callback_data=data, icon_custom_emoji_id=icon,
             style=style or "success",
         )
+    # Promo code is applied at checkout — its natural home is the tariff screen.
+    kb.button(text="🎟 Промокод", callback_data="promo:enter")
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()

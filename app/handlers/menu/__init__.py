@@ -315,6 +315,7 @@ def _help_kb():
     kb.button(text="📖 Частые вопросы", callback_data="help:faq")
     kb.button(text="📲 Инструкции", callback_data="dev:menu")
     kb.button(text="💬 Написать оператору", url=SUPPORT_URL)
+    kb.button(text="ℹ️ О сервисе", callback_data="about:open")
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
