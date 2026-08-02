@@ -21,33 +21,30 @@ def main_menu_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
     sub_text = "Продлить подписку" if has_active_sub else "Купить подписку"
 
     kb = InlineKeyboardBuilder()
-    # Bot API button styles: "primary" (blue), "success" (green), "danger" (red).
-    # Colour scheme: green = money path (buy / top-up), blue = navigation &
-    # secondary actions, grey (no style) = help / info footer.
-    kb.button(text="Подключиться", callback_data="dev:menu",
-              style="primary", icon_custom_emoji_id=emoji.CONNECT)
-    kb.button(text="📲 Добавить устройство", callback_data="hw:add", style="primary")
-    kb.button(text="Личный кабинет", callback_data="menu:cabinet",
-              style="primary", icon_custom_emoji_id=emoji.CABINET)
-    # Right under the cabinet: «Купить ГБ» | «Купить/Продлить подписку».
+    # Simplified main menu (reference-style, ~6 items). Colour scheme: green =
+    # money path (buy / top-up), blue = navigation, grey = troubleshooting.
+    # Secondary features (Добавить устройство, Подарить, Промокод, О сервисе)
+    # live in the cabinet to keep this screen clean.
+    kb.button(text=sub_text, callback_data="menu:buy",
+              style="success", icon_custom_emoji_id=emoji.SUB)
     if BYPASS_ENABLED:
         kb.button(text="Купить ГБ", callback_data="tr:open",
                   style="success", icon_custom_emoji_id=emoji.GB)
-        kb.button(text=sub_text, callback_data="menu:buy",
-                  style="success", icon_custom_emoji_id=emoji.SUB)
-        buy_row = (2,)
-    else:
-        kb.button(text=sub_text, callback_data="menu:buy",
-                  style="success", icon_custom_emoji_id=emoji.SUB)
-        buy_row = (1,)
-    kb.button(text="Реферальная программа", callback_data="menu:referral",
+    kb.button(text="Личный кабинет", callback_data="menu:cabinet",
+              style="primary", icon_custom_emoji_id=emoji.CABINET)
+    kb.button(text="Пригласить друзей", callback_data="menu:referral",
               style="primary", icon_custom_emoji_id=emoji.REFERRAL)
-    kb.button(text="Подарить", callback_data="gift:open",
-              style="primary", icon_custom_emoji_id=emoji.GIFT)
-    kb.button(text="🎟 Промокод", callback_data="promo:enter")
-    kb.button(text="Помощь", callback_data="help:open", icon_custom_emoji_id=emoji.HELP)
-    kb.button(text="О сервисе", callback_data="about:open", icon_custom_emoji_id=emoji.ABOUT)
-    kb.adjust(1, 1, 1, *buy_row, 2, 1, 2)
+    kb.button(text="Подключиться", callback_data="dev:menu",
+              style="primary", icon_custom_emoji_id=emoji.CONNECT)
+    kb.button(text="Инструкции", callback_data="help:open",
+              style="primary", icon_custom_emoji_id=emoji.HELP)
+    kb.button(text="🆘 Не работает VPN?", callback_data="faq:novpn")
+    # green buy (+ГБ) on top, blue nav, «Подключиться | Инструкции» paired,
+    # grey troubleshooting last.
+    if BYPASS_ENABLED:
+        kb.adjust(1, 1, 1, 1, 2, 1)
+    else:
+        kb.adjust(1, 1, 1, 2, 1)
     return kb.as_markup()
 
 
@@ -68,10 +65,18 @@ def cabinet_keyboard(*, has_active_sub: bool, has_bypass: bool = False) -> Inlin
             text="Докупить ГБ обхода" if has_bypass else "Обход блокировок",
             callback_data="tr:open", style="success", icon_custom_emoji_id=emoji.GB,
         )
+    # The cabinet is the "everything else" hub — secondary features relocated
+    # here from the (now minimal) main menu.
+    kb.button(text="📲 Добавить устройство", callback_data="hw:add", style="primary")
     kb.button(text="Реферальная программа", callback_data="menu:referral",
               style="primary", icon_custom_emoji_id=emoji.REFERRAL)
+    kb.button(text="Подарить", callback_data="gift:open",
+              style="primary", icon_custom_emoji_id=emoji.GIFT)
+    kb.button(text="🎟 Промокод", callback_data="promo:enter")
     kb.button(text="Поддержка", url=_support_url(),
               style="primary", icon_custom_emoji_id=emoji.HELP)
+    kb.button(text="О сервисе", callback_data="about:open",
+              icon_custom_emoji_id=emoji.ABOUT)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
