@@ -107,26 +107,52 @@ async def send_screen(
     reply_markup: InlineKeyboardMarkup | None = None,
 ) -> Message | None:
     """Send a screen as a photo+caption when an image is configured for ``key``
-    (see :mod:`app.screens`), otherwise as a plain text message. Falls back to
-    text if the photo send fails (e.g. a stale file_id)."""
+    (see :mod:`app.screens`), otherwise as a plain text message.
+
+    Premium-emoji markdown ``![x](tg://emoji?id=N)`` is converted to a
+    ``<tg-emoji>`` tag; if Telegram rejects it (an id the bot can't use) we retry
+    with the plain fallback emoji. Falls back to a text message if the photo send
+    fails entirely (e.g. a stale file_id)."""
     from app.screens import screen_image
 
     file_id = screen_image(key)
+    # (premium-emoji rendering, plain-emoji fallback)
+    variants = (convert_tg_emoji(text), strip_tg_emoji(text))
     if file_id:
+        for i, caption in enumerate(variants):
+            try:
+                return await bot.send_photo(
+                    chat_id,
+                    file_id,
+                    caption=caption,
+                    parse_mode="HTML",
+                    reply_markup=reply_markup,
+                )
+            except TelegramForbiddenError:
+                await mark_unreachable(chat_id)
+                return None
+            except TelegramBadRequest:
+                # A rejected premium emoji -> retry stripped; if the stripped
+                # caption also fails the file_id is bad -> drop to text below.
+                if i == 0:
+                    continue
+                logger.warning("send_screen photo failed for %r; sending text", key)
+    for i, body in enumerate(variants):
         try:
-            return await bot.send_photo(
-                chat_id,
-                file_id,
-                caption=text,
-                parse_mode="HTML",
-                reply_markup=reply_markup,
+            return await bot.send_message(
+                chat_id, body, parse_mode="HTML", reply_markup=reply_markup,
             )
         except TelegramForbiddenError:
             await mark_unreachable(chat_id)
             return None
-        except TelegramBadRequest:
-            logger.exception("send_screen photo failed for %r; sending text", key)
-    return await safe_send(bot, chat_id, text, reply_markup=reply_markup)
+        except TelegramBadRequest as exc:
+            if "chat not found" in str(exc).lower():
+                await mark_unreachable(chat_id)
+                return None
+            if i == 0:
+                continue  # retry with the plain-emoji fallback
+            logger.exception("send_screen text failed for %r", key)
+    return None
 
 
 async def show_screen(
