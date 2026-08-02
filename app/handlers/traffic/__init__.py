@@ -32,19 +32,32 @@ INTRO = (
 )
 
 
-def _packs_keyboard(packs: dict[int, dict], *, extended: bool) -> InlineKeyboardBuilder:
+def _origin(data: str) -> str:
+    """Trailing origin token of a traffic callback: 'c' (opened from the cabinet)
+    or 'm' (from the main menu; the default for any legacy / external callback)."""
+    return "c" if data.split(":")[-1] == "c" else "m"
+
+
+def _back_cb(origin: str) -> str:
+    """Where the top-level «Назад» returns — the screen the user came from."""
+    return "menu:cabinet" if origin == "c" else "menu:main"
+
+
+def _packs_keyboard(
+    packs: dict[int, dict], *, extended: bool, origin: str
+) -> InlineKeyboardBuilder:
     kb = InlineKeyboardBuilder()
     for gb, p in packs.items():
         label = f"{gb} ГБ — {p['price']} ₽"
         if p["discount"]:
             label += f"  {p['discount']}"
-        kb.button(text=label, callback_data=f"tr:pack:{gb}", style="success")
+        kb.button(text=label, callback_data=f"tr:pack:{gb}:{origin}", style="success")
     rows = [2] * (len(packs) // 2) + ([1] if len(packs) % 2 else [])
     if extended:
-        kb.button(text="← Базовые пакеты", callback_data="tr:open", style="primary")
+        kb.button(text="← Базовые пакеты", callback_data=f"tr:open:{origin}", style="primary")
     else:
-        kb.button(text="📦 Больше объёма →", callback_data="tr:ext", style="primary")
-    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:cabinet")
+        kb.button(text="📦 Больше объёма →", callback_data=f"tr:ext:{origin}", style="primary")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=_back_cb(origin))
     kb.adjust(*rows, 1, 1)
     return kb
 
@@ -62,31 +75,36 @@ async def _intro_text(uid: int) -> str:
     return INTRO
 
 
-@router.callback_query(F.data == "tr:open")
+@router.callback_query(F.data.startswith("tr:open"))
 async def cb_open(call: CallbackQuery) -> None:
     if not config.BYPASS_ENABLED:
         await call.answer("Обход скоро будет доступен ✨", show_alert=True)
         return
+    origin = _origin(call.data)
     text = await _intro_text(call.from_user.id)
-    await safe_edit(call.message, text,
-                    reply_markup=_packs_keyboard(config.TRAFFIC_PACKS, extended=False).as_markup())
+    await safe_edit(
+        call.message, text,
+        reply_markup=_packs_keyboard(config.TRAFFIC_PACKS, extended=False, origin=origin).as_markup(),
+    )
     await call.answer()
 
 
-@router.callback_query(F.data == "tr:ext")
+@router.callback_query(F.data.startswith("tr:ext"))
 async def cb_extended(call: CallbackQuery) -> None:
+    origin = _origin(call.data)
     await safe_edit(
         call.message,
         "📦 <b>Большие пакеты обхода</b>\n\nЧем больше объём — тем выгоднее 👇",
-        reply_markup=_packs_keyboard(config.TRAFFIC_PACKS_EXTENDED, extended=True).as_markup(),
+        reply_markup=_packs_keyboard(config.TRAFFIC_PACKS_EXTENDED, extended=True, origin=origin).as_markup(),
     )
     await call.answer()
 
 
 @router.callback_query(F.data.startswith("tr:pack:"))
 async def cb_pack(call: CallbackQuery) -> None:
+    parts = call.data.split(":")  # tr:pack:<gb>[:origin]
     try:
-        gb = int(call.data.split(":")[2])
+        gb = int(parts[2])
     except (IndexError, ValueError):
         await call.answer()
         return
@@ -94,7 +112,10 @@ async def cb_pack(call: CallbackQuery) -> None:
     if pack is None:
         await call.answer()
         return
-    back = "tr:ext" if gb in config.TRAFFIC_PACKS_EXTENDED else "tr:open"
+    origin = _origin(call.data)
+    # Back to the list the pack was picked from — carrying the origin so its own
+    # «Назад» still returns to where the whole flow started.
+    inner = "tr:ext" if gb in config.TRAFFIC_PACKS_EXTENDED else "tr:open"
     text = (
         f"📦 <b>{gb} ГБ обхода</b>\n\n"
         f"💰 Стоимость: <b>{pack['price']} ₽</b>\n"
@@ -103,19 +124,22 @@ async def cb_pack(call: CallbackQuery) -> None:
     )
     await safe_edit(
         call.message, text,
-        reply_markup=payment_methods_keyboard(str(gb), back_data=back, prefix="trpay"),
+        reply_markup=payment_methods_keyboard(
+            f"{gb}:{origin}", back_data=f"{inner}:{origin}", prefix="trpay"
+        ),
     )
     await call.answer()
 
 
 @router.callback_query(F.data.startswith("trpay:"))
 async def cb_method(call: CallbackQuery) -> None:
-    _, method, gb_s = call.data.split(":", 2)
+    parts = call.data.split(":")  # trpay:<method>:<gb>[:origin]
     try:
-        gb = int(gb_s)
-    except ValueError:
+        method, gb = parts[1], int(parts[2])
+    except (IndexError, ValueError):
         await call.answer()
         return
+    origin = _origin(call.data)
     pack = config.traffic_pack(gb)
     if pack is None or method not in _PLATEGA_METHODS:
         await call.answer()
@@ -164,7 +188,8 @@ async def cb_method(call: CallbackQuery) -> None:
     method_label = "СБП" if method == "sbp" else "картой"
     kb = InlineKeyboardBuilder()
     kb.button(text=f"💳 Оплатить {price} ₽", url=pay_url, style="success")
-    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"tr:pack:{gb}")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK,
+              callback_data=f"tr:pack:{gb}:{origin}")
     kb.adjust(1)
     await safe_edit(
         call.message,
@@ -183,5 +208,6 @@ async def cmd_traffic(message: Message) -> None:
         return
     text = await _intro_text(message.from_user.id)
     await message.answer(
-        text, reply_markup=_packs_keyboard(config.TRAFFIC_PACKS, extended=False).as_markup()
+        text,
+        reply_markup=_packs_keyboard(config.TRAFFIC_PACKS, extended=False, origin="m").as_markup(),
     )

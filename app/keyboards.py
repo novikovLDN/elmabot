@@ -28,7 +28,8 @@ def main_menu_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
     kb.button(text=sub_text, callback_data="menu:buy",
               style="success", icon_custom_emoji_id=emoji.SUB)
     if BYPASS_ENABLED:
-        kb.button(text="Купить ГБ", callback_data="tr:open",
+        # ":m" — opened from the main menu, so its Назад returns to the main menu.
+        kb.button(text="Пополнить ГБ", callback_data="tr:open:m",
                   style="success", icon_custom_emoji_id=emoji.GB)
     kb.button(text="Личный кабинет", callback_data="menu:cabinet",
               style="primary", icon_custom_emoji_id=emoji.CABINET)
@@ -38,7 +39,7 @@ def main_menu_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
               style="primary", icon_custom_emoji_id=emoji.CONNECT)
     kb.button(text="Инструкции", callback_data="help:open",
               style="primary", icon_custom_emoji_id=emoji.HELP)
-    kb.button(text="🆘 Не работает VPN?", callback_data="faq:novpn")
+    kb.button(text="🆘 Не работает VPN?", callback_data="faq:novpn:main")
     # green buy (+ГБ) on top, blue nav, «Подключиться | Инструкции» paired,
     # grey troubleshooting last.
     if BYPASS_ENABLED:
@@ -61,9 +62,10 @@ def cabinet_keyboard(*, has_active_sub: bool, has_bypass: bool = False) -> Inlin
         kb.button(text="Купить подписку", callback_data="menu:buy",
                   style="success", icon_custom_emoji_id=emoji.SUB)
     if BYPASS_ENABLED:
+        # ":c" — opened from the cabinet, so its Назад returns to the cabinet.
         kb.button(
             text="Докупить ГБ обхода" if has_bypass else "Обход блокировок",
-            callback_data="tr:open", style="success", icon_custom_emoji_id=emoji.GB,
+            callback_data="tr:open:c", style="success", icon_custom_emoji_id=emoji.GB,
         )
     kb.button(text="Поддержка", url=_support_url(),
               style="primary", icon_custom_emoji_id=emoji.HELP)

@@ -350,14 +350,18 @@ async def cb_faq(call: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("faq:"))
 async def cb_faq_answer(call: CallbackQuery) -> None:
-    key = call.data.split(":", 1)[1]
+    parts = call.data.split(":")  # faq:<key>[:origin]
+    key = parts[1]
     text = FAQ_ANSWERS.get(key)
     if text is None:
         await call.answer()
         return
+    # Opened straight from the main menu («Не работает VPN?») -> Назад returns to
+    # the main menu; opened from the FAQ list -> back to the list.
+    back = "menu:main" if len(parts) > 2 and parts[2] == "main" else "help:faq"
     kb = InlineKeyboardBuilder()
     kb.button(text="💬 Написать оператору", url=SUPPORT_URL)
-    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="help:faq")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=back)
     kb.adjust(1)
     await safe_edit(call.message, text, reply_markup=kb.as_markup())
     await call.answer()
