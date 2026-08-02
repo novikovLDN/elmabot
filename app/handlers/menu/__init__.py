@@ -183,10 +183,17 @@ async def _has_active_sub(user_id: int) -> bool:
 async def show_main(message_or_call, user_id: int) -> None:
     markup = main_menu_keyboard(has_active_sub=await _has_active_sub(user_id))
     if isinstance(message_or_call, CallbackQuery):
-        await safe_edit(message_or_call.message, MAIN, reply_markup=markup)
+        # "main" carries a photo, so show_screen deletes the old screen (text or
+        # photo) and sends a fresh photo — text<->photo can't be edited in place.
+        await show_screen(message_or_call.message, "main", MAIN, reply_markup=markup)
         await message_or_call.answer()
     else:
-        await message_or_call.answer(MAIN, reply_markup=markup)
+        # A plain Message: /menu, or call.message forwarded from onb:done (already
+        # deleted there). Send a fresh screen (photo+caption when configured).
+        await send_screen(
+            message_or_call.bot, message_or_call.chat.id, "main", MAIN,
+            reply_markup=markup,
+        )
 
 
 @router.message(Command("menu"))
