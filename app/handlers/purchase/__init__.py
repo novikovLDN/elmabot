@@ -119,7 +119,7 @@ SUB_MANAGE = (
 async def cb_sub_manage(call: CallbackQuery) -> None:
     """Subscription-management screen — reached from the renewal reminder."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="🔄 Продлить Plus", callback_data="menu:buy")
+    kb.button(text="🔄 Продлить Plus", callback_data="menu:buy", style="success")
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     await safe_edit(call.message, SUB_MANAGE, reply_markup=kb.as_markup())
@@ -321,7 +321,7 @@ async def cb_method(call: CallbackQuery) -> None:
 
     method_label = "СБП" if method == "sbp" else "картой"
     kb = InlineKeyboardBuilder()
-    kb.button(text=f"💳 Оплатить {final} ₽", url=pay_url)
+    kb.button(text=f"💳 Оплатить {final} ₽", url=pay_url, style="success")
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"buy:tariff:{code}")
     kb.adjust(1)
     await safe_edit(

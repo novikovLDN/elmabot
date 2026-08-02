@@ -313,7 +313,7 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
         _, msg, show_buy = await promo_service.apply_promo(message.bot, user.id, args[6:])
         kb = InlineKeyboardBuilder()
         if show_buy:
-            kb.button(text="Выбрать тариф", callback_data="menu:buy")
+            kb.button(text="Выбрать тариф", callback_data="menu:buy", style="success")
         kb.button(text="🏠 Главное меню", callback_data="menu:main")
         kb.adjust(1)
         await message.answer(msg, reply_markup=kb.as_markup())
@@ -445,7 +445,7 @@ async def _incy_bypass_key(user_id: int) -> str | None:
 async def _no_access(call: CallbackQuery) -> None:
     """Shown when a connection screen is reached without an active subscription."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="💳 Купить подписку", callback_data="menu:buy")
+    kb.button(text="💳 Купить подписку", callback_data="menu:buy", style="success")
     kb.button(text="🏠 Главное меню", callback_data="menu:main")
     kb.adjust(1)
     await safe_edit(
@@ -463,7 +463,7 @@ async def _show_tv_guide(call: CallbackQuery, key: str) -> None:
         return
     happ = happ_crypto.format_for_user(raw)
     kb = InlineKeyboardBuilder()
-    kb.button(text="📤 Поделиться", callback_data="share:open")
+    kb.button(text="📤 Поделиться", callback_data="share:open", style="primary")
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="dev:menu")
     kb.adjust(1)
     await safe_edit(
@@ -766,9 +766,9 @@ async def _bypass_raw(user_id: int) -> str | None:
 
 def _hw_type_kb(has_bypass: bool):
     kb = InlineKeyboardBuilder()
-    kb.button(text="🌐 Обычные сервера (безлимит)", callback_data="hw:kind:std")
+    kb.button(text="🌐 Обычные сервера (безлимит)", callback_data="hw:kind:std", style="primary")
     if has_bypass:
-        kb.button(text="🤍 Обход белых списков", callback_data="hw:kind:bp")
+        kb.button(text="🤍 Обход белых списков", callback_data="hw:kind:bp", style="primary")
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()

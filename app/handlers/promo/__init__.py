@@ -32,7 +32,7 @@ PROMPT = (
 def _result_kb(show_buy: bool):
     kb = InlineKeyboardBuilder()
     if show_buy:
-        kb.button(text="Выбрать тариф", callback_data="menu:buy")
+        kb.button(text="Выбрать тариф", callback_data="menu:buy", style="success")
     kb.button(text="🏠 Главное меню", callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()

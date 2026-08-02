@@ -38,12 +38,12 @@ def _packs_keyboard(packs: dict[int, dict], *, extended: bool) -> InlineKeyboard
         label = f"{gb} ГБ — {p['price']} ₽"
         if p["discount"]:
             label += f"  {p['discount']}"
-        kb.button(text=label, callback_data=f"tr:pack:{gb}")
+        kb.button(text=label, callback_data=f"tr:pack:{gb}", style="success")
     rows = [2] * (len(packs) // 2) + ([1] if len(packs) % 2 else [])
     if extended:
-        kb.button(text="← Базовые пакеты", callback_data="tr:open")
+        kb.button(text="← Базовые пакеты", callback_data="tr:open", style="primary")
     else:
-        kb.button(text="📦 Больше объёма →", callback_data="tr:ext")
+        kb.button(text="📦 Больше объёма →", callback_data="tr:ext", style="primary")
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:cabinet")
     kb.adjust(*rows, 1, 1)
     return kb
@@ -163,7 +163,7 @@ async def cb_method(call: CallbackQuery) -> None:
 
     method_label = "СБП" if method == "sbp" else "картой"
     kb = InlineKeyboardBuilder()
-    kb.button(text=f"💳 Оплатить {price} ₽", url=pay_url)
+    kb.button(text=f"💳 Оплатить {price} ₽", url=pay_url, style="success")
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"tr:pack:{gb}")
     kb.adjust(1)
     await safe_edit(

@@ -31,7 +31,7 @@ INTRO = (
 def _intro_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text="Выбрать срок", callback_data="gift:tariffs",
-              icon_custom_emoji_id=emoji.CALENDAR)
+              style="success", icon_custom_emoji_id=emoji.CALENDAR)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
@@ -55,7 +55,7 @@ async def cb_gift_tariffs(call: CallbackQuery) -> None:
         label = f"🗝️ {t.title} — {t.price_rub} ₽"
         if t.save_label:
             label += f"  {t.save_label}"
-        kb.button(text=label, callback_data=f"gift:tariff:{t.code}")
+        kb.button(text=label, callback_data=f"gift:tariff:{t.code}", style="success")
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="gift:open")
     kb.adjust(1)
     await safe_edit(

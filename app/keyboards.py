@@ -22,25 +22,28 @@ def main_menu_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
 
     kb = InlineKeyboardBuilder()
     # Bot API button styles: "primary" (blue), "success" (green), "danger" (red).
-    # icon_custom_emoji_id puts a premium emoji to the left of the label.
+    # Colour scheme: green = money path (buy / top-up), blue = navigation &
+    # secondary actions, grey (no style) = help / info footer.
     kb.button(text="Подключиться", callback_data="dev:menu",
               style="primary", icon_custom_emoji_id=emoji.CONNECT)
-    kb.button(text="📲 Добавить устройство", callback_data="hw:add")
+    kb.button(text="📲 Добавить устройство", callback_data="hw:add", style="primary")
     kb.button(text="Личный кабинет", callback_data="menu:cabinet",
-              icon_custom_emoji_id=emoji.CABINET)
+              style="primary", icon_custom_emoji_id=emoji.CABINET)
     # Right under the cabinet: «Купить ГБ» | «Купить/Продлить подписку».
     if BYPASS_ENABLED:
-        kb.button(text="Купить ГБ", callback_data="tr:open", icon_custom_emoji_id=emoji.GB)
+        kb.button(text="Купить ГБ", callback_data="tr:open",
+                  style="success", icon_custom_emoji_id=emoji.GB)
         kb.button(text=sub_text, callback_data="menu:buy",
-                  style="primary", icon_custom_emoji_id=emoji.SUB)
+                  style="success", icon_custom_emoji_id=emoji.SUB)
         buy_row = (2,)
     else:
         kb.button(text=sub_text, callback_data="menu:buy",
-                  style="primary", icon_custom_emoji_id=emoji.SUB)
+                  style="success", icon_custom_emoji_id=emoji.SUB)
         buy_row = (1,)
     kb.button(text="Реферальная программа", callback_data="menu:referral",
-              icon_custom_emoji_id=emoji.REFERRAL)
-    kb.button(text="Подарить", callback_data="gift:open", icon_custom_emoji_id=emoji.GIFT)
+              style="primary", icon_custom_emoji_id=emoji.REFERRAL)
+    kb.button(text="Подарить", callback_data="gift:open",
+              style="primary", icon_custom_emoji_id=emoji.GIFT)
     kb.button(text="🎟 Промокод", callback_data="promo:enter")
     kb.button(text="Помощь", callback_data="help:open", icon_custom_emoji_id=emoji.HELP)
     kb.button(text="О сервисе", callback_data="about:open", icon_custom_emoji_id=emoji.ABOUT)
@@ -54,20 +57,21 @@ def cabinet_keyboard(*, has_active_sub: bool, has_bypass: bool = False) -> Inlin
     kb = InlineKeyboardBuilder()
     if has_active_sub:
         kb.button(text="Продлить подписку", callback_data="menu:buy",
-                  style="primary", icon_custom_emoji_id=emoji.SUB)
+                  style="success", icon_custom_emoji_id=emoji.SUB)
         kb.button(text="Подключиться", callback_data="dev:menu",
                   style="primary", icon_custom_emoji_id=emoji.CONNECT)
     else:
         kb.button(text="Купить подписку", callback_data="menu:buy",
-                  style="primary", icon_custom_emoji_id=emoji.SUB)
+                  style="success", icon_custom_emoji_id=emoji.SUB)
     if BYPASS_ENABLED:
         kb.button(
             text="Докупить ГБ обхода" if has_bypass else "Обход блокировок",
-            callback_data="tr:open", icon_custom_emoji_id=emoji.GB,
+            callback_data="tr:open", style="success", icon_custom_emoji_id=emoji.GB,
         )
     kb.button(text="Реферальная программа", callback_data="menu:referral",
-              icon_custom_emoji_id=emoji.REFERRAL)
-    kb.button(text="Поддержка", url=_support_url(), icon_custom_emoji_id=emoji.HELP)
+              style="primary", icon_custom_emoji_id=emoji.REFERRAL)
+    kb.button(text="Поддержка", url=_support_url(),
+              style="primary", icon_custom_emoji_id=emoji.HELP)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
@@ -88,9 +92,10 @@ def payment_methods_keyboard(
     handlers stay separate; ``code`` is the chosen tariff.
     """
     kb = InlineKeyboardBuilder()
-    kb.button(text="СБП", callback_data=f"{prefix}:sbp:{code}", icon_custom_emoji_id=emoji.SBP)
+    kb.button(text="СБП", callback_data=f"{prefix}:sbp:{code}",
+              style="primary", icon_custom_emoji_id=emoji.SBP)
     kb.button(text="Банковская карта", callback_data=f"{prefix}:card:{code}",
-              icon_custom_emoji_id=emoji.CARD)
+              style="primary", icon_custom_emoji_id=emoji.CARD)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=back_data)
     kb.adjust(1)
     return kb.as_markup()
@@ -101,7 +106,7 @@ def payment_methods_keyboard(
 def welcome_keyboard() -> InlineKeyboardMarkup:
     """Welcome screen — single Start button."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="🚀 Start", callback_data="onb:start")
+    kb.button(text="🚀 Start", callback_data="onb:start", style="success")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -109,7 +114,8 @@ def welcome_keyboard() -> InlineKeyboardMarkup:
 def claim_keyboard() -> InlineKeyboardMarkup:
     """Screen 1 — claim the free trial."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="🎁 Забрать бесплатный доступ", callback_data="onb:claim")
+    kb.button(text="🎁 Забрать бесплатный доступ", callback_data="onb:claim",
+              style="success")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -118,13 +124,13 @@ def devices_keyboard() -> InlineKeyboardMarkup:
     """Screen 2 — choose a device to connect. Each device opens its download
     step (``dl:<key>``); TV devices keep their QR-import instructions."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="iOS", callback_data="dl:ios", icon_custom_emoji_id=emoji.DEV_IOS)
-    kb.button(text="Android", callback_data="dl:android", icon_custom_emoji_id=emoji.DEV_ANDROID)
-    kb.button(text="MacOS", callback_data="dl:macos", icon_custom_emoji_id=emoji.DEV_MAC)
-    kb.button(text="Windows", callback_data="dl:windows", icon_custom_emoji_id=emoji.DEV_WINDOWS)
-    kb.button(text="Android TV", callback_data="dl:androidtv", icon_custom_emoji_id=emoji.DEV_ANDROIDTV)
-    kb.button(text="Apple TV", callback_data="dl:appletv", icon_custom_emoji_id=emoji.DEV_APPLETV)
-    kb.button(text="Поделиться", callback_data="share:open", icon_custom_emoji_id=emoji.SHARE)
+    kb.button(text="iOS", callback_data="dl:ios", style="primary", icon_custom_emoji_id=emoji.DEV_IOS)
+    kb.button(text="Android", callback_data="dl:android", style="primary", icon_custom_emoji_id=emoji.DEV_ANDROID)
+    kb.button(text="MacOS", callback_data="dl:macos", style="primary", icon_custom_emoji_id=emoji.DEV_MAC)
+    kb.button(text="Windows", callback_data="dl:windows", style="primary", icon_custom_emoji_id=emoji.DEV_WINDOWS)
+    kb.button(text="Android TV", callback_data="dl:androidtv", style="primary", icon_custom_emoji_id=emoji.DEV_ANDROIDTV)
+    kb.button(text="Apple TV", callback_data="dl:appletv", style="primary", icon_custom_emoji_id=emoji.DEV_APPLETV)
+    kb.button(text="Поделиться", callback_data="share:open", style="primary", icon_custom_emoji_id=emoji.SHARE)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(2, 2, 2, 1, 1)
     return kb.as_markup()
@@ -133,8 +139,8 @@ def devices_keyboard() -> InlineKeyboardMarkup:
 def share_keyboard() -> InlineKeyboardMarkup:
     """Screen 9 — share the access link."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="📥 Копировать ссылку", callback_data="share:copy")
-    kb.button(text="⤵️ QR-код", callback_data="share:qr")
+    kb.button(text="📥 Копировать ссылку", callback_data="share:copy", style="primary")
+    kb.button(text="⤵️ QR-код", callback_data="share:qr", style="primary")
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="dev:menu")
     kb.adjust(1)
     return kb.as_markup()
@@ -153,7 +159,7 @@ def buy_keyboard(*, renew: bool = False) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(
         text="🔄 Продлить подписку" if renew else "💳 Купить подписку",
-        callback_data="menu:buy",
+        callback_data="menu:buy", style="success",
     )
     kb.button(text="🔙 Главное меню", callback_data="menu:main")
     kb.adjust(1)
@@ -163,7 +169,7 @@ def buy_keyboard(*, renew: bool = False) -> InlineKeyboardMarkup:
 def manage_sub_keyboard() -> InlineKeyboardMarkup:
     """Reminder CTA → the subscription-management screen (``sub:manage``)."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="🔄 Продлить доступ", callback_data="sub:manage")
+    kb.button(text="🔄 Продлить доступ", callback_data="sub:manage", style="success")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -176,7 +182,7 @@ def offer_keyboard(
     it never depends on a previously-stored (and possibly expired) offer."""
     kb = InlineKeyboardBuilder()
     cb = f"promo:{pct}:{days}" if pct else "menu:buy"
-    kb.button(text=button_text, callback_data=cb)
+    kb.button(text=button_text, callback_data=cb, style="success")
     kb.button(text="🏠 Главное меню", callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
@@ -186,12 +192,14 @@ def tariffs_keyboard(
     rows: list[tuple[str, str, str | None, str | None]],
 ) -> InlineKeyboardMarkup:
     """Tariff list. ``rows`` is ``[(callback_data, label, icon_emoji_id, style),
-    ...]`` so the handler bakes the (discounted) price, per-row premium icon and
-    an optional button style ("success" highlights the year-promo pick)."""
+    ...]`` so the handler bakes the (discounted) price and per-row premium icon.
+    Every tariff is a green "success" button (the money path); the handler may
+    still pass an explicit style, which wins."""
     kb = InlineKeyboardBuilder()
     for data, label, icon, style in rows:
         kb.button(
-            text=label, callback_data=data, icon_custom_emoji_id=icon, style=style
+            text=label, callback_data=data, icon_custom_emoji_id=icon,
+            style=style or "success",
         )
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
@@ -200,7 +208,8 @@ def tariffs_keyboard(
 
 def referral_keyboard(share_url: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="Пригласить друга", url=share_url, icon_custom_emoji_id=emoji.INVITE)
+    kb.button(text="Пригласить друга", url=share_url,
+              style="primary", icon_custom_emoji_id=emoji.INVITE)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     return kb.as_markup()
@@ -381,7 +390,7 @@ def broadcast_user_markup(
     if buy:
         # Plain "open the tariff list" CTA (no discount). Own callback so it opens
         # a fresh tariffs message even under a photo broadcast (menu:buy edits).
-        kb.button(text="🛒 Купить доступ", callback_data="buyaccess", style="primary")
+        kb.button(text="🛒 Купить доступ", callback_data="buyaccess", style="success")
         has_any = True
     if year:
         # Its own callback (not promo:pct:days) — the year offer is scoped to the
@@ -394,23 +403,24 @@ def broadcast_user_markup(
         )
         has_any = True
     if bypass_url:
-        kb.button(text="🌐 Добавить Обход 🤍", url=bypass_url)
+        kb.button(text="🌐 Добавить Обход 🤍", url=bypass_url, style="primary")
         has_any = True
     if disc_pct and disc_days:
         kb.button(
             text=f"🔥 Купить со скидкой −{disc_pct}%",
             callback_data=f"promo:{disc_pct}:{disc_days}",
+            style="success",
         )
         has_any = True
     if channel:
         if CHANNEL_URL:
-            kb.button(text="📣 Перейти в канал", url=CHANNEL_URL)
+            kb.button(text="📣 Перейти в канал", url=CHANNEL_URL, style="primary")
         else:
-            kb.button(text="📣 Перейти в канал", callback_data="chan:soon")
+            kb.button(text="📣 Перейти в канал", callback_data="chan:soon", style="primary")
         has_any = True
     if referral:
         kb.button(text="Пригласить друга", callback_data="menu:referral",
-                  icon_custom_emoji_id=emoji.INVITE)
+                  style="primary", icon_custom_emoji_id=emoji.INVITE)
         has_any = True
     if not has_any:
         return None
