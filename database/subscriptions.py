@@ -87,18 +87,20 @@ async def create_pending_payment(
     *,
     provider: str = "unknown",
     tariff_code: str | None = None,
+    confirm_message_id: int | None = None,
 ) -> None:
     """Journal a payment as 'pending' at invoice-creation time (§5.3).
 
     ``tariff_code`` lets an async provider callback (Platega webhook) recover
-    what was bought from just the transaction id.
+    what was bought from just the transaction id. ``confirm_message_id`` is the
+    «Проверьте заказ» message to remove once the payment confirms.
     """
     pool = get_pool()
     await pool.execute(
         """
         INSERT INTO payments (telegram_id, invoice_id, amount_kopecks, status,
-                              provider, tariff_code)
-        VALUES ($1, $2, $3, 'pending', $4, $5)
+                              provider, tariff_code, confirm_message_id)
+        VALUES ($1, $2, $3, 'pending', $4, $5, $6)
         ON CONFLICT (invoice_id) DO NOTHING
         """,
         telegram_id,
@@ -106,6 +108,7 @@ async def create_pending_payment(
         amount,
         provider,
         tariff_code,
+        confirm_message_id,
     )
 
 

@@ -127,6 +127,9 @@ CREATE TABLE IF NOT EXISTS payments (
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'unknown';
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS tariff_code TEXT;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS fail_reason TEXT;
+-- Message id of the «Проверьте заказ» screen, so it can be removed once the
+-- payment is confirmed by the webhook.
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS confirm_message_id BIGINT;
 
 CREATE INDEX IF NOT EXISTS idx_subs_expiry
     ON subscriptions(expires_at) WHERE status = 'active';

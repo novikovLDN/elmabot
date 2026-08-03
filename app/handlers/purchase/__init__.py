@@ -293,9 +293,13 @@ async def cb_tariff(call: CallbackQuery) -> None:
         return
 
     # Journal pending BEFORE the user can pay, so the webhook can resolve it.
+    # Store this message's id so the webhook can delete the «Проверьте заказ»
+    # screen once the payment is confirmed (it's an in-place edit of the tariff
+    # list, so the id is stable).
     await create_pending_payment(
         call.from_user.id, txn_id, final * 100,  # kopecks
         provider="platega", tariff_code=code,
+        confirm_message_id=call.message.message_id,
     )
     await safe_edit(call.message, order, reply_markup=_order_kb(pay_url=pay_url, final=final))
 

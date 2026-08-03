@@ -64,6 +64,18 @@ async def complete_purchase(
 _GB = 1024 ** 3
 
 
+async def _delete_confirm_screen(bot: Bot, payment) -> None:
+    """Remove the «Проверьте заказ» message once its payment is confirmed. The
+    id is journaled on the pending payment; best-effort (it may be gone)."""
+    msg_id = payment.get("confirm_message_id")
+    if not msg_id:
+        return
+    try:
+        await bot.delete_message(chat_id=payment["telegram_id"], message_id=int(msg_id))
+    except Exception:  # noqa: BLE001 - message may be gone / too old to delete
+        logger.debug("confirm screen delete failed for %s", payment["telegram_id"], exc_info=True)
+
+
 async def complete_traffic_purchase(
     bot: Bot,
     user_id: int,
@@ -115,6 +127,8 @@ async def finalize_confirmed_payment(bot: Bot, payment) -> None:
     else:
         tariff = get_tariff(code) or TARIFFS[0]
         await complete_purchase(bot, tg, tariff, invoice_id=invoice_id, amount_paid=amount)
+        # The «Проверьте заказ» screen is stale now — remove it, then confirm.
+        await _delete_confirm_screen(bot, payment)
         await notify_purchase_activated(bot, tg)
 
     # Best-effort admin web-push for daily revenue milestones (guarded/no-op if
