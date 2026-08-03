@@ -61,26 +61,27 @@ async def close() -> None:
 
 async def create_transaction(
     *,
-    method: int,
+    method: int | None = None,
     amount_rub: float,
     description: str,
     payload: str | None = None,
     user_id: int | None = None,
     user_name: str | None = None,
 ) -> dict:
-    """Create a transaction and return the parsed JSON. The key field is
-    ``redirect`` — the hosted pay.platega.io page where the user completes the
-    payment (it lists every method enabled for the merchant, so the user picks
-    there); ``transactionId`` is what the webhook echoes back.
+    """Create a transaction (``POST /v2/transaction/process``) and return the
+    parsed JSON. Use :func:`pay_url` to get the hosted pay.platega.io page where
+    the user pays; ``transactionId`` is what the webhook echoes back.
 
-    ``paymentMethod`` is required by the API (§2.1) even though the hosted page
-    offers all methods; ``user_id`` is passed as ``metadata.userId`` — the docs
-    (§2.1 "Критично" / §9) mark it important for antifraud."""
+    ``method`` is optional: **omit it** and the payer picks the method on the
+    hosted page ("без заданного метода"); pass one to pin a single method.
+    ``user_id`` is sent as ``metadata.userId`` — the docs mark it important for
+    antifraud (its absence can get the merchant disabled)."""
     body: dict = {
-        "paymentMethod": method,
         "paymentDetails": {"amount": amount_rub, "currency": "RUB"},
         "description": description,
     }
+    if method is not None:
+        body["paymentMethod"] = method
     if config.PLATEGA_RETURN_URL:
         body["return"] = config.PLATEGA_RETURN_URL
     if config.PLATEGA_FAILED_URL:
@@ -93,9 +94,15 @@ async def create_transaction(
             meta["userName"] = user_name
         body["metadata"] = meta
 
-    resp = await _get_client().post("/transaction/process", json=body)
+    resp = await _get_client().post("/v2/transaction/process", json=body)
     resp.raise_for_status()
     return resp.json()
+
+
+def pay_url(txn: dict) -> str | None:
+    """The hosted payment URL from a create response. v2 returns ``url``; older
+    responses used ``redirect`` — accept either."""
+    return txn.get("url") or txn.get("redirect")
 
 
 async def get_status(transaction_id: str) -> str | None:

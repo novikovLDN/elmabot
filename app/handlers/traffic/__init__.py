@@ -174,7 +174,7 @@ async def cb_method(call: CallbackQuery) -> None:
         return
 
     txn_id = txn.get("transactionId")
-    pay_url = txn.get("redirect")
+    pay_url = platega.pay_url(txn)
     if not txn_id or not pay_url:
         logger.error("Platega traffic response missing fields: %s", txn)
         await safe_edit(call.message,

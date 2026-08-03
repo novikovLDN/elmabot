@@ -264,8 +264,8 @@ async def cb_tariff(call: CallbackQuery) -> None:
 
     await call.answer("Готовлю оплату…")
     try:
+        # No method -> the payer picks it on the Platega page.
         txn = await platega.create_transaction(
-            method=config.PLATEGA_DEFAULT_METHOD,
             amount_rub=float(final),
             description=f"Подписка ELMA — {tariff.title}",
             payload=f"tg:{call.from_user.id}",
@@ -282,7 +282,7 @@ async def cb_tariff(call: CallbackQuery) -> None:
         return
 
     txn_id = txn.get("transactionId")
-    pay_url = txn.get("redirect")
+    pay_url = platega.pay_url(txn)
     if not txn_id or not pay_url:
         logger.error("Platega response missing fields: %s", txn)
         await safe_edit(

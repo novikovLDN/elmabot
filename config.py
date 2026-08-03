@@ -214,10 +214,6 @@ PLATEGA_API_URL = _get_str("PLATEGA_API_URL", "https://app.platega.io").rstrip("
 # bot so the user lands back in Telegram. Empty -> Platega's own result pages.
 PLATEGA_RETURN_URL = _get_str("PLATEGA_RETURN_URL", "")
 PLATEGA_FAILED_URL = _get_str("PLATEGA_FAILED_URL", "")
-# paymentMethod the one-tap «Оплатить» button creates the transaction with
-# (2 = СБП, 11 = карта, 12 = межд., 13 = крипто). Platega's hosted page still
-# offers the other methods enabled for the merchant.
-PLATEGA_DEFAULT_METHOD = _get_int("PLATEGA_DEFAULT_METHOD", 2)
 # Port the webhook HTTP server binds to (Railway/most PaaS inject $PORT).
 WEBHOOK_PORT = _get_int("PORT", _get_int("WEBHOOK_PORT", 8080))
 
