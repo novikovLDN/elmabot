@@ -124,6 +124,8 @@ async def finalize_confirmed_payment(bot: Bot, payment) -> None:
             bot, tg, gb, invoice_id=invoice_id, amount_paid=amount,
             provider=payment["provider"],
         )
+        # Remove the traffic pay screen now that the payment is confirmed.
+        await _delete_confirm_screen(bot, payment)
     else:
         tariff = get_tariff(code) or TARIFFS[0]
         await complete_purchase(bot, tg, tariff, invoice_id=invoice_id, amount_paid=amount)

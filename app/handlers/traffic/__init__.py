@@ -182,9 +182,12 @@ async def cb_method(call: CallbackQuery) -> None:
                         reply_markup=back_to_menu())
         return
 
+    # Store this message's id so the webhook can delete the pay screen once the
+    # payment is confirmed (in-place edit -> stable id).
     await create_pending_payment(
         call.from_user.id, txn_id, price * 100,
         provider=method, tariff_code=f"tr_{gb}",
+        confirm_message_id=call.message.message_id,
     )
 
     method_label = "СБП" if method == "sbp" else "картой"
