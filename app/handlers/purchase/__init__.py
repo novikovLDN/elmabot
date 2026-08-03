@@ -1,9 +1,9 @@
 """Tariff selection and purchase (ELMA Plus).
 
-Payments are not wired yet: choosing a tariff opens the payment screen (СБП /
-Карта), but the method buttons land on a placeholder. When a provider is
-connected, the only changes are inside ``cb_method`` (create invoice) and
-``on_paid`` (already routes through ``billing.complete_purchase``).
+Choosing a tariff opens an order-confirmation screen; «Оплатить» creates a
+Platega transaction and links straight to the hosted payment page (which lists
+every method enabled for the merchant), so there's no in-bot method picker.
+The webhook resolves the pending payment via ``billing.complete_purchase``.
 """
 import asyncio
 import logging
@@ -18,7 +18,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 from app import emoji, tariffs
 from app.format import fmt_date
-from app.keyboards import back_to_menu, payment_methods_keyboard, tariffs_keyboard
+from app.keyboards import back_to_menu, tariffs_keyboard
 from app.services import billing, discounts, payments, platega
 from app.utils import convert_tg_emoji, safe_edit, safe_send
 from database import (
@@ -29,9 +29,6 @@ from database import (
     set_offer,
     utcnow,
 )
-
-# Our pay:<method>:<code> buttons -> Platega paymentMethod codes.
-_PLATEGA_METHODS = {"sbp": platega.METHOD_SBP, "card": platega.METHOD_CARD}
 
 logger = logging.getLogger(__name__)
 router = Router(name="purchase")
@@ -220,9 +217,24 @@ async def cb_channel_soon(call: CallbackQuery) -> None:
     await call.answer("Канал скоро откроется ✨", show_alert=True)
 
 
+def _order_kb(*, pay_url: str | None, final: int | None = None) -> InlineKeyboardMarkup:
+    """Order-confirmation buttons: «Оплатить» opens Platega's hosted page (all
+    enabled methods), «Поддержка» → support chat, «Назад» → tariff list."""
+    kb = InlineKeyboardBuilder()
+    if pay_url:
+        kb.button(text=f"Оплатить {final} ₽", url=pay_url, style="success")
+    kb.button(text="Поддержка", url=config.SUPPORT_URL, style="primary")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:buy")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
 @router.callback_query(F.data.startswith("buy:tariff:"))
 async def cb_tariff(call: CallbackQuery) -> None:
-    """Show the payment screen (СБП / Карта) for the chosen tariff."""
+    """Order-confirmation screen. «Оплатить» opens Platega's hosted payment page
+    (every method enabled for the merchant) directly, so we create the
+    transaction here and hand back a ready pay link — one tap, no in-bot method
+    picker."""
     code = call.data.split(":")[2]
     tariff = tariffs.get_tariff(code)
     if tariff is None:
@@ -233,59 +245,27 @@ async def cb_tariff(call: CallbackQuery) -> None:
     discounted = discounts.applies_to(offer, code)
     final = discounts.apply(tariff.price_rub, offer) if discounted else tariff.price_rub
 
-    if discounted and final != tariff.price_rub:
-        price = f"<s>{tariff.price_rub} ₽</s> {final} ₽ (−{offer.pct}%)"
-    else:
-        price = f"{final} ₽"
-
-    text = (
-        "⭐️ <b>Оформление подписки ELMA</b>\n\n"
-        f"💰 Стоимость: {price}\n"
-        f"📅 Период: {tariff.title}\n"
-        "🌐 Устройств: до 5\n\n"
-        "Предупредим за 3 дня до окончания —\n"
-        "ничего не пропустишь.\n\n"
-        "Как оплатить? 👇"
-    )
-    await safe_edit(
-        call.message,
-        text,
-        reply_markup=payment_methods_keyboard(code, back_data="menu:buy"),
-    )
-    await call.answer()
-
-
-@router.callback_query(F.data.startswith("pay:"))
-async def cb_method(call: CallbackQuery) -> None:
-    """Create a Platega payment for the chosen method and hand back a pay link."""
-    _, method, code = call.data.split(":", 2)
-    tariff = tariffs.get_tariff(code)
-    if tariff is None or method not in _PLATEGA_METHODS:
-        await call.answer()
-        return
-
-    user = await get_user(call.from_user.id)
-    offer = discounts.active_offer(user)
-    final = (
-        discounts.apply(tariff.price_rub, offer)
-        if discounts.applies_to(offer, code)
-        else tariff.price_rub
+    order = (
+        "❗️ <b>Проверьте заказ</b>\n\n"
+        f"• Период: {tariff.title}\n"
+        f"• Итого: {final} ₽\n\n"
+        "Как только банк подтвердит операцию, подписка активируется "
+        "автоматически (обычно это занимает до 3 минут)."
     )
 
     if not config.PAYMENTS_ENABLED:
         await safe_edit(
             call.message,
-            f"⭐️ <b>Оплата ELMA Plus «{tariff.title}» — {final} ₽</b>\n\n"
-            "⏳ Приём платежей скоро подключим. Загляни чуть позже 🙌",
-            reply_markup=back_to_menu(),
+            order + "\n\n⏳ Приём платежей скоро подключим. Загляни чуть позже 🙌",
+            reply_markup=_order_kb(pay_url=None),
         )
         await call.answer()
         return
 
-    await call.answer("Готовлю ссылку на оплату…")
+    await call.answer("Готовлю оплату…")
     try:
         txn = await platega.create_transaction(
-            method=_PLATEGA_METHODS[method],
+            method=config.PLATEGA_DEFAULT_METHOD,
             amount_rub=float(final),
             description=f"Подписка ELMA — {tariff.title}",
             payload=f"tg:{call.from_user.id}",
@@ -312,26 +292,10 @@ async def cb_method(call: CallbackQuery) -> None:
 
     # Journal pending BEFORE the user can pay, so the webhook can resolve it.
     await create_pending_payment(
-        call.from_user.id,
-        txn_id,
-        final * 100,  # kopecks
-        provider=method,
-        tariff_code=code,
+        call.from_user.id, txn_id, final * 100,  # kopecks
+        provider="platega", tariff_code=code,
     )
-
-    method_label = "СБП" if method == "sbp" else "картой"
-    kb = InlineKeyboardBuilder()
-    kb.button(text=f"💳 Оплатить {final} ₽", url=pay_url, style="success")
-    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"buy:tariff:{code}")
-    kb.adjust(1)
-    await safe_edit(
-        call.message,
-        f"💳 <b>Оплата ELMA Plus «{tariff.title}»</b>\n\n"
-        f"К оплате {method_label}: <b>{final} ₽</b>\n"
-        "Ссылка действует 15 минут.\n\n"
-        "Нажми кнопку ниже, заверши оплату — доступ откроется автоматически ✨",
-        reply_markup=kb.as_markup(),
-    )
+    await safe_edit(call.message, order, reply_markup=_order_kb(pay_url=pay_url, final=final))
 
 
 # --- Payment provider hooks (ready, currently unused) ---------------------
