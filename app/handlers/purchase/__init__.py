@@ -269,6 +269,8 @@ async def cb_tariff(call: CallbackQuery) -> None:
             amount_rub=float(final),
             description=f"Подписка ELMA — {tariff.title}",
             payload=f"tg:{call.from_user.id}",
+            user_id=call.from_user.id,
+            user_name=f"@{call.from_user.username}" if call.from_user.username else None,
         )
     except (httpx.HTTPError, KeyError, ValueError):
         logger.exception("Platega create_transaction failed for %s", call.from_user.id)

@@ -163,6 +163,8 @@ async def cb_method(call: CallbackQuery) -> None:
             amount_rub=float(price),
             description=f"ELMA — обход {gb} ГБ",
             payload=f"tg:{call.from_user.id}",
+            user_id=call.from_user.id,
+            user_name=f"@{call.from_user.username}" if call.from_user.username else None,
         )
     except (httpx.HTTPError, KeyError, ValueError):
         logger.exception("Platega traffic txn failed for %s", call.from_user.id)

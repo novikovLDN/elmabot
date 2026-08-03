@@ -65,9 +65,17 @@ async def create_transaction(
     amount_rub: float,
     description: str,
     payload: str | None = None,
+    user_id: int | None = None,
+    user_name: str | None = None,
 ) -> dict:
-    """Create a payment with a fixed method. Returns the parsed JSON, which
-    includes ``transactionId`` and ``redirect`` (the payment URL)."""
+    """Create a transaction and return the parsed JSON. The key field is
+    ``redirect`` — the hosted pay.platega.io page where the user completes the
+    payment (it lists every method enabled for the merchant, so the user picks
+    there); ``transactionId`` is what the webhook echoes back.
+
+    ``paymentMethod`` is required by the API (§2.1) even though the hosted page
+    offers all methods; ``user_id`` is passed as ``metadata.userId`` — the docs
+    (§2.1 "Критично" / §9) mark it important for antifraud."""
     body: dict = {
         "paymentMethod": method,
         "paymentDetails": {"amount": amount_rub, "currency": "RUB"},
@@ -79,6 +87,11 @@ async def create_transaction(
         body["failedUrl"] = config.PLATEGA_FAILED_URL
     if payload:
         body["payload"] = payload
+    if user_id is not None:
+        meta: dict = {"userId": str(user_id)}
+        if user_name:
+            meta["userName"] = user_name
+        body["metadata"] = meta
 
     resp = await _get_client().post("/transaction/process", json=body)
     resp.raise_for_status()
