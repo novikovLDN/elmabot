@@ -8,12 +8,12 @@ import logging
 
 import httpx
 from aiogram import F, Router
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 import config
 from app import emoji
-from app.keyboards import back_to_menu, payment_methods_keyboard
+from app.keyboards import back_to_menu
 from app.services import bypass_service, platega
 from app.utils import safe_edit
 from database import create_pending_payment
@@ -21,7 +21,6 @@ from database import create_pending_payment
 logger = logging.getLogger(__name__)
 router = Router(name="traffic")
 
-_PLATEGA_METHODS = {"sbp": platega.METHOD_SBP, "card": platega.METHOD_CARD}
 _GB = 1024 ** 3
 
 INTRO = (
@@ -100,8 +99,23 @@ async def cb_extended(call: CallbackQuery) -> None:
     await call.answer()
 
 
+def _order_kb(price: int, back: str, *, pay_url: str | None) -> InlineKeyboardMarkup:
+    """Order-confirmation buttons for a GB pack: «Оплатить» opens Platega's
+    hosted page (all methods), «Поддержка» → support, «Назад» → the packs list."""
+    kb = InlineKeyboardBuilder()
+    if pay_url:
+        kb.button(text=f"Оплатить {price} ₽", url=pay_url, style="success")
+    kb.button(text="Поддержка", url=config.SUPPORT_URL, style="primary")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=back)
+    kb.adjust(1)
+    return kb.as_markup()
+
+
 @router.callback_query(F.data.startswith("tr:pack:"))
 async def cb_pack(call: CallbackQuery) -> None:
+    """Order-confirmation for a GB pack. «Оплатить» opens Platega's hosted page
+    (all methods) directly, so we create the methodless transaction here and
+    hand back a ready pay link — the payer picks the method on Platega."""
     parts = call.data.split(":")  # tr:pack:<gb>[:origin]
     try:
         gb = int(parts[2])
@@ -113,53 +127,30 @@ async def cb_pack(call: CallbackQuery) -> None:
         await call.answer()
         return
     origin = _origin(call.data)
-    # Back to the list the pack was picked from — carrying the origin so its own
-    # «Назад» still returns to where the whole flow started.
-    inner = "tr:ext" if gb in config.TRAFFIC_PACKS_EXTENDED else "tr:open"
-    text = (
-        f"📦 <b>{gb} ГБ обхода</b>\n\n"
-        f"💰 Стоимость: <b>{pack['price']} ₽</b>\n"
-        "♾️ Без срока — пока есть трафик\n\n"
-        "Как оплатить? 👇"
-    )
-    await safe_edit(
-        call.message, text,
-        reply_markup=payment_methods_keyboard(
-            f"{gb}:{origin}", back_data=f"{inner}:{origin}", prefix="trpay"
-        ),
-    )
-    await call.answer()
-
-
-@router.callback_query(F.data.startswith("trpay:"))
-async def cb_method(call: CallbackQuery) -> None:
-    parts = call.data.split(":")  # trpay:<method>:<gb>[:origin]
-    try:
-        method, gb = parts[1], int(parts[2])
-    except (IndexError, ValueError):
-        await call.answer()
-        return
-    origin = _origin(call.data)
-    pack = config.traffic_pack(gb)
-    if pack is None or method not in _PLATEGA_METHODS:
-        await call.answer()
-        return
     price = pack["price"]
+    # Назад -> the list the pack was picked from, carrying the origin so its own
+    # «Назад» still returns to where the whole flow started.
+    back = f"tr:ext:{origin}" if gb in config.TRAFFIC_PACKS_EXTENDED else f"tr:open:{origin}"
+    order = (
+        f"📦 <b>{gb} ГБ обхода</b>\n\n"
+        f"💰 Стоимость: <b>{price} ₽</b>\n"
+        "♾️ Без срока — пока есть трафик\n\n"
+        "Для оплаты 👇"
+    )
 
     if not config.PAYMENTS_ENABLED:
         await safe_edit(
             call.message,
-            f"📦 <b>Обход {gb} ГБ — {price} ₽</b>\n\n"
-            "⏳ Приём платежей скоро подключим. Загляни чуть позже 🙌",
-            reply_markup=back_to_menu(),
+            order + "\n\n⏳ Приём платежей скоро подключим. Загляни чуть позже 🙌",
+            reply_markup=_order_kb(price, back, pay_url=None),
         )
         await call.answer()
         return
 
-    await call.answer("Готовлю ссылку на оплату…")
+    await call.answer("Готовлю оплату…")
     try:
+        # No method -> the payer picks it on the Platega page.
         txn = await platega.create_transaction(
-            method=_PLATEGA_METHODS[method],
             amount_rub=float(price),
             description=f"ELMA — обход {gb} ГБ",
             payload=f"tg:{call.from_user.id}",
@@ -186,24 +177,10 @@ async def cb_method(call: CallbackQuery) -> None:
     # payment is confirmed (in-place edit -> stable id).
     await create_pending_payment(
         call.from_user.id, txn_id, price * 100,
-        provider=method, tariff_code=f"tr_{gb}",
+        provider="platega", tariff_code=f"tr_{gb}",
         confirm_message_id=call.message.message_id,
     )
-
-    method_label = "СБП" if method == "sbp" else "картой"
-    kb = InlineKeyboardBuilder()
-    kb.button(text=f"💳 Оплатить {price} ₽", url=pay_url, style="success")
-    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK,
-              callback_data=f"tr:pack:{gb}:{origin}")
-    kb.adjust(1)
-    await safe_edit(
-        call.message,
-        f"💳 <b>Оплата обхода — {gb} ГБ</b>\n\n"
-        f"К оплате {method_label}: <b>{price} ₽</b>\n"
-        "Ссылка действует 15 минут.\n\n"
-        "Заверши оплату — трафик зачислится автоматически ✨",
-        reply_markup=kb.as_markup(),
-    )
+    await safe_edit(call.message, order, reply_markup=_order_kb(price, back, pay_url=pay_url))
 
 
 @router.message(F.text == "/traffic")
