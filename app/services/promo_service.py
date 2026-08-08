@@ -24,7 +24,8 @@ async def apply_promo(bot: Bot, user_id: int, code: str) -> tuple[bool, str, boo
 
     ``show_buy`` is True for discount codes so the caller can open the tariff
     screen right after (the discount is already active on the user's row)."""
-    code = (code or "").strip()
+    # Promo codes are short; hard-cap arbitrary user input before it hits the DB.
+    code = (code or "").strip()[:64]
     if not code:
         return False, "Пришли промокод одним словом.", False
 

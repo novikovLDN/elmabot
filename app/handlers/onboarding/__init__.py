@@ -35,7 +35,7 @@ from app.keyboards import (
 )
 from app.handlers.menu import show_main
 from app.services import billing, happ_crypto, incy_crypto, subscription_service
-from app.utils import convert_tg_emoji, safe_edit, send_screen, show_screen
+from app.utils import clean_username, convert_tg_emoji, safe_edit, send_screen, show_screen
 from config import (
     APP_ANDROID_URL,
     APP_INCY_ANDROID_URL,
@@ -292,7 +292,9 @@ def _parse_ref(args: str | None) -> int | None:
 @router.message(CommandStart())
 async def cmd_start(message: Message, command: CommandObject) -> None:
     user = message.from_user
-    is_new = await upsert_user(user.id, user.username, user.language_code or "ru")
+    is_new = await upsert_user(
+        user.id, clean_username(user.username), user.language_code or "ru"
+    )
     args = command.args or ""
 
     # Gift redemption works for any user (new or returning).

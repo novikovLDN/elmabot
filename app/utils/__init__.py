@@ -1,3 +1,4 @@
+from .sanitize import clean_text, clean_username
 from .telegram_safe import (
     convert_tg_emoji,
     safe_edit,
@@ -14,4 +15,6 @@ __all__ = [
     "strip_tg_emoji",
     "send_screen",
     "show_screen",
+    "clean_username",
+    "clean_text",
 ]

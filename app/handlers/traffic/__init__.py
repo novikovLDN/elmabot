@@ -15,7 +15,7 @@ import config
 from app import emoji
 from app.keyboards import back_to_menu
 from app.services import bypass_service, platega
-from app.utils import safe_edit
+from app.utils import clean_username, safe_edit
 from database import create_pending_payment
 
 logger = logging.getLogger(__name__)
@@ -148,6 +148,7 @@ async def cb_pack(call: CallbackQuery) -> None:
         return
 
     await call.answer("Готовлю оплату…")
+    uname = clean_username(call.from_user.username)
     try:
         # No method -> the payer picks it on the Platega page.
         txn = await platega.create_transaction(
@@ -155,7 +156,7 @@ async def cb_pack(call: CallbackQuery) -> None:
             description=f"ELMA — обход {gb} ГБ",
             payload=f"tg:{call.from_user.id}",
             user_id=call.from_user.id,
-            user_name=f"@{call.from_user.username}" if call.from_user.username else None,
+            user_name=f"@{uname}" if uname else None,
         )
     except (httpx.HTTPError, KeyError, ValueError):
         logger.exception("Platega traffic txn failed for %s", call.from_user.id)

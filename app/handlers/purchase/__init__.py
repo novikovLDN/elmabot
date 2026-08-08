@@ -20,7 +20,7 @@ from app import emoji, tariffs
 from app.format import fmt_date
 from app.keyboards import back_to_menu, tariffs_keyboard
 from app.services import billing, discounts, payments, platega
-from app.utils import convert_tg_emoji, safe_edit, safe_send
+from app.utils import clean_username, convert_tg_emoji, safe_edit, safe_send
 from database import (
     create_pending_payment,
     get_user,
@@ -263,6 +263,7 @@ async def cb_tariff(call: CallbackQuery) -> None:
         return
 
     await call.answer("Готовлю оплату…")
+    uname = clean_username(call.from_user.username)
     try:
         # No method -> the payer picks it on the Platega page.
         txn = await platega.create_transaction(
@@ -270,7 +271,7 @@ async def cb_tariff(call: CallbackQuery) -> None:
             description=f"Подписка ELMA — {tariff.title}",
             payload=f"tg:{call.from_user.id}",
             user_id=call.from_user.id,
-            user_name=f"@{call.from_user.username}" if call.from_user.username else None,
+            user_name=f"@{uname}" if uname else None,
         )
     except (httpx.HTTPError, KeyError, ValueError):
         logger.exception("Platega create_transaction failed for %s", call.from_user.id)
