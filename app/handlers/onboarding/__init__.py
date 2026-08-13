@@ -444,17 +444,27 @@ async def _incy_bypass_key(user_id: int) -> str | None:
     return await incy_crypto.to_incy_link(row["subscription_url"])
 
 
-async def _no_access(call: CallbackQuery) -> None:
-    """Shown when a connection screen is reached without an active subscription."""
+def _access_gate_kb():
+    """Buy options shown when a premium key is requested without an active sub —
+    a subscription, and (if bypass is on) buying GB traffic instead."""
     kb = InlineKeyboardBuilder()
     kb.button(text="💳 Купить подписку", callback_data="menu:buy", style="success")
+    if BYPASS_ENABLED:
+        kb.button(text="🌐 Обход блокировок (ГБ)", callback_data="tr:open", style="success")
     kb.button(text="🏠 Главное меню", callback_data="menu:main")
     kb.adjust(1)
-    await safe_edit(
-        call.message,
-        "🔒 Доступ не активен.\n\nОформи подписку, чтобы получить ключ 👇",
-        reply_markup=kb.as_markup(),
-    )
+    return kb.as_markup()
+
+
+async def _no_access(call: CallbackQuery) -> None:
+    """Shown when a premium connection screen is reached without an active sub."""
+    text = "🔒 Доступ не активен.\n\nОформи подписку, чтобы получить ключ 👇"
+    if BYPASS_ENABLED:
+        text = (
+            "🔒 Премиум-подписка не активна.\n\n"
+            "Оформи подписку — или подключи обход блокировок по трафику (ГБ) 👇"
+        )
+    await safe_edit(call.message, text, reply_markup=_access_gate_kb())
     await call.answer()
 
 
@@ -748,7 +758,10 @@ HW_APP = (
     "Выбери приложение, в котором будешь подключаться:"
 )
 
-HW_NO_SUB = "🔒 Чтобы добавить устройство, нужна активная подписка 👇"
+HW_NO_SUB = (
+    "🔒 Чтобы подключиться, нужен доступ.\n\n"
+    "Оформи подписку — или подключи обход блокировок по трафику (ГБ) 👇"
+)
 
 HW_BYPASS_UNAVAILABLE = (
     "❌ <b>Обход белых списков недоступен</b>\n\n"
@@ -766,10 +779,11 @@ async def _bypass_raw(user_id: int) -> str | None:
     return row["subscription_url"]
 
 
-def _hw_type_kb(has_bypass: bool):
+def _hw_type_kb(has_sub: bool, has_bypass: bool):
     kb = InlineKeyboardBuilder()
-    kb.button(text="🌐 Обычные сервера (безлимит)", callback_data="hw:kind:std", style="primary")
-    if has_bypass:
+    if has_sub:  # premium (unlimited) servers need an active subscription
+        kb.button(text="🌐 Обычные сервера (безлимит)", callback_data="hw:kind:std", style="primary")
+    if has_bypass:  # bypass works on bought GB traffic alone, no subscription
         kb.button(text="🤍 Обход белых списков", callback_data="hw:kind:bp", style="primary")
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
@@ -829,20 +843,22 @@ def _hw_caption(client: str, kind: str, crypt: str) -> str:
 
 
 async def _hw_type_screen(call: CallbackQuery) -> None:
-    if not await _active_sub_raw(call.from_user.id):
-        await _render_text(call, HW_NO_SUB, buy_keyboard())
-        return
+    has_sub = bool(await _active_sub_raw(call.from_user.id))
     has_bypass = bool(await _bypass_raw(call.from_user.id))
-    await _render_text(call, HW_TYPE, _hw_type_kb(has_bypass))
+    if not has_sub and not has_bypass:  # nothing to connect with yet
+        await _render_text(call, HW_NO_SUB, _access_gate_kb())
+        return
+    await _render_text(call, HW_TYPE, _hw_type_kb(has_sub, has_bypass))
 
 
 @router.message(Command("hwadd"))
 async def cmd_hwadd(message: Message) -> None:
-    if not await _active_sub_raw(message.from_user.id):
-        await message.answer(HW_NO_SUB, reply_markup=buy_keyboard())
-        return
+    has_sub = bool(await _active_sub_raw(message.from_user.id))
     has_bypass = bool(await _bypass_raw(message.from_user.id))
-    await message.answer(HW_TYPE, reply_markup=_hw_type_kb(has_bypass))
+    if not has_sub and not has_bypass:
+        await message.answer(HW_NO_SUB, reply_markup=_access_gate_kb())
+        return
+    await message.answer(HW_TYPE, reply_markup=_hw_type_kb(has_sub, has_bypass))
 
 
 @router.callback_query(F.data == "hw:add")
@@ -879,7 +895,7 @@ async def cb_hw_app(call: CallbackQuery) -> None:
     else:
         raw = await _active_sub_raw(uid)
         if not raw:
-            await _render_text(call, HW_NO_SUB, buy_keyboard())
+            await _render_text(call, HW_NO_SUB, _access_gate_kb())
             await call.answer()
             return
 
