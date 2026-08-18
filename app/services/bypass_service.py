@@ -146,8 +146,14 @@ async def provision_traffic(telegram_id: int, extra_bytes: int) -> int:
 
 
 async def get_usage(telegram_id: int) -> dict | None:
-    """Live bypass usage: {used, limit, remaining, subscription_url}, or None if
-    the user has no bypass entity. Syncs the cached link/limit on the way."""
+    """Live bypass usage: ``{used, limit, remaining, subscription_url, live}``,
+    or None if the user has no bypass entity. Syncs the cached link/limit on the
+    way.
+
+    ``live`` is True when the figures come straight from the panel this call, and
+    False when the panel read failed and only the cached limit is known (``used``
+    unknown → reported as 0). Callers that must show accurate consumption should
+    check ``live`` and omit the number when it's False."""
     row = await get_bypass(telegram_id)
     if not row or not row["panel_uuid"]:
         return None
@@ -162,7 +168,7 @@ async def get_usage(telegram_id: int) -> dict | None:
         limit = int(row["traffic_limit_bytes"] or 0)
         return {
             "used": 0, "limit": limit, "remaining": limit,
-            "subscription_url": row["subscription_url"],
+            "subscription_url": row["subscription_url"], "live": False,
         }
     e = _extract(user)
     used, limit = int(e["used"]), int(e["limit"])
@@ -170,5 +176,5 @@ async def get_usage(telegram_id: int) -> dict | None:
     await set_bypass_meta(telegram_id, subscription_url=url, traffic_limit_bytes=limit)
     return {
         "used": used, "limit": limit,
-        "remaining": max(0, limit - used), "subscription_url": url,
+        "remaining": max(0, limit - used), "subscription_url": url, "live": True,
     }

@@ -67,9 +67,12 @@ async def _subscription(request: web.Request) -> web.Response:
 
     usage = await bypass_service.get_usage(tg_id) if config.BYPASS_ENABLED else None
     bp_url = usage["subscription_url"] if usage else None
-    bp_used = int(usage["used"]) if usage else 0
-    bp_limit = int(usage["limit"]) if usage else 0
-    bp_remaining = int(usage["remaining"]) if usage else None
+    # Only trust the numbers when they came from the panel this request; a stale
+    # cached read must not be shown as if it were current.
+    bp_live = bool(usage and usage.get("live"))
+    bp_used = int(usage["used"]) if bp_live else 0
+    bp_limit = int(usage["limit"]) if bp_live else 0
+    bp_remaining = int(usage["remaining"]) if bp_live else None
     if not prem_url and not bp_url:
         return web.Response(status=404, text="no subscription")
 
@@ -100,18 +103,25 @@ async def _subscription(request: web.Request) -> web.Response:
     resp.headers["Profile-Title"] = f"base64:{title_b64}"
     resp.headers["Profile-Update-Interval"] = "12"
     resp.headers["Content-Disposition"] = f'inline; filename="{config.SUBSCRIPTION_BRAND}"'
+    # Never let the client / a CDN / a proxy serve a stale copy — every fetch is
+    # recomputed with fresh panel data.
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
 
-    # Description (legend + remaining bypass traffic when known).
+    # Description (legend + remaining bypass traffic, shown only when the figure
+    # is live/known this request).
     announce = aggregator.build_announce(
         has_premium=bool(prem_url),
         has_bypass=bool(bp_url),
-        remaining_bytes=bp_remaining if (usage and bp_limit > 0) else None,
+        remaining_bytes=bp_remaining if (bp_live and bp_limit > 0) else None,
     )
     if announce:
         resp.headers["Announce"] = "base64:" + base64.b64encode(announce.encode()).decode()
 
-    # Metered (LTE/bypass) traffic + premium expiry for the client's own display.
-    if usage and bp_limit > 0:
+    # Metered (LTE/bypass) traffic + premium expiry — only when the figures are
+    # live, so we never publish a stale consumption number.
+    if bp_live and bp_limit > 0:
         expire_ts = int(prem_expire.timestamp()) if prem_expire else 0
         resp.headers["Subscription-Userinfo"] = (
             f"upload=0; download={bp_used}; total={bp_limit}; expire={expire_ts}"

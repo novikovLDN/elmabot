@@ -180,7 +180,13 @@ async def fetch(subscription_url: str, user_agent: str) -> tuple[bytes, dict]:
     ``(body, passthrough_headers)``."""
     async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True) as client:
         resp = await client.get(
-            subscription_url, headers={"User-Agent": user_agent or "Happ"}
+            subscription_url,
+            headers={
+                "User-Agent": user_agent or "Happ",
+                # Always pull the current configs/usage — never a cached copy.
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+            },
         )
         resp.raise_for_status()
         passthrough = {
