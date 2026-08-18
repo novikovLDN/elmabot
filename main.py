@@ -11,7 +11,7 @@ from aiogram.types import BotCommand
 
 from app.brand import install_brand
 from app.handlers import get_routers
-from app.services import platega, remnawave
+from app.services import aggregator, platega, remnawave
 from app.services.notifications import (
     expiry_cleanup_loop,
     offer_loop,
@@ -111,6 +111,7 @@ async def main() -> None:
             await runner.cleanup()
         await platega.close()
         await remnawave.close()
+        await aggregator.close()
         await bot.session.close()
         await close_db()
         logger.info("Shutdown complete")

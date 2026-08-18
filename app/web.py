@@ -8,6 +8,7 @@ Platega retries non-2xx responses (up to 3 times, 5 min apart), so:
   * duplicate / already-paid  -> 200 (stop retrying)
   * provisioning failed       -> 500 (let it retry; complete_purchase is idempotent)
 """
+import asyncio
 import base64
 import logging
 from pathlib import Path
@@ -19,6 +20,7 @@ from aiohttp import web
 import config
 from app.services import aggregator, billing, bypass_service, platega
 from database import (
+    get_bypass,
     get_payment,
     get_subscription,
     is_payment_paid,
@@ -59,35 +61,48 @@ async def _subscription(request: web.Request) -> web.Response:
     if tg_id is None or (config.SUBSCRIPTION_ADMIN_ONLY and tg_id not in config.ADMIN_IDS):
         return web.Response(status=404, text="not found")
 
-    # Collect the user's two panel subscriptions: premium (active) and bypass,
-    # plus the bypass traffic figures for the description/userinfo.
+    # Collect the user's two panel subscriptions: premium (active) and bypass.
+    # DB reads are fast; the panel/HTTP work below is what we parallelise.
     sub = await get_subscription(tg_id)
     prem_url = sub["subscription_url"] if sub and sub["status"] == "active" else None
     prem_expire = sub["expires_at"] if sub and sub["status"] == "active" else None
-
-    usage = await bypass_service.get_usage(tg_id) if config.BYPASS_ENABLED else None
-    bp_url = usage["subscription_url"] if usage else None
-    # Only trust the numbers when they came from the panel this request; a stale
-    # cached read must not be shown as if it were current.
-    bp_live = bool(usage and usage.get("live"))
-    bp_used = int(usage["used"]) if bp_live else 0
-    bp_limit = int(usage["limit"]) if bp_live else 0
-    bp_remaining = int(usage["remaining"]) if bp_live else None
+    bp_row = await get_bypass(tg_id) if config.BYPASS_ENABLED else None
+    bp_url = bp_row["subscription_url"] if bp_row and bp_row["panel_uuid"] else None
     if not prem_url and not bp_url:
         return web.Response(status=404, text="no subscription")
 
     ua = request.headers.get("User-Agent", "")
+    prem_label = f"{config.SUBSCRIPTION_BRAND} VPN"
+    bp_label = f"{config.SUBSCRIPTION_BRAND} Обход"
+
+    # Fire both config fetches and the live usage read concurrently — total
+    # latency is the slowest single call, not their sum (this is what made
+    # importing the subscription slow).
+    prem_task = asyncio.create_task(aggregator.fetch(prem_url, ua)) if prem_url else None
+    bp_task = asyncio.create_task(aggregator.fetch(bp_url, ua)) if bp_url else None
+    usage_task = asyncio.create_task(bypass_service.get_usage(tg_id)) if bp_url else None
+
     groups: list[tuple[str, bytes]] = []
-    for label, url in ((f"{config.SUBSCRIPTION_BRAND} VPN", prem_url),
-                       (f"{config.SUBSCRIPTION_BRAND} Обход", bp_url)):
-        if not url:
+    for label, task in ((prem_label, prem_task), (bp_label, bp_task)):
+        if task is None:
             continue
         try:
-            body, _ = await aggregator.fetch(url, ua)
+            body, _ = await task
+            groups.append((label, body))
         except Exception:  # noqa: BLE001 - one source failing shouldn't 500 the other
             logger.exception("aggregator fetch failed for %s (%s)", tg_id, label)
-            continue
-        groups.append((label, body))
+
+    usage = None
+    if usage_task is not None:
+        try:
+            usage = await usage_task
+        except Exception:  # noqa: BLE001
+            logger.exception("bypass usage read failed for %s", tg_id)
+    # Only trust the numbers when they came from the panel this request.
+    bp_live = bool(usage and usage.get("live"))
+    bp_used = int(usage["used"]) if bp_live else 0
+    bp_limit = int(usage["limit"]) if bp_live else 0
+    bp_remaining = int(usage["remaining"]) if bp_live else None
 
     combined = aggregator.combine(groups)
     if combined is None:

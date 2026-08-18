@@ -21,11 +21,29 @@ import config
 
 logger = logging.getLogger(__name__)
 
-_TIMEOUT = httpx.Timeout(15.0)
+_TIMEOUT = httpx.Timeout(10.0)
 
 # Response headers worth passing through from the panel (traffic/expiry the
 # client shows, refresh hint, content type).
 _PASSTHROUGH = ("subscription-userinfo", "profile-update-interval", "content-type")
+
+# Shared keep-alive client — avoids a fresh TLS handshake on every fetch (the
+# aggregator does two upstream requests per subscription load).
+_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True)
+    return _client
+
+
+async def close() -> None:
+    global _client
+    if _client is not None and not _client.is_closed:
+        await _client.aclose()
+        _client = None
 
 
 # --- opaque per-user token -------------------------------------------------
@@ -178,18 +196,15 @@ async def fetch(subscription_url: str, user_agent: str) -> tuple[bytes, dict]:
     """GET the panel subscription content, forwarding the client's User-Agent so
     the panel returns the format that client expects. Returns
     ``(body, passthrough_headers)``."""
-    async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True) as client:
-        resp = await client.get(
-            subscription_url,
-            headers={
-                "User-Agent": user_agent or "Happ",
-                # Always pull the current configs/usage — never a cached copy.
-                "Cache-Control": "no-cache",
-                "Pragma": "no-cache",
-            },
-        )
-        resp.raise_for_status()
-        passthrough = {
-            h: resp.headers[h] for h in _PASSTHROUGH if h in resp.headers
-        }
-        return resp.content, passthrough
+    resp = await _get_client().get(
+        subscription_url,
+        headers={
+            "User-Agent": user_agent or "Happ",
+            # Always pull the current configs/usage — never a cached copy.
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+        },
+    )
+    resp.raise_for_status()
+    passthrough = {h: resp.headers[h] for h in _PASSTHROUGH if h in resp.headers}
+    return resp.content, passthrough
