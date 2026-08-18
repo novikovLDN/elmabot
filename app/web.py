@@ -20,6 +20,7 @@ from aiohttp import web
 import config
 from app.services import aggregator, billing, bypass_service, platega
 from database import (
+    get_bypass,
     get_payment,
     get_subscription,
     is_payment_paid,
@@ -60,19 +61,24 @@ async def _subscription(request: web.Request) -> web.Response:
     if tg_id is None or (config.SUBSCRIPTION_ADMIN_ONLY and tg_id not in config.ADMIN_IDS):
         return web.Response(status=404, text="not found")
 
-    # Resolve both subscription URLs. Premium from the DB (fast); bypass from a
-    # LIVE panel read (get_usage) — the cached DB link can be empty/stale, which
-    # is why the bypass servers weren't showing. Run them together.
+    # Two subscription links to merge: premium (subscriptions table) and bypass
+    # (bypass table). Take each link straight from where it's stored — that's the
+    # actual link. get_usage is only for the remaining-traffic number.
     if config.BYPASS_ENABLED:
-        sub, usage = await asyncio.gather(
-            get_subscription(tg_id), bypass_service.get_usage(tg_id)
+        sub, bp_row, usage = await asyncio.gather(
+            get_subscription(tg_id), get_bypass(tg_id), bypass_service.get_usage(tg_id)
         )
     else:
-        sub, usage = await get_subscription(tg_id), None
+        sub, bp_row, usage = await get_subscription(tg_id), None, None
 
     prem_url = sub["subscription_url"] if sub and sub["status"] == "active" else None
     prem_expire = sub["expires_at"] if sub and sub["status"] == "active" else None
-    bp_url = usage["subscription_url"] if usage else None
+    # Bypass link: the stored subscription_url (fall back to the live usage read).
+    bp_url = (
+        (bp_row["subscription_url"] if bp_row else None)
+        or (usage["subscription_url"] if usage else None)
+        or None
+    )
     # Only trust the numbers when they came from the panel this request.
     bp_live = bool(usage and usage.get("live"))
     bp_used = int(usage["used"]) if bp_live else 0
