@@ -13,7 +13,6 @@ import base64
 import hashlib
 import hmac
 import logging
-from urllib.parse import quote
 
 import httpx
 
@@ -82,21 +81,6 @@ def sub_link(telegram_id: int) -> str:
 
 # --- rebranding ------------------------------------------------------------
 
-def _rebrand_uri_list(text: str, brand: str) -> str:
-    """Rewrite the ``#remark`` of each proxy URI to ``brand N`` (keeps the config
-    itself untouched — only the display name changes)."""
-    out: list[str] = []
-    idx = 0
-    for line in text.splitlines():
-        stripped = line.strip()
-        if "://" in stripped:
-            idx += 1
-            out.append(f"{stripped.split('#', 1)[0]}#{quote(f'{brand} {idx}')}")
-        else:
-            out.append(line)
-    return "\n".join(out)
-
-
 _GB = 1024 ** 3
 
 
@@ -142,13 +126,9 @@ def _extract_uris(body: bytes) -> list[str] | None:
     return None
 
 
-def _relabel(uri: str, name: str) -> str:
-    return f"{uri.split('#', 1)[0]}#{quote(name)}"
-
-
 def combine(groups: list[tuple[str, bytes]]) -> bytes | None:
     """Merge several subscription bodies (each ``(label, body)``) into one base64
-    URI list, renaming every config ``"<label> N"``. Every server from every
+    URI list, keeping each server's **original name**. Every server from every
     source is kept — nothing is de-duplicated across sources, so the premium and
     bypass servers all show together. Returns ``None`` if none of the sources is
     a URI list (nothing mergeable)."""
@@ -158,37 +138,10 @@ def combine(groups: list[tuple[str, bytes]]) -> bytes | None:
         if not uris:
             logger.warning("aggregator: source %r is not a URI list (%d bytes)", label, len(body))
             continue
-        for n, uri in enumerate(uris, 1):
-            lines.append(_relabel(uri, f"{label} {n}"))
+        lines.extend(uris)  # original #remarks preserved
     if not lines:
         return None
     return base64.b64encode("\n".join(lines).encode())
-
-
-def rebrand(body: bytes, brand: str) -> bytes:
-    """Best-effort rebrand of subscription content.
-
-    Handles the two common formats — a base64-encoded or a plaintext list of
-    proxy URIs. Structured formats (Clash / sing-box YAML/JSON) pass through
-    unchanged; the ``profile-title`` header still carries the brand there.
-    """
-    # base64-encoded URI list (the default subscription format)
-    try:
-        decoded = base64.b64decode(b"".join(body.split()), validate=True)
-        if b"://" in decoded:
-            rebranded = _rebrand_uri_list(decoded.decode("utf-8", "replace"), brand)
-            return base64.b64encode(rebranded.encode())
-    except Exception:  # noqa: BLE001 - not base64, fall through
-        pass
-    # plaintext URI list (not YAML/JSON)
-    try:
-        text = body.decode("utf-8")
-    except UnicodeDecodeError:
-        return body
-    lstripped = text.lstrip()
-    if "://" in text and "proxies:" not in text and not lstripped.startswith(("{", "[")):
-        return _rebrand_uri_list(text, brand).encode()
-    return body
 
 
 async def fetch(subscription_url: str) -> tuple[bytes, dict]:

@@ -107,10 +107,10 @@ async def _subscription(request: web.Request) -> web.Response:
     combined = aggregator.combine(groups)
     if combined is None:
         # No mergeable URI list (structured format / all sources failed) —
-        # fall back to serving the first source rebranded as-is.
+        # fall back to serving the first source as-is.
         if not groups:
             return web.Response(status=502, text="upstream error")
-        combined = aggregator.rebrand(groups[0][1], config.SUBSCRIPTION_BRAND)
+        combined = groups[0][1]
 
     title_b64 = base64.b64encode(config.SUBSCRIPTION_TITLE.encode()).decode()
     resp = web.Response(body=combined)
