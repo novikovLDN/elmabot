@@ -17,9 +17,8 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from aiohttp import web
 
 import config
-from app.services import aggregator, billing, platega
+from app.services import aggregator, billing, bypass_service, platega
 from database import (
-    get_bypass,
     get_payment,
     get_subscription,
     is_payment_paid,
@@ -60,30 +59,32 @@ async def _subscription(request: web.Request) -> web.Response:
     if tg_id is None or (config.SUBSCRIPTION_ADMIN_ONLY and tg_id not in config.ADMIN_IDS):
         return web.Response(status=404, text="not found")
 
-    # Collect the user's two panel subscriptions: premium (active) and bypass.
+    # Collect the user's two panel subscriptions: premium (active) and bypass,
+    # plus the bypass traffic figures for the description/userinfo.
     sub = await get_subscription(tg_id)
     prem_url = sub["subscription_url"] if sub and sub["status"] == "active" else None
-    bp_url = None
-    if config.BYPASS_ENABLED:
-        bp = await get_bypass(tg_id)
-        bp_url = bp["subscription_url"] if bp and bp["panel_uuid"] else None
+    prem_expire = sub["expires_at"] if sub and sub["status"] == "active" else None
+
+    usage = await bypass_service.get_usage(tg_id) if config.BYPASS_ENABLED else None
+    bp_url = usage["subscription_url"] if usage else None
+    bp_used = int(usage["used"]) if usage else 0
+    bp_limit = int(usage["limit"]) if usage else 0
+    bp_remaining = int(usage["remaining"]) if usage else None
     if not prem_url and not bp_url:
         return web.Response(status=404, text="no subscription")
 
     ua = request.headers.get("User-Agent", "")
     groups: list[tuple[str, bytes]] = []
-    userinfo: str | None = None
     for label, url in ((f"{config.SUBSCRIPTION_BRAND} VPN", prem_url),
                        (f"{config.SUBSCRIPTION_BRAND} Обход", bp_url)):
         if not url:
             continue
         try:
-            body, passthrough = await aggregator.fetch(url, ua)
+            body, _ = await aggregator.fetch(url, ua)
         except Exception:  # noqa: BLE001 - one source failing shouldn't 500 the other
             logger.exception("aggregator fetch failed for %s (%s)", tg_id, label)
             continue
         groups.append((label, body))
-        userinfo = userinfo or passthrough.get("subscription-userinfo")
 
     combined = aggregator.combine(groups)
     if combined is None:
@@ -99,8 +100,22 @@ async def _subscription(request: web.Request) -> web.Response:
     resp.headers["Profile-Title"] = f"base64:{title_b64}"
     resp.headers["Profile-Update-Interval"] = "12"
     resp.headers["Content-Disposition"] = f'inline; filename="{config.SUBSCRIPTION_BRAND}"'
-    if userinfo:
-        resp.headers["Subscription-Userinfo"] = userinfo
+
+    # Description (legend + remaining bypass traffic when known).
+    announce = aggregator.build_announce(
+        has_premium=bool(prem_url),
+        has_bypass=bool(bp_url),
+        remaining_bytes=bp_remaining if (usage and bp_limit > 0) else None,
+    )
+    if announce:
+        resp.headers["Announce"] = "base64:" + base64.b64encode(announce.encode()).decode()
+
+    # Metered (LTE/bypass) traffic + premium expiry for the client's own display.
+    if usage and bp_limit > 0:
+        expire_ts = int(prem_expire.timestamp()) if prem_expire else 0
+        resp.headers["Subscription-Userinfo"] = (
+            f"upload=0; download={bp_used}; total={bp_limit}; expire={expire_ts}"
+        )
     return resp
 
 

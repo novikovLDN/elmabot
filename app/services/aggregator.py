@@ -79,6 +79,30 @@ def _rebrand_uri_list(text: str, brand: str) -> str:
     return "\n".join(out)
 
 
+_GB = 1024 ** 3
+
+
+def _fmt_gb(num_bytes: int) -> str:
+    return f"{num_bytes / _GB:.2f} ГБ"
+
+
+def build_announce(*, has_premium: bool, has_bypass: bool, remaining_bytes: int | None) -> str:
+    """Subscription description shown at the top of the client.
+
+    Explains the two server types and, when we know it, the remaining bypass
+    (LTE) traffic. When the remaining is unknown we still show the legend, just
+    without the amount.
+    """
+    lines: list[str] = []
+    if has_premium:
+        lines.append("🚀 UNLIMITED — безлимитные сервера, не тратят трафик.")
+    if has_bypass:
+        lines.append("🌐 LTE — тарификация по ГБ трафика (обход блокировок).")
+        if remaining_bytes is not None:
+            lines.append(f"⚠️ Осталось {_fmt_gb(remaining_bytes)} трафика обхода.")
+    return "\n".join(lines)
+
+
 def _extract_uris(body: bytes) -> list[str] | None:
     """Pull the proxy-URI lines out of a subscription body (base64 or plaintext
     list). Returns ``None`` for structured formats (Clash / sing-box)."""
