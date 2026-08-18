@@ -264,6 +264,21 @@ _dash_host = (
     DASHBOARD_BASE_URL.split("://", 1)[-1].split("/", 1)[0].split(":", 1)[0]
 )
 WEBAUTHN_RP_ID = _get_str("WEBAUTHN_RP_ID", "") or _dash_host
+
+# --- Subscription aggregator ---------------------------------------------
+# Serve a user's panel configs under our own domain (rebranded "Elma") instead
+# of exposing the raw Remnawave subscription link. Served at "<base>/sub/<token>"
+# on the same real domain the dashboard/webhook already run on.
+SUBSCRIPTION_BASE_URL = _get_str("SUBSCRIPTION_BASE_URL", "") or DASHBOARD_BASE_URL
+# Brand shown as the subscription/profile title and per-config name.
+SUBSCRIPTION_BRAND = _get_str("SUBSCRIPTION_BRAND", "Elma")
+# HMAC key for the opaque per-user subscription token — derived from the bot
+# token so links stay valid across restarts without extra config.
+SUBSCRIPTION_SECRET = _get_str("SUBSCRIPTION_SECRET", "") or hashlib.sha256(
+    ("subagg:" + BOT_TOKEN).encode()
+).hexdigest()
+# MVP gate: while True the aggregator serves ADMIN_IDS only.
+SUBSCRIPTION_ADMIN_ONLY = _get_bool("SUBSCRIPTION_ADMIN_ONLY", True)
 WEBAUTHN_RP_NAME = _get_str("WEBAUTHN_RP_NAME", f"{BRAND_NAME} Admin")
 
 # --- Admin web-push (VAPID) ---

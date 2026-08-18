@@ -30,7 +30,7 @@ from app.keyboards import (
     broadcast_user_markup,
 )
 import config
-from app.services import broadcaster, happ_crypto, subscription_service
+from app.services import aggregator, broadcaster, happ_crypto, subscription_service
 from app.tariffs import get_tariff
 from app.utils import convert_tg_emoji, safe_edit, safe_send
 from config import ADMIN_IDS, REFERRAL_BONUS_DAYS, SUPPORT_USERNAME
@@ -167,6 +167,32 @@ def fmt_duration(td: timedelta) -> str:
 async def cmd_admin(message: Message, state: FSMContext) -> None:
     await state.clear()
     await message.answer("🛠 <b>Админ-панель</b>", parse_mode="HTML", reply_markup=admin_menu())
+
+
+@router.message(Command("suburl"))
+async def cmd_suburl(message: Message) -> None:
+    """Aggregated subscription link (served from our domain, rebranded Elma).
+
+    Admin-only MVP: hand the admin their own aggregated link + a Happ import
+    link to test that the panel configs come through under our domain."""
+    if not config.SUBSCRIPTION_BASE_URL:
+        await message.answer(
+            "⚠️ Агрегатор не настроен: задай <code>SUBSCRIPTION_BASE_URL</code> "
+            "(или <code>DASHBOARD_BASE_URL</code>).",
+        )
+        return
+    link = aggregator.sub_link(message.from_user.id)
+    happ = happ_crypto.to_crypt_link(link)
+    await message.answer(
+        "🔗 <b>Агрегированная подписка (Elma)</b>\n\n"
+        "Ссылка-подписка (импорт в любой клиент):\n"
+        f"<code>{html.escape(link)}</code>\n\n"
+        "Happ (в один тап):\n"
+        f"<code>{html.escape(happ)}</code>\n\n"
+        f"Отдаётся с нашего домена под именем <b>{config.SUBSCRIPTION_BRAND}</b> "
+        "(пока только для админов).",
+        disable_web_page_preview=True,
+    )
 
 
 @router.message(Command("dashboard"))
