@@ -18,7 +18,13 @@ from aiohttp import web
 
 import config
 from app.services import aggregator, billing, platega
-from database import get_payment, get_subscription, is_payment_paid, mark_payment_failed
+from database import (
+    get_bypass,
+    get_payment,
+    get_subscription,
+    is_payment_paid,
+    mark_payment_failed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,34 +51,56 @@ async def _connect_page(_: web.Request) -> web.Response:
 
 
 async def _subscription(request: web.Request) -> web.Response:
-    """Aggregated subscription: fetch the user's panel configs and serve them
-    rebranded under our own domain. Admin-only while SUBSCRIPTION_ADMIN_ONLY."""
+    """Aggregated subscription: merge the user's premium + bypass panel configs
+    into one Elma-branded subscription served from our own domain. Admin-only
+    while SUBSCRIPTION_ADMIN_ONLY."""
     if not config.SUBSCRIPTION_BASE_URL:
         return web.Response(status=404, text="not found")
     tg_id = aggregator.verify_token(request.match_info.get("token", ""))
     if tg_id is None or (config.SUBSCRIPTION_ADMIN_ONLY and tg_id not in config.ADMIN_IDS):
         return web.Response(status=404, text="not found")
 
+    # Collect the user's two panel subscriptions: premium (active) and bypass.
     sub = await get_subscription(tg_id)
-    url = sub["subscription_url"] if sub else None
-    if not url:
+    prem_url = sub["subscription_url"] if sub and sub["status"] == "active" else None
+    bp_url = None
+    if config.BYPASS_ENABLED:
+        bp = await get_bypass(tg_id)
+        bp_url = bp["subscription_url"] if bp and bp["panel_uuid"] else None
+    if not prem_url and not bp_url:
         return web.Response(status=404, text="no subscription")
 
-    try:
-        body, passthrough = await aggregator.fetch(url, request.headers.get("User-Agent", ""))
-    except Exception:  # noqa: BLE001 - upstream/panel error
-        logger.exception("aggregator fetch failed for %s", tg_id)
-        return web.Response(status=502, text="upstream error")
+    ua = request.headers.get("User-Agent", "")
+    groups: list[tuple[str, bytes]] = []
+    userinfo: str | None = None
+    for label, url in ((f"{config.SUBSCRIPTION_BRAND} VPN", prem_url),
+                       (f"{config.SUBSCRIPTION_BRAND} Обход", bp_url)):
+        if not url:
+            continue
+        try:
+            body, passthrough = await aggregator.fetch(url, ua)
+        except Exception:  # noqa: BLE001 - one source failing shouldn't 500 the other
+            logger.exception("aggregator fetch failed for %s (%s)", tg_id, label)
+            continue
+        groups.append((label, body))
+        userinfo = userinfo or passthrough.get("subscription-userinfo")
 
-    body = aggregator.rebrand(body, config.SUBSCRIPTION_BRAND)
-    brand_b64 = base64.b64encode(config.SUBSCRIPTION_BRAND.encode()).decode()
-    resp = web.Response(body=body)
-    resp.headers["Content-Type"] = passthrough.get("content-type", "text/plain; charset=utf-8")
-    resp.headers["Profile-Title"] = f"base64:{brand_b64}"
-    resp.headers["Profile-Update-Interval"] = passthrough.get("profile-update-interval", "12")
+    combined = aggregator.combine(groups)
+    if combined is None:
+        # No mergeable URI list (structured format / all sources failed) —
+        # fall back to serving the first source rebranded as-is.
+        if not groups:
+            return web.Response(status=502, text="upstream error")
+        combined = aggregator.rebrand(groups[0][1], config.SUBSCRIPTION_BRAND)
+
+    title_b64 = base64.b64encode(config.SUBSCRIPTION_TITLE.encode()).decode()
+    resp = web.Response(body=combined)
+    resp.headers["Content-Type"] = "text/plain; charset=utf-8"
+    resp.headers["Profile-Title"] = f"base64:{title_b64}"
+    resp.headers["Profile-Update-Interval"] = "12"
     resp.headers["Content-Disposition"] = f'inline; filename="{config.SUBSCRIPTION_BRAND}"'
-    if "subscription-userinfo" in passthrough:
-        resp.headers["Subscription-Userinfo"] = passthrough["subscription-userinfo"]
+    if userinfo:
+        resp.headers["Subscription-Userinfo"] = userinfo
     return resp
 
 

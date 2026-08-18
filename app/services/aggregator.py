@@ -79,6 +79,51 @@ def _rebrand_uri_list(text: str, brand: str) -> str:
     return "\n".join(out)
 
 
+def _extract_uris(body: bytes) -> list[str] | None:
+    """Pull the proxy-URI lines out of a subscription body (base64 or plaintext
+    list). Returns ``None`` for structured formats (Clash / sing-box)."""
+    try:
+        decoded = base64.b64decode(b"".join(body.split()), validate=True)
+        if b"://" in decoded:
+            return [l.strip() for l in decoded.decode("utf-8", "replace").splitlines() if "://" in l]
+    except Exception:  # noqa: BLE001 - not base64
+        pass
+    try:
+        text = body.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    if "://" in text and "proxies:" not in text and not text.lstrip().startswith(("{", "[")):
+        return [l.strip() for l in text.splitlines() if "://" in l]
+    return None
+
+
+def _relabel(uri: str, name: str) -> str:
+    return f"{uri.split('#', 1)[0]}#{quote(name)}"
+
+
+def combine(groups: list[tuple[str, bytes]], *, dedupe: bool = True) -> bytes | None:
+    """Merge several subscription bodies (each ``(label, body)``) into one base64
+    URI list, renaming every config ``"<label> N"``. Returns ``None`` if none of
+    the sources is a URI list (nothing mergeable)."""
+    lines: list[str] = []
+    seen: set[str] = set()
+    for label, body in groups:
+        uris = _extract_uris(body)
+        if not uris:
+            continue
+        n = 0
+        for uri in uris:
+            key = uri.split("#", 1)[0]
+            if dedupe and key in seen:
+                continue
+            seen.add(key)
+            n += 1
+            lines.append(_relabel(uri, f"{label} {n}"))
+    if not lines:
+        return None
+    return base64.b64encode("\n".join(lines).encode())
+
+
 def rebrand(body: bytes, brand: str) -> bytes:
     """Best-effort rebrand of subscription content.
 

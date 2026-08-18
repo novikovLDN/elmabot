@@ -270,8 +270,10 @@ WEBAUTHN_RP_ID = _get_str("WEBAUTHN_RP_ID", "") or _dash_host
 # of exposing the raw Remnawave subscription link. Served at "<base>/sub/<token>"
 # on the same real domain the dashboard/webhook already run on.
 SUBSCRIPTION_BASE_URL = _get_str("SUBSCRIPTION_BASE_URL", "") or DASHBOARD_BASE_URL
-# Brand shown as the subscription/profile title and per-config name.
+# Brand used to name each config (premium -> "<brand> VPN", bypass -> "<brand>
+# Обход"). The whole subscription is titled SUBSCRIPTION_TITLE.
 SUBSCRIPTION_BRAND = _get_str("SUBSCRIPTION_BRAND", "Elma")
+SUBSCRIPTION_TITLE = _get_str("SUBSCRIPTION_TITLE", "💙 Elma VPN")
 # HMAC key for the opaque per-user subscription token — derived from the bot
 # token so links stay valid across restarts without extra config.
 SUBSCRIPTION_SECRET = _get_str("SUBSCRIPTION_SECRET", "") or hashlib.sha256(
