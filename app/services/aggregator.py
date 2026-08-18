@@ -13,6 +13,7 @@ import base64
 import hashlib
 import hmac
 import logging
+from urllib.parse import quote, unquote
 
 import httpx
 
@@ -126,19 +127,31 @@ def _extract_uris(body: bytes) -> list[str] | None:
     return None
 
 
+def _with_note(uri: str, note: str) -> str:
+    """Append ``note`` as a second line under the server's original name.
+
+    The name/note are joined with a real newline that ``quote`` encodes as
+    ``%0A`` — the URI line itself stays intact (no literal newline to break the
+    list), and the client renders the ``%0A`` as a subtitle under the name."""
+    base, _, frag = uri.partition("#")
+    name = unquote(frag) if frag else ""
+    label = f"{name}\n{note}" if name else note
+    return f"{base}#{quote(label)}"
+
+
 def combine(groups: list[tuple[str, bytes]]) -> bytes | None:
-    """Merge several subscription bodies (each ``(label, body)``) into one base64
-    URI list, keeping each server's **original name**. Every server from every
-    source is kept — nothing is de-duplicated across sources, so the premium and
-    bypass servers all show together. Returns ``None`` if none of the sources is
-    a URI list (nothing mergeable)."""
+    """Merge several subscription bodies (each ``(note, body)``) into one base64
+    URI list, keeping each server's **original name** and appending ``note`` as a
+    subtitle. Every server from every source is kept — nothing is de-duplicated
+    across sources, so premium and bypass servers all show together. Returns
+    ``None`` if none of the sources is a URI list (nothing mergeable)."""
     lines: list[str] = []
-    for label, body in groups:
+    for note, body in groups:
         uris = _extract_uris(body)
         if not uris:
-            logger.warning("aggregator: source %r is not a URI list (%d bytes)", label, len(body))
+            logger.warning("aggregator: source %r is not a URI list (%d bytes)", note, len(body))
             continue
-        lines.extend(uris)  # original #remarks preserved
+        lines.extend(_with_note(uri, note) if note else uri for uri in uris)
     if not lines:
         return None
     return base64.b64encode("\n".join(lines).encode())

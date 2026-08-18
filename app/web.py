@@ -87,22 +87,22 @@ async def _subscription(request: web.Request) -> web.Response:
     if not prem_url and not bp_url:
         return web.Response(status=404, text="no subscription")
 
-    prem_label = f"{config.SUBSCRIPTION_BRAND} VPN"
-    bp_label = f"{config.SUBSCRIPTION_BRAND} Обход"
+    prem_note = config.SUBSCRIPTION_NOTE_PREMIUM
+    bp_note = config.SUBSCRIPTION_NOTE_BYPASS
 
     # Fetch both config lists concurrently.
     prem_task = asyncio.create_task(aggregator.fetch(prem_url)) if prem_url else None
     bp_task = asyncio.create_task(aggregator.fetch(bp_url)) if bp_url else None
     groups: list[tuple[str, bytes]] = []
-    for label, task in ((prem_label, prem_task), (bp_label, bp_task)):
+    for note, task in ((prem_note, prem_task), (bp_note, bp_task)):
         if task is None:
             continue
         try:
             body, _ = await task
-            groups.append((label, body))
-            logger.info("aggregator %s: %s -> %d bytes", tg_id, label, len(body))
+            groups.append((note, body))
+            logger.info("aggregator %s: %r -> %d bytes", tg_id, note, len(body))
         except Exception:  # noqa: BLE001 - one source failing shouldn't 500 the other
-            logger.exception("aggregator fetch failed for %s (%s)", tg_id, label)
+            logger.exception("aggregator fetch failed for %s (%s)", tg_id, note)
 
     combined = aggregator.combine(groups)
     if combined is None:

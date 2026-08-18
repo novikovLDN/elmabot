@@ -280,6 +280,9 @@ SUBSCRIPTION_TITLE = _get_str("SUBSCRIPTION_TITLE", "💙 Elma VPN")
 SUBSCRIPTION_UPSTREAM_UA = _get_str("SUBSCRIPTION_UPSTREAM_UA", "v2rayNG/1.9.5")
 # How often the client auto-refreshes the subscription, in hours.
 SUBSCRIPTION_UPDATE_INTERVAL = _get_int("SUBSCRIPTION_UPDATE_INTERVAL", 1)
+# Second line (subtitle) shown under each server: premium vs bypass.
+SUBSCRIPTION_NOTE_PREMIUM = _get_str("SUBSCRIPTION_NOTE_PREMIUM", "Для WiFi (не тратит ГБ)")
+SUBSCRIPTION_NOTE_BYPASS = _get_str("SUBSCRIPTION_NOTE_BYPASS", "Для LTE (белые списки)")
 # HMAC key for the opaque per-user subscription token — derived from the bot
 # token so links stay valid across restarts without extra config.
 SUBSCRIPTION_SECRET = _get_str("SUBSCRIPTION_SECRET", "") or hashlib.sha256(
