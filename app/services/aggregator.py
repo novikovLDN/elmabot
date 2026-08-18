@@ -143,23 +143,19 @@ def _relabel(uri: str, name: str) -> str:
     return f"{uri.split('#', 1)[0]}#{quote(name)}"
 
 
-def combine(groups: list[tuple[str, bytes]], *, dedupe: bool = True) -> bytes | None:
+def combine(groups: list[tuple[str, bytes]]) -> bytes | None:
     """Merge several subscription bodies (each ``(label, body)``) into one base64
-    URI list, renaming every config ``"<label> N"``. Returns ``None`` if none of
-    the sources is a URI list (nothing mergeable)."""
+    URI list, renaming every config ``"<label> N"``. Every server from every
+    source is kept — nothing is de-duplicated across sources, so the premium and
+    bypass servers all show together. Returns ``None`` if none of the sources is
+    a URI list (nothing mergeable)."""
     lines: list[str] = []
-    seen: set[str] = set()
     for label, body in groups:
         uris = _extract_uris(body)
         if not uris:
+            logger.warning("aggregator: source %r is not a URI list (%d bytes)", label, len(body))
             continue
-        n = 0
-        for uri in uris:
-            key = uri.split("#", 1)[0]
-            if dedupe and key in seen:
-                continue
-            seen.add(key)
-            n += 1
+        for n, uri in enumerate(uris, 1):
             lines.append(_relabel(uri, f"{label} {n}"))
     if not lines:
         return None
