@@ -30,7 +30,13 @@ from app.keyboards import (
     broadcast_user_markup,
 )
 import config
-from app.services import aggregator, broadcaster, happ_crypto, subscription_service
+from app.services import (
+    aggregator,
+    broadcaster,
+    happ_crypto,
+    incy_crypto,
+    subscription_service,
+)
 from app.tariffs import get_tariff
 from app.utils import convert_tg_emoji, safe_edit, safe_send
 from config import ADMIN_IDS, REFERRAL_BONUS_DAYS, SUPPORT_USERNAME
@@ -183,16 +189,21 @@ async def cmd_suburl(message: Message) -> None:
         return
     link = aggregator.sub_link(message.from_user.id)
     happ = happ_crypto.to_crypt_link(link)
-    await message.answer(
+    incy = await incy_crypto.to_incy_link(link)
+    text = (
         "🔗 <b>Агрегированная подписка (Elma)</b>\n\n"
         "Ссылка-подписка (импорт в любой клиент):\n"
         f"<code>{html.escape(link)}</code>\n\n"
         "Happ (в один тап):\n"
-        f"<code>{html.escape(happ)}</code>\n\n"
-        f"Отдаётся с нашего домена под именем <b>{config.SUBSCRIPTION_BRAND}</b> "
-        "(пока только для админов).",
-        disable_web_page_preview=True,
+        f"<code>{html.escape(happ)}</code>\n"
     )
+    if incy:
+        text += f"\nIncy (в один тап):\n<code>{html.escape(incy)}</code>\n"
+    text += (
+        f"\nОтдаётся с нашего домена под именем <b>{config.SUBSCRIPTION_BRAND}</b> "
+        "(пока только для админов)."
+    )
+    await message.answer(text, disable_web_page_preview=True)
 
 
 @router.message(Command("dashboard"))

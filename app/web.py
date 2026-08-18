@@ -116,7 +116,7 @@ async def _subscription(request: web.Request) -> web.Response:
     resp = web.Response(body=combined)
     resp.headers["Content-Type"] = "text/plain; charset=utf-8"
     resp.headers["Profile-Title"] = f"base64:{title_b64}"
-    resp.headers["Profile-Update-Interval"] = "12"
+    resp.headers["Profile-Update-Interval"] = str(config.SUBSCRIPTION_UPDATE_INTERVAL)
     resp.headers["Content-Disposition"] = f'inline; filename="{config.SUBSCRIPTION_BRAND}"'
     # Never let the client / a CDN / a proxy serve a stale copy — every fetch is
     # recomputed with fresh panel data.

@@ -278,6 +278,8 @@ SUBSCRIPTION_TITLE = _get_str("SUBSCRIPTION_TITLE", "💙 Elma VPN")
 # plain-client UA so the panel returns a base64 vless URI list (mergeable), not
 # a JSON/Clash template — the merged result imports into any client.
 SUBSCRIPTION_UPSTREAM_UA = _get_str("SUBSCRIPTION_UPSTREAM_UA", "v2rayNG/1.9.5")
+# How often the client auto-refreshes the subscription, in hours.
+SUBSCRIPTION_UPDATE_INTERVAL = _get_int("SUBSCRIPTION_UPDATE_INTERVAL", 1)
 # HMAC key for the opaque per-user subscription token — derived from the bot
 # token so links stay valid across restarts without extra config.
 SUBSCRIPTION_SECRET = _get_str("SUBSCRIPTION_SECRET", "") or hashlib.sha256(
