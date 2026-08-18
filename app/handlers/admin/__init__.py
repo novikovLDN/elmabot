@@ -46,6 +46,8 @@ from database import (
     SEGMENTS,
     activity_windows,
     bypass_backfill_targets,
+    ensure_sub_token,
+    reissue_sub_token,
     bypass_coverage,
     create_login_token,
     find_user_by_username,
@@ -187,7 +189,27 @@ async def cmd_suburl(message: Message) -> None:
             "(или <code>DASHBOARD_BASE_URL</code>).",
         )
         return
-    link = aggregator.sub_link(message.from_user.id)
+    token = await ensure_sub_token(message.from_user.id)
+    await _send_sub_links(message, token)
+
+
+@router.message(Command("subreissue"))
+async def cmd_subreissue(message: Message) -> None:
+    """Reissue the admin's aggregated link: the old link dies immediately and a
+    fresh one is issued (import the new one into the client)."""
+    if not config.SUBSCRIPTION_BASE_URL:
+        await message.answer("⚠️ Агрегатор не настроен.")
+        return
+    token = await reissue_sub_token(message.from_user.id)
+    await message.answer(
+        "♻️ <b>Ссылка перевыпущена.</b> Старая больше не работает — "
+        "импортируй новую в клиент 👇"
+    )
+    await _send_sub_links(message, token)
+
+
+async def _send_sub_links(message: Message, token: str) -> None:
+    link = aggregator.sub_link(token)
     happ = happ_crypto.to_crypt_link(link)
     incy = await incy_crypto.to_incy_link(link)
     text = (
@@ -201,7 +223,8 @@ async def cmd_suburl(message: Message) -> None:
         text += f"\nIncy (в один тап):\n<code>{html.escape(incy)}</code>\n"
     text += (
         f"\nОтдаётся с нашего домена под именем <b>{config.SUBSCRIPTION_BRAND}</b> "
-        "(пока только для админов)."
+        "(пока только для админов).\n"
+        "Перевыпуск ссылки: /subreissue"
     )
     await message.answer(text, disable_web_page_preview=True)
 

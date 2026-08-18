@@ -10,8 +10,6 @@ The token is a stateless HMAC of the telegram id, so no storage is needed. While
 ``SUBSCRIPTION_ADMIN_ONLY`` is on (the MVP default), only admin ids are served.
 """
 import base64
-import hashlib
-import hmac
 import logging
 from urllib.parse import quote, unquote
 
@@ -46,38 +44,13 @@ async def close() -> None:
         _client = None
 
 
-# --- opaque per-user token -------------------------------------------------
+# --- per-user link ---------------------------------------------------------
 
-def _sig(payload: str) -> str:
-    return hmac.new(
-        config.SUBSCRIPTION_SECRET.encode(), payload.encode(), hashlib.sha256
-    ).hexdigest()[:20]
-
-
-def make_token(telegram_id: int) -> str:
-    payload = base64.urlsafe_b64encode(str(int(telegram_id)).encode()).decode().rstrip("=")
-    return f"{payload}.{_sig(payload)}"
-
-
-def verify_token(token: str) -> int | None:
-    """Telegram id encoded in ``token``, or ``None`` if it fails the HMAC."""
-    try:
-        payload, sig = token.split(".", 1)
-    except ValueError:
-        return None
-    if not hmac.compare_digest(sig, _sig(payload)):
-        return None
-    try:
-        pad = "=" * (-len(payload) % 4)
-        return int(base64.urlsafe_b64decode(payload + pad).decode())
-    except Exception:  # noqa: BLE001
-        return None
-
-
-def sub_link(telegram_id: int) -> str:
-    """Full aggregated subscription URL handed to the user / imported by clients."""
+def sub_link(token: str) -> str:
+    """Full aggregated subscription URL for a user's token (unique + revocable;
+    the token lives in the DB, so reissuing it kills the old link)."""
     base = (config.SUBSCRIPTION_BASE_URL or "").rstrip("/")
-    return f"{base}/sub/{make_token(telegram_id)}"
+    return f"{base}/sub/{token}"
 
 
 # --- rebranding ------------------------------------------------------------

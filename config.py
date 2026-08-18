@@ -283,11 +283,6 @@ SUBSCRIPTION_UPDATE_INTERVAL = _get_int("SUBSCRIPTION_UPDATE_INTERVAL", 1)
 # Second line (subtitle) shown under each server: premium vs bypass.
 SUBSCRIPTION_NOTE_PREMIUM = _get_str("SUBSCRIPTION_NOTE_PREMIUM", "Для WiFi (не тратит ГБ)")
 SUBSCRIPTION_NOTE_BYPASS = _get_str("SUBSCRIPTION_NOTE_BYPASS", "Для LTE (белые списки)")
-# HMAC key for the opaque per-user subscription token — derived from the bot
-# token so links stay valid across restarts without extra config.
-SUBSCRIPTION_SECRET = _get_str("SUBSCRIPTION_SECRET", "") or hashlib.sha256(
-    ("subagg:" + BOT_TOKEN).encode()
-).hexdigest()
 # MVP gate: while True the aggregator serves ADMIN_IDS only.
 SUBSCRIPTION_ADMIN_ONLY = _get_bool("SUBSCRIPTION_ADMIN_ONLY", True)
 WEBAUTHN_RP_NAME = _get_str("WEBAUTHN_RP_NAME", f"{BRAND_NAME} Admin")

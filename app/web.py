@@ -25,6 +25,7 @@ from database import (
     get_subscription,
     is_payment_paid,
     mark_payment_failed,
+    user_by_sub_token,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,7 +58,8 @@ async def _subscription(request: web.Request) -> web.Response:
     while SUBSCRIPTION_ADMIN_ONLY."""
     if not config.SUBSCRIPTION_BASE_URL:
         return web.Response(status=404, text="not found")
-    tg_id = aggregator.verify_token(request.match_info.get("token", ""))
+    # The token is a per-user secret in the DB — an unknown/revoked token 404s.
+    tg_id = await user_by_sub_token(request.match_info.get("token", ""))
     if tg_id is None or (config.SUBSCRIPTION_ADMIN_ONLY and tg_id not in config.ADMIN_IDS):
         return web.Response(status=404, text="not found")
 

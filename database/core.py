@@ -43,6 +43,10 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_code       TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_pct        INTEGER;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS offer_expires_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_funnel_stage SMALLINT NOT NULL DEFAULT 0;
+-- Per-user aggregator subscription token (unique, revocable — reissuing it
+-- kills the old /sub link).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS sub_token TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS ix_users_sub_token ON users (sub_token) WHERE sub_token IS NOT NULL;
 -- Loyalty economy: balance (kopecks), VIP flag, and an optional fixed cashback
 -- % that overrides the referral tier when set.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_kopecks        BIGINT NOT NULL DEFAULT 0;

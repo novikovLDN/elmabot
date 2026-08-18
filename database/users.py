@@ -1,7 +1,52 @@
 """CRUD for users."""
+import secrets
+
 import asyncpg
 
 from .core import get_pool
+
+
+def _new_sub_token() -> str:
+    return secrets.token_urlsafe(24)
+
+
+async def ensure_sub_token(telegram_id: int) -> str:
+    """The user's aggregator subscription token, creating a random one on first
+    use. Stable until reissued — this is what makes each /sub link unique and
+    revocable per user."""
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "SELECT sub_token FROM users WHERE telegram_id = $1", telegram_id
+    )
+    if row and row["sub_token"]:
+        return row["sub_token"]
+    token = _new_sub_token()
+    await pool.execute(
+        "UPDATE users SET sub_token = $2 WHERE telegram_id = $1", telegram_id, token
+    )
+    return token
+
+
+async def reissue_sub_token(telegram_id: int) -> str:
+    """Rotate the user's subscription token: the old /sub link dies immediately
+    and a fresh one is returned."""
+    pool = get_pool()
+    token = _new_sub_token()
+    await pool.execute(
+        "UPDATE users SET sub_token = $2 WHERE telegram_id = $1", telegram_id, token
+    )
+    return token
+
+
+async def user_by_sub_token(token: str) -> int | None:
+    """Telegram id behind a subscription token, or None if it's unknown/revoked."""
+    if not token:
+        return None
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "SELECT telegram_id FROM users WHERE sub_token = $1", token
+    )
+    return row["telegram_id"] if row else None
 
 
 async def upsert_user(
