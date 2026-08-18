@@ -123,13 +123,16 @@ def build_announce(*, has_premium: bool, has_bypass: bool, remaining_bytes: int 
 
 def _extract_uris(body: bytes) -> list[str] | None:
     """Pull the proxy-URI lines out of a subscription body (base64 or plaintext
-    list). Returns ``None`` for structured formats (Clash / sing-box)."""
-    try:
-        decoded = base64.b64decode(b"".join(body.split()), validate=True)
+    list). Returns ``None`` for structured formats (Clash / sing-box / JSON)."""
+    compact = b"".join(body.split())
+    pad = b"=" * (-len(compact) % 4)
+    for decoder in (base64.b64decode, base64.urlsafe_b64decode):
+        try:
+            decoded = decoder(compact + pad)
+        except Exception:  # noqa: BLE001 - not this base64 variant
+            continue
         if b"://" in decoded:
             return [l.strip() for l in decoded.decode("utf-8", "replace").splitlines() if "://" in l]
-    except Exception:  # noqa: BLE001 - not base64
-        pass
     try:
         text = body.decode("utf-8")
     except UnicodeDecodeError:
@@ -188,14 +191,17 @@ def rebrand(body: bytes, brand: str) -> bytes:
     return body
 
 
-async def fetch(subscription_url: str, user_agent: str) -> tuple[bytes, dict]:
-    """GET the panel subscription content, forwarding the client's User-Agent so
-    the panel returns the format that client expects. Returns
+async def fetch(subscription_url: str) -> tuple[bytes, dict]:
+    """GET the panel subscription content as a base64 vless URI list.
+
+    We send a fixed plain-client User-Agent (``SUBSCRIPTION_UPSTREAM_UA``) rather
+    than the caller's, so the panel returns a mergeable URI list instead of a
+    JSON/Clash template keyed to the real client. Returns
     ``(body, passthrough_headers)``."""
     resp = await _get_client().get(
         subscription_url,
         headers={
-            "User-Agent": user_agent or "Happ",
+            "User-Agent": config.SUBSCRIPTION_UPSTREAM_UA,
             # Always pull the current configs/usage — never a cached copy.
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",

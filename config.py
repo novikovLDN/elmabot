@@ -274,6 +274,10 @@ SUBSCRIPTION_BASE_URL = _get_str("SUBSCRIPTION_BASE_URL", "") or DASHBOARD_BASE_
 # Обход"). The whole subscription is titled SUBSCRIPTION_TITLE.
 SUBSCRIPTION_BRAND = _get_str("SUBSCRIPTION_BRAND", "Elma")
 SUBSCRIPTION_TITLE = _get_str("SUBSCRIPTION_TITLE", "💙 Elma VPN")
+# User-Agent sent to the panel when fetching a user's subscription. We force a
+# plain-client UA so the panel returns a base64 vless URI list (mergeable), not
+# a JSON/Clash template — the merged result imports into any client.
+SUBSCRIPTION_UPSTREAM_UA = _get_str("SUBSCRIPTION_UPSTREAM_UA", "v2rayNG/1.9.5")
 # HMAC key for the opaque per-user subscription token — derived from the bot
 # token so links stay valid across restarts without extra config.
 SUBSCRIPTION_SECRET = _get_str("SUBSCRIPTION_SECRET", "") or hashlib.sha256(

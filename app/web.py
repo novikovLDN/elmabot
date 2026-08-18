@@ -87,13 +87,12 @@ async def _subscription(request: web.Request) -> web.Response:
     if not prem_url and not bp_url:
         return web.Response(status=404, text="no subscription")
 
-    ua = request.headers.get("User-Agent", "")
     prem_label = f"{config.SUBSCRIPTION_BRAND} VPN"
     bp_label = f"{config.SUBSCRIPTION_BRAND} Обход"
 
     # Fetch both config lists concurrently.
-    prem_task = asyncio.create_task(aggregator.fetch(prem_url, ua)) if prem_url else None
-    bp_task = asyncio.create_task(aggregator.fetch(bp_url, ua)) if bp_url else None
+    prem_task = asyncio.create_task(aggregator.fetch(prem_url)) if prem_url else None
+    bp_task = asyncio.create_task(aggregator.fetch(bp_url)) if bp_url else None
     groups: list[tuple[str, bytes]] = []
     for label, task in ((prem_label, prem_task), (bp_label, bp_task)):
         if task is None:
