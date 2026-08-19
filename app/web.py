@@ -170,12 +170,19 @@ async def _subscription(request: web.Request) -> web.Response:
     if announce:
         resp.headers["Announce"] = "base64:" + base64.b64encode(announce.encode()).decode()
 
-    # Metered (LTE/bypass) traffic + premium expiry — only when the figures are
-    # live, so we never publish a stale consumption number.
-    if bp_live and bp_limit > 0:
-        expire_ts = int(prem_expire.timestamp()) if prem_expire else 0
+    # Subscription-Userinfo drives the client's header card:
+    #   • expire (premium end) -> the "истекает через N д" banner + «Продлить»
+    #     button; sent whenever there's an active premium sub, INDEPENDENT of
+    #     bypass (this is what was missing).
+    #   • download/total (bypass metered) -> the traffic bar; only when live, so
+    #     we never publish a stale consumption number (total=0 => unlimited).
+    expire_ts = int(prem_expire.timestamp()) if prem_expire else 0
+    metered = bp_live and bp_limit > 0
+    download = bp_used if metered else 0
+    total = bp_limit if metered else 0
+    if expire_ts or metered:
         resp.headers["Subscription-Userinfo"] = (
-            f"upload=0; download={bp_used}; total={bp_limit}; expire={expire_ts}"
+            f"upload=0; download={download}; total={total}; expire={expire_ts}"
         )
     return resp
 
