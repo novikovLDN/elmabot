@@ -210,6 +210,7 @@ async def cmd_subreissue(message: Message) -> None:
 
 async def _send_sub_links(message: Message, token: str) -> None:
     link = aggregator.sub_link(token)
+    add = aggregator.add_link(token)          # clickable https -> happ://add/...
     happ = happ_crypto.to_crypt_link(link)
     incy = await incy_crypto.to_incy_link(link)
     text = (
@@ -226,7 +227,10 @@ async def _send_sub_links(message: Message, token: str) -> None:
         "(пока только для админов).\n"
         "Перевыпуск ссылки: /subreissue"
     )
-    await message.answer(text, disable_web_page_preview=True)
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🔑 Добавить в Happ (в 1 тап)", url=add)
+    kb.adjust(1)
+    await message.answer(text, reply_markup=kb.as_markup(), disable_web_page_preview=True)
 
 
 @router.message(Command("dashboard"))

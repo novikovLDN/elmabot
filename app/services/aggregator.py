@@ -53,6 +53,13 @@ def sub_link(token: str) -> str:
     return f"{base}/sub/{token}"
 
 
+def add_link(token: str) -> str:
+    """Clickable https one-tap "add to Happ" link — /add 302-redirects to the
+    ``happ://add/...`` deep link (usable in Telegram buttons, unlike happ://)."""
+    base = (config.SUBSCRIPTION_BASE_URL or "").rstrip("/")
+    return f"{base}/add/{token}"
+
+
 # --- rebranding ------------------------------------------------------------
 
 _GB = 1024 ** 3

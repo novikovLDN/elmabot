@@ -52,6 +52,34 @@ async def _connect_page(_: web.Request) -> web.Response:
     )
 
 
+_bot_webpage_cache: str | None = None
+
+
+async def _subscription_webpage(request: web.Request) -> str | None:
+    """URL for the client's «Продлить» button / web-page icon — the configured
+    one, else the bot's own t.me link (resolved once and cached)."""
+    global _bot_webpage_cache
+    if config.SUBSCRIPTION_WEBPAGE_URL:
+        return config.SUBSCRIPTION_WEBPAGE_URL
+    if _bot_webpage_cache is None:
+        try:
+            me = await request.app["bot"].me()
+            _bot_webpage_cache = f"https://t.me/{me.username}?start=renew"
+        except Exception:  # noqa: BLE001 - fall back to support
+            _bot_webpage_cache = config.SUPPORT_URL or ""
+    return _bot_webpage_cache or None
+
+
+async def _happ_add(request: web.Request) -> web.Response:
+    """One-tap add-to-Happ: an https link that 302-redirects to the ``happ://``
+    deep link (happ:// itself isn't clickable in Telegram, https is)."""
+    token = request.match_info.get("token", "")
+    tg = await user_by_sub_token(token)
+    if tg is None or (config.SUBSCRIPTION_ADMIN_ONLY and tg not in config.ADMIN_IDS):
+        return web.Response(status=404, text="not found")
+    return web.HTTPFound(f"happ://add/{aggregator.sub_link(token)}")
+
+
 async def _subscription(request: web.Request) -> web.Response:
     """Aggregated subscription: merge the user's premium + bypass panel configs
     into one Elma-branded subscription served from our own domain. Admin-only
@@ -120,6 +148,12 @@ async def _subscription(request: web.Request) -> web.Response:
     resp.headers["Profile-Title"] = f"base64:{title_b64}"
     resp.headers["Profile-Update-Interval"] = str(config.SUBSCRIPTION_UPDATE_INTERVAL)
     resp.headers["Content-Disposition"] = f'inline; filename="{config.SUBSCRIPTION_BRAND}"'
+    # Web-page / «Продлить» button + support link shown in the client's header
+    # card. Points at the bot's renew screen.
+    webpage = await _subscription_webpage(request)
+    if webpage:
+        resp.headers["Profile-Web-Page-Url"] = webpage
+        resp.headers["Support-Url"] = webpage
     # Never let the client / a CDN / a proxy serve a stale copy — every fetch is
     # recomputed with fresh panel data.
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -209,6 +243,7 @@ def build_app(bot: Bot, dp: Dispatcher | None = None) -> web.Application:
     app.router.add_get("/", _health)
     app.router.add_get("/connect", _connect_page)
     app.router.add_get("/sub/{token}", _subscription)
+    app.router.add_get("/add/{token}", _happ_add)
     app.router.add_post("/platega/webhook", _platega_webhook)
     # Admin web dashboard (no-op unless DASHBOARD_ENABLED).
     from app.api.dashboard import setup_dashboard

@@ -283,6 +283,9 @@ SUBSCRIPTION_UPDATE_INTERVAL = _get_int("SUBSCRIPTION_UPDATE_INTERVAL", 1)
 # Second line (subtitle) shown under each server: premium vs bypass.
 SUBSCRIPTION_NOTE_PREMIUM = _get_str("SUBSCRIPTION_NOTE_PREMIUM", "Для WiFi (не тратит ГБ)")
 SUBSCRIPTION_NOTE_BYPASS = _get_str("SUBSCRIPTION_NOTE_BYPASS", "Для LTE (белые списки)")
+# Where the client's «Продлить» button / web-page icon leads. Empty -> the bot's
+# own t.me link (resolved at runtime) so it opens the renew screen.
+SUBSCRIPTION_WEBPAGE_URL = _get_str("SUBSCRIPTION_WEBPAGE_URL", "")
 # MVP gate: while True the aggregator serves ADMIN_IDS only.
 SUBSCRIPTION_ADMIN_ONLY = _get_bool("SUBSCRIPTION_ADMIN_ONLY", True)
 WEBAUTHN_RP_NAME = _get_str("WEBAUTHN_RP_NAME", f"{BRAND_NAME} Admin")

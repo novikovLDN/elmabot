@@ -308,6 +308,14 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
             await message.answer(GIFT_REDEEMED, reply_markup=devices_keyboard())
             return
 
+    # «Продлить» from the subscription client's header card: /start renew.
+    if args == "renew":
+        from app.handlers.purchase import _tariffs_view
+
+        text, markup = await _tariffs_view(user.id)
+        await message.answer(text, reply_markup=markup)
+        return
+
     # Promo-code deep link: /start promo_<code>.
     if args.startswith("promo_"):
         from app.services import promo_service
