@@ -1,9 +1,15 @@
-"""Thin async client over the Remnawave panel REST API (httpx).
+"""Thin async client over the Remnawave panel REST API (httpx), **v3.x**.
 
-Four user operations plus a squad helper. Auth is a Bearer token. The panel
-PATCHes through a single ``/api/users`` endpoint (uuid in the body, not the
-path). ``404`` is normalised to ``None`` so callers can treat "missing" as data
-rather than an exception.
+Four user operations plus a squad helper. Auth is a Bearer token.
+
+Remnawave 3.x breaking changes handled here:
+- users are identified by a numeric ``id`` (the ``uuid`` field is gone). PATCH
+  carries ``{"id": <int>, ...}`` in the body; DELETE is ``/api/users/{id}``.
+- our stored ``panel_uuid`` column now holds that numeric id (as a string); a
+  legacy (non-numeric) value yields ``None`` from :func:`_as_id`, so the caller
+  re-adopts the record by ``username`` (still supported) and heals itself.
+- squad membership uses ``userIds`` (numbers), not ``userUuids``.
+- DELETE returns 204 (no body); ``404`` is normalised to ``None``.
 
 No webhooks panel->bot: the bot always drives the panel.
 """
@@ -93,29 +99,54 @@ def _unwrap(payload: dict) -> dict:
 
 # --- User operations -------------------------------------------------------
 
+def _as_id(identifier) -> int | None:
+    """Coerce a stored identifier to Remnawave's numeric user id (3.x). A legacy
+    uuid string (or None) returns None, so the caller re-adopts by username."""
+    try:
+        return int(identifier)
+    except (TypeError, ValueError):
+        return None
+
+
 async def create_user(payload: dict) -> dict:
+    """POST /api/users -> 201. The response carries the numeric ``id``."""
     return await _req("POST", "/api/users", json=payload)
 
 
-async def update_user(panel_uuid: str, **fields) -> dict | None:
-    """PATCH /api/users — uuid travels in the body. ``None`` on 404."""
-    return await _req("PATCH", "/api/users", json={"uuid": panel_uuid, **fields})
+async def update_user(identifier, **fields) -> dict | None:
+    """PATCH /api/users — 3.x identifies the user by numeric ``id`` in the body.
+    A non-numeric (legacy uuid) identifier returns ``None`` so the caller heals
+    the record via find-by-username; ``None`` also on 404."""
+    uid = _as_id(identifier)
+    if uid is None:
+        return None
+    return await _req("PATCH", "/api/users", json={"id": uid, **fields})
 
 
 async def find_user_by_username(username: str) -> dict | None:
+    """GET /api/users/by-username/{username} — still supported in 3.x (unlike
+    by-telegram-id / by-email / by-tag / by-id). Returns the object with the
+    numeric ``id``, or ``None`` on 404."""
     return await _req("GET", f"/api/users/by-username/{username}")
 
 
-async def delete_user(panel_uuid: str) -> None:
-    """DELETE /api/users/{uuid}. 404 is treated as already-deleted."""
-    await _req("DELETE", f"/api/users/{panel_uuid}")
+async def delete_user(identifier) -> None:
+    """DELETE /api/users/{id} (numeric id in 3.x). 204/404 both mean 'gone'."""
+    uid = _as_id(identifier)
+    if uid is None:
+        return
+    await _req("DELETE", f"/api/users/{uid}")
 
 
-async def add_users_to_squad(squad_uuid: str, user_uuids: list[str]) -> dict | None:
-    """Attach users to an internal squad — the §10.4 safety net for when a
-    freshly created user came back with an empty ``activeInternalSquads``."""
+async def add_users_to_squad(squad_uuid: str, user_ids: list) -> dict | None:
+    """Attach users to an internal squad — safety net for a freshly created user
+    that came back with an empty ``activeInternalSquads``. 3.x uses ``userIds``
+    (numbers), not ``userUuids``."""
+    ids = [i for i in (_as_id(u) for u in user_ids) if i is not None]
+    if not ids:
+        return None
     return await _req(
         "POST",
         "/api/squads/add-users-to-squad",
-        json={"squadUuid": squad_uuid, "userUuids": user_uuids},
+        json={"squadUuid": squad_uuid, "userIds": ids},
     )

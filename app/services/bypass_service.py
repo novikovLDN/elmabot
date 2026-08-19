@@ -34,8 +34,10 @@ def _far_future() -> str:
 
 def _extract(data: dict | None) -> dict:
     data = data or {}
+    # Remnawave 3.x: numeric ``id`` (stringified); ``uuid`` is a legacy fallback.
+    pid = data.get("id") or data.get("uuid") or data.get("userUuid")
     return {
-        "uuid": data.get("uuid") or data.get("id") or data.get("userUuid"),
+        "uuid": str(pid) if pid is not None else None,
         "url": (
             data.get("subscriptionUrl")
             or data.get("subscription_url")
@@ -54,7 +56,7 @@ def _create_payload(telegram_id: int, limit_bytes: int) -> dict:
         "trafficLimitStrategy": "NO_RESET",
         "status": "ACTIVE",
         "expireAt": _far_future(),
-        "deviceLimit": config.BYPASS_DEVICE_LIMIT,
+        "hwidDeviceLimit": config.BYPASS_DEVICE_LIMIT,  # 3.x renamed deviceLimit
         "description": _DESCRIPTION,
         "telegramId": telegram_id,
     }

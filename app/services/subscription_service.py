@@ -58,10 +58,14 @@ def next_expiry_delta(
 
 
 def _extract(data: dict | None) -> dict:
-    """Pull the fields we persist out of a panel user object, defensively."""
+    """Pull the fields we persist out of a panel user object, defensively.
+
+    ``panel_uuid`` now holds Remnawave 3.x's numeric ``id`` (stringified for the
+    TEXT column); ``uuid`` is a legacy fallback for pre-migration responses."""
     data = data or {}
+    pid = data.get("id") or data.get("uuid") or data.get("userUuid")
     return {
-        "panel_uuid": data.get("uuid") or data.get("id") or data.get("userUuid"),
+        "panel_uuid": str(pid) if pid is not None else None,
         "vless_uuid": data.get("vlessUuid") or data.get("vless_uuid"),
         "subscription_url": (
             data.get("subscriptionUrl")
@@ -81,7 +85,7 @@ def _build_create_payload(
         "trafficLimitStrategy": "NO_RESET",
         "status": "ACTIVE",
         "expireAt": _iso_z(expire_at),
-        "deviceLimit": config.DEVICE_LIMIT,
+        "hwidDeviceLimit": config.DEVICE_LIMIT,  # 3.x renamed deviceLimit
         "description": _DESCRIPTION,
         "telegramId": telegram_id,
     }
