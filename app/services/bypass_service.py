@@ -114,10 +114,18 @@ async def provision_trial_bonus(telegram_id: int) -> bool:
 
 async def provision_traffic(telegram_id: int, extra_bytes: int) -> int:
     """Add ``extra_bytes`` to the user's bypass entity (creating it if needed).
-    Returns the new total limit in bytes. Panel call first, DB write second."""
+    Returns the new total limit in bytes. Panel call first, DB write second.
+
+    Remnawave 3.x ``trafficLimitBytes`` is ABSOLUTE, so the new limit is
+    ``current + extra`` — and ``current`` is read LIVE from the panel (not the
+    possibly-stale DB cache), so a top-up never assigns the wrong amount."""
     row = await get_bypass(telegram_id)
     if row and row["panel_uuid"]:
-        new_limit = int(row["traffic_limit_bytes"] or 0) + int(extra_bytes)
+        current = await remnawave.find_user_by_username(
+            config.build_bypass_username(telegram_id)
+        )
+        base = int(_extract(current)["limit"]) if current else int(row["traffic_limit_bytes"] or 0)
+        new_limit = base + int(extra_bytes)
         patched = await remnawave.update_user(
             row["panel_uuid"], trafficLimitBytes=new_limit, status="ACTIVE"
         )
