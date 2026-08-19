@@ -87,29 +87,56 @@ async def revoke(request: web.Request) -> web.Response:
     return json_ok({"ok": True})
 
 
-@routes.post("/users/{tg}/reissue")
-async def reissue(request: web.Request) -> web.Response:
-    """Rotate the user's VPN keys (new subscription url); notify them."""
-    from app.services import subscription_service
+async def _notify_reissue(bot, tg: int) -> None:
+    """Tell the user their subscription was reissued; the Подключиться flow shows
+    the fresh key (it re-reads the current panel key each time)."""
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+
     from app.utils import safe_send
 
-    tg = _tg(request)
-    try:
-        sub = await subscription_service.reissue(tg)
-    except Exception as exc:  # noqa: BLE001 - panel failure
-        raise web.HTTPBadGateway(reason=f"reissue failed: {exc}")
-    if sub is None:
-        raise web.HTTPBadRequest(reason="нет активной подписки")
-
-    await database.log_audit(int(request["admin"]["sub"]), "reissue", tg)
-    bot = request.config_dict["bot"]
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📲 Подключиться", callback_data="dev:menu")
+    kb.button(text="🏠 Главное меню", callback_data="menu:main")
+    kb.adjust(1)
     await safe_send(
         bot, tg,
-        "🔑 <b>Ключ доступа перевыпущен</b>\n\n"
-        "Старая ссылка больше не работает. Открой «Подключиться» и импортируй "
-        "новый ключ на своих устройствах.",
+        "🔑 <b>Ваша подписка обновлена</b>\n\n"
+        "Ключ доступа перевыпущен — старый ключ больше не действует.\n\n"
+        "Нажми «Подключиться», чтобы установить новый ключ на своих устройствах 👇",
+        reply_markup=kb.as_markup(),
     )
-    return json_ok({"ok": True})
+
+
+@routes.post("/users/{tg}/reissue")
+async def reissue(request: web.Request) -> web.Response:
+    """Reissue the user's subscription: rotate the aggregator link + the panel
+    VPN key, then notify the user. Records the admin's reason; logs any error."""
+    from app.services import subscription_service
+
+    tg = _tg(request)
+    body = await read_json(request)
+    reason = str(body.get("reason", "")).strip()[:300]
+    admin_id = int(request["admin"]["sub"])
+
+    # 1. Rotate the aggregator link — DB-only, instant, can't break the VPN.
+    #    The old /sub link dies immediately.
+    await database.reissue_sub_token(tg)
+
+    # 2. Rotate the panel VPN key (new vless url; old configs stop working).
+    try:
+        sub = await subscription_service.reissue(tg)
+    except Exception as exc:  # noqa: BLE001 - panel failure: log and surface
+        detail = f"{reason} | {exc}" if reason else str(exc)
+        await database.log_audit(admin_id, "reissue_error", tg, detail[:300])
+        raise web.HTTPBadGateway(reason=f"reissue failed: {exc}")
+
+    # 3. Notify the user — the Подключиться flow serves the new key automatically.
+    await _notify_reissue(request.config_dict["bot"], tg)
+
+    # 4. Audit success with the reason (per-user record).
+    await database.log_audit(admin_id, "reissue", tg, reason or None)
+    bus.publish({"type": "admin:reissue", "telegram_id": tg})
+    return json_ok({"ok": True, "had_active_sub": sub is not None})
 
 
 @routes.post("/users/{tg}/discount")

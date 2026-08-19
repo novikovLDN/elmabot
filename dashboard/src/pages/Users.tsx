@@ -95,6 +95,7 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
   const [days, setDays] = useState(30);
   const [discPct, setDiscPct] = useState(20);
   const [discDays, setDiscDays] = useState(3);
+  const [reissueReason, setReissueReason] = useState("");
   const detail = useQuery({ queryKey: ["users", "detail", tg], queryFn: () => endpoints.user(tg) });
 
   const refresh = () => {
@@ -112,8 +113,12 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
     onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
   });
   const reissue = useMutation({
-    mutationFn: () => endpoints.reissue(tg),
-    onSuccess: () => { toast.success("Ключ перевыпущен"); refresh(); },
+    mutationFn: () => endpoints.reissue(tg, reissueReason.trim()),
+    onSuccess: () => {
+      toast.success("Подписка перевыпущена — пользователь уведомлён");
+      setReissueReason("");
+      refresh();
+    },
     onError: (e) => toast.error(e instanceof ApiError ? e.detail : "Ошибка"),
   });
   const setDisc = useMutation({
@@ -176,9 +181,22 @@ function UserDrawer({ tg, onClose }: { tg: number; onClose: () => void }) {
               <ConfirmButton className="w-full" variant="secondary" icon={ShieldX}
                 idleLabel="Отозвать доступ" confirmLabel="Точно отозвать доступ?"
                 pending={revoke.isPending} onConfirm={() => revoke.mutate()} />
-              <ConfirmButton className="w-full" variant="secondary" icon={RefreshCw}
-                idleLabel="Перевыпустить ключ" confirmLabel="Точно перевыпустить? Старая ссылка перестанет работать"
-                pending={reissue.isPending} onConfirm={() => reissue.mutate()} />
+
+              {/* reissue — reason required + double-confirm */}
+              <div className="space-y-2 rounded-xl border border-border-subtle bg-bg-elevated/40 p-3">
+                <div className="label">Перевыпуск подписки</div>
+                <p className="text-xs text-fg-muted">
+                  Ротация ключа и ссылки. Старый доступ сразу перестаёт работать,
+                  пользователю придёт уведомление с новым ключом.
+                </p>
+                <input className="input w-full" placeholder="Причина перевыпуска (обязательно)"
+                  value={reissueReason} onChange={(e) => setReissueReason(e.target.value)} />
+                <ConfirmButton className="w-full" variant="danger" icon={RefreshCw}
+                  idleLabel="Перевыпустить подписку"
+                  confirmLabel="Точно перевыпустить? Старый ключ перестанет работать"
+                  disabled={reissueReason.trim().length < 3}
+                  pending={reissue.isPending} onConfirm={() => reissue.mutate()} />
+              </div>
             </div>
 
             {/* personal discount (offer) */}

@@ -9,7 +9,7 @@ import { Pagination } from "./Users";
 
 const ACTION: Record<string, string> = {
   grant: "badge-success", revoke: "badge-danger", broadcast: "badge-accent",
-  password_set: "badge-muted",
+  password_set: "badge-muted", reissue: "badge-accent", reissue_error: "badge-danger",
 };
 
 export default function Audit() {
