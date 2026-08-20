@@ -79,6 +79,13 @@ async def _req(method: str, path: str, **kwargs) -> dict | None:
                     method, path, resp.status_code, attempt, _RETRIES,
                 )
             else:
+                if resp.status_code >= 400:
+                    # Log the panel's actual error body so validation failures
+                    # (400/422) are diagnosable instead of a bare status code.
+                    logger.error(
+                        "Remnawave %s %s -> %d: %s",
+                        method, path, resp.status_code, resp.text[:800],
+                    )
                 resp.raise_for_status()
                 if resp.content:
                     return _unwrap(resp.json())
@@ -128,6 +135,24 @@ async def find_user_by_username(username: str) -> dict | None:
     by-telegram-id / by-email / by-tag / by-id). Returns the object with the
     numeric ``id``, or ``None`` on 404."""
     return await _req("GET", f"/api/users/by-username/{username}")
+
+
+async def find_user_by_telegram_id(
+    telegram_id: int, *, username: str | None = None
+) -> dict | None:
+    """GET /api/users/stream?telegramId= — the 3.x-guaranteed lookup (the old
+    /by-telegram-id was removed).
+
+    A user can have several entities under one telegramId (premium ``elma_<id>``
+    AND bypass ``elma_bp_<id>``), so pass ``username`` to pick the right one —
+    never adopt/patch the wrong entity."""
+    res = await _req(
+        "GET", "/api/users/stream", params={"telegramId": telegram_id, "size": 10}
+    )
+    users = (res or {}).get("users") or []
+    if username is not None:
+        users = [u for u in users if u.get("username") == username]
+    return users[0] if users else None
 
 
 async def delete_user(identifier) -> None:

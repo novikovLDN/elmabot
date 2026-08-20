@@ -193,6 +193,37 @@ async def cmd_suburl(message: Message) -> None:
     await _send_sub_links(message, token)
 
 
+@router.message(Command("panelbackfill"))
+async def cmd_panel_backfill(message: Message) -> None:
+    """Backfill telegramId onto panel entities + migrate stored ids to 3.x
+    numeric ids. One-shot, admin-only."""
+    from app.services import panel_backfill
+
+    status = await message.answer("⏳ Бэкфилл панели запущен… (telegramId + миграция id)")
+
+    async def progress(done: int, total: int, st: dict) -> None:
+        try:
+            await status.edit_text(f"⏳ Бэкфилл: {done}/{total}…")
+        except Exception:  # noqa: BLE001
+            pass
+
+    try:
+        st = await panel_backfill.run(progress)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("panel backfill crashed")
+        await status.edit_text(f"❌ Бэкфилл упал: {exc}")
+        return
+    await status.edit_text(
+        "✅ <b>Бэкфилл завершён</b>\n\n"
+        f"Всего сущностей: {st['total']}\n"
+        f"telegramId проставлен: {st['tg_fixed']}\n"
+        f"Уже корректно: {st['ok']}\n"
+        f"Не найдено в панели: {st['not_found']}\n"
+        f"Без id: {st['no_id']}\n"
+        f"Ошибок: {st['error']}"
+    )
+
+
 @router.message(Command("subreissue"))
 async def cmd_subreissue(message: Message) -> None:
     """Reissue the admin's aggregated link: the old link dies immediately and a

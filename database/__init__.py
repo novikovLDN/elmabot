@@ -8,6 +8,8 @@ from .core import (
 )
 from .subscriptions import (
     clear_panel_uuid,
+    set_panel_uuid,
+    all_provisioned,
     create_gift,
     create_pending_payment,
     due_reactivation_ladder,
@@ -127,6 +129,7 @@ from .bypass import (
     bypass_backfill_targets,
     bypass_coverage,
     clear_bypass_panel,
+    set_bypass_panel_uuid,
     get_bypass,
     record_traffic_purchase,
     set_bypass_meta,
@@ -192,6 +195,8 @@ __all__ = [
     "get_subscription",
     "upsert_subscription",
     "clear_panel_uuid",
+    "set_panel_uuid",
+    "all_provisioned",
     "create_pending_payment",
     "get_payment",
     "is_payment_paid",
@@ -231,6 +236,7 @@ __all__ = [
     "set_bypass_meta",
     "set_bypass_notify_level",
     "clear_bypass_panel",
+    "set_bypass_panel_uuid",
     "all_bypass",
     "bypass_backfill_targets",
     "bypass_backfill_count",

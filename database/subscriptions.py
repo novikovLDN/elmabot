@@ -78,6 +78,23 @@ async def clear_panel_uuid(telegram_id: int) -> None:
     )
 
 
+async def set_panel_uuid(telegram_id: int, panel_uuid: str) -> None:
+    """Store the panel identifier (3.x numeric id) — used by the backfill."""
+    pool = get_pool()
+    await pool.execute(
+        "UPDATE subscriptions SET panel_uuid = $2 WHERE telegram_id = $1",
+        telegram_id, panel_uuid,
+    )
+
+
+async def all_provisioned() -> list[asyncpg.Record]:
+    """Every subscription with a panel entity (for the panel backfill)."""
+    pool = get_pool()
+    return await pool.fetch(
+        "SELECT telegram_id, panel_uuid FROM subscriptions WHERE panel_uuid IS NOT NULL"
+    )
+
+
 # --- Payments --------------------------------------------------------------
 
 async def create_pending_payment(

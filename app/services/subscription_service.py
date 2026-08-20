@@ -91,10 +91,9 @@ def _build_create_payload(
     }
     if config.REMNAWAVE_MAIN_SQUAD_UUID:
         payload["activeInternalSquads"] = [config.REMNAWAVE_MAIN_SQUAD_UUID]
-    # Reuse the same VLESS uuid when recreating a lost record so the user does
-    # not have to reconfigure the client (§3).
-    if vless_uuid:
-        payload["vlessUuid"] = vless_uuid
+    # NOTE: Remnawave 3.x validates the create DTO strictly and no longer accepts
+    # a caller-supplied vlessUuid, so we don't send it (the panel assigns keys;
+    # the client re-imports the stable aggregator/subscription link).
     return payload
 
 
@@ -160,6 +159,18 @@ async def _adopt(
     )
 
 
+async def _find_panel_user(telegram_id: int, username: str) -> dict | None:
+    """Locate the user's panel record robustly: by username, then by telegramId
+    (3.x stream) as a fallback — so provisioning never breaks on a single
+    lookup path."""
+    found = await remnawave.find_user_by_username(username)
+    if found is None:
+        # Safety net: match on username so a user's bypass entity (same
+        # telegramId) is never adopted as their premium one.
+        found = await remnawave.find_user_by_telegram_id(telegram_id, username=username)
+    return found
+
+
 async def create_or_renew(
     telegram_id: int, expire_at: datetime, source: str
 ) -> asyncpg.Record:
@@ -186,7 +197,7 @@ async def create_or_renew(
             return await _persist(telegram_id, expire_at, source, patched, db_sub=sub)
 
     # Step 3: preflight — adopt a record left over from a half-finished run.
-    found = await remnawave.find_user_by_username(username)
+    found = await _find_panel_user(telegram_id, username)
     if found:
         logger.info("Adopting existing panel record for %s", telegram_id)
         return await _adopt(telegram_id, found, expire_at, source, sub)
@@ -200,7 +211,7 @@ async def create_or_renew(
         if exc.response.status_code == 409:
             # Race: the record appeared between preflight and POST -> adopt.
             logger.info("Create conflict for %s; adopting existing record", telegram_id)
-            found = await remnawave.find_user_by_username(username)
+            found = await _find_panel_user(telegram_id, username)
             if found:
                 return await _adopt(telegram_id, found, expire_at, source, sub)
         logger.exception("Remnawave create failed for %s", telegram_id)

@@ -86,6 +86,15 @@ async def clear_bypass_panel(telegram_id: int) -> None:
     )
 
 
+async def set_bypass_panel_uuid(telegram_id: int, panel_uuid: str) -> None:
+    """Store the bypass panel identifier (3.x numeric id) — used by the backfill."""
+    pool = get_pool()
+    await pool.execute(
+        "UPDATE bypass_subscriptions SET panel_uuid = $2 WHERE telegram_id = $1",
+        telegram_id, panel_uuid,
+    )
+
+
 async def all_bypass() -> list[asyncpg.Record]:
     """Bypass rows with a provisioned entity (for the traffic monitor)."""
     pool = get_pool()
