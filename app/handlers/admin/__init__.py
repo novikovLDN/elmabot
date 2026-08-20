@@ -216,7 +216,7 @@ async def cmd_panel_backfill(message: Message) -> None:
     await status.edit_text(
         "✅ <b>Бэкфилл завершён</b>\n\n"
         f"Всего сущностей: {st['total']}\n"
-        f"telegramId проставлен: {st['tg_fixed']}\n"
+        f"Синхронизировано (telegramId/срок): {st['synced']}\n"
         f"Уже корректно: {st['ok']}\n"
         f"Не найдено в панели: {st['not_found']}\n"
         f"Без id: {st['no_id']}\n"

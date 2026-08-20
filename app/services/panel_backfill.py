@@ -25,25 +25,43 @@ from . import remnawave
 logger = logging.getLogger(__name__)
 
 
-async def _fix_one(username: str, telegram_id: int, *, bypass: bool) -> str:
+def _iso_z(dt) -> str:
+    from database import to_db_utc
+
+    return to_db_utc(dt).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+async def _fix_one(
+    username: str, telegram_id: int, *, bypass: bool, expires_at=None, active=False
+) -> str:
     found = await remnawave.find_user_by_username(username)
     if found is None:
         found = await remnawave.find_user_by_telegram_id(telegram_id, username=username)
     if found is None:
         return "not_found"
-    pid = found.get("id")
+    pid = found.get("id") or found.get("uuid")
     if pid is None:
         return "no_id"
     pid = str(pid)
-    # Store the numeric id in our DB (uuid -> id migration).
+    # Store the identifier in our DB (uuid -> id migration).
     if bypass:
         await set_bypass_panel_uuid(telegram_id, pid)
     else:
         await set_panel_uuid(telegram_id, pid)
+
+    patch: dict = {}
     # Fill telegramId on the panel entity if it's absent or wrong.
     if found.get("telegramId") != telegram_id:
-        await remnawave.update_user(pid, telegramId=telegram_id)
-        return "tg_fixed"
+        patch["telegramId"] = telegram_id
+    # Re-sync the premium expiry to our DB (heals renewals that didn't apply
+    # while the panel client was on the old contract).
+    if not bypass and active and expires_at is not None:
+        patch["expireAt"] = _iso_z(expires_at)
+        patch["status"] = "ACTIVE"
+
+    if patch:
+        await remnawave.update_user(pid, **patch)
+        return "synced"
     return "ok"
 
 
@@ -53,17 +71,22 @@ async def run(progress=None) -> dict:
     subs = await all_provisioned()
     byps = await all_bypass()
     targets = [
-        (config.build_username(r["telegram_id"]), r["telegram_id"], False) for r in subs
+        (
+            config.build_username(r["telegram_id"]), r["telegram_id"], False,
+            r["expires_at"], r["status"] == "active",
+        )
+        for r in subs
     ] + [
-        (config.build_bypass_username(r["telegram_id"]), r["telegram_id"], True) for r in byps
+        (config.build_bypass_username(r["telegram_id"]), r["telegram_id"], True, None, False)
+        for r in byps
     ]
 
-    stats = {"total": 0, "ok": 0, "tg_fixed": 0, "not_found": 0, "no_id": 0, "error": 0}
+    stats = {"total": 0, "ok": 0, "synced": 0, "not_found": 0, "no_id": 0, "error": 0}
     total = len(targets)
-    for i, (username, tg, is_bp) in enumerate(targets, 1):
+    for i, (username, tg, is_bp, exp, active) in enumerate(targets, 1):
         stats["total"] += 1
         try:
-            res = await _fix_one(username, tg, bypass=is_bp)
+            res = await _fix_one(username, tg, bypass=is_bp, expires_at=exp, active=active)
             stats[res] = stats.get(res, 0) + 1
         except Exception:  # noqa: BLE001 - keep going; one bad user mustn't stop it
             logger.exception("panel backfill failed for tg=%s", tg)

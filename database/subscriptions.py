@@ -88,10 +88,11 @@ async def set_panel_uuid(telegram_id: int, panel_uuid: str) -> None:
 
 
 async def all_provisioned() -> list[asyncpg.Record]:
-    """Every subscription with a panel entity (for the panel backfill)."""
+    """Every subscription with a panel entity (for the panel backfill / re-sync)."""
     pool = get_pool()
     return await pool.fetch(
-        "SELECT telegram_id, panel_uuid FROM subscriptions WHERE panel_uuid IS NOT NULL"
+        "SELECT telegram_id, panel_uuid, expires_at, status "
+        "FROM subscriptions WHERE panel_uuid IS NOT NULL"
     )
 
 
