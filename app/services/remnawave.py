@@ -107,27 +107,35 @@ def _unwrap(payload: dict) -> dict:
 # --- User operations -------------------------------------------------------
 
 def _as_id(identifier) -> int | None:
-    """Coerce a stored identifier to Remnawave's numeric user id (3.x). A legacy
-    uuid string (or None) returns None, so the caller re-adopts by username."""
+    """Numeric Remnawave 3.x user id, or None for a uuid/None identifier."""
     try:
         return int(identifier)
     except (TypeError, ValueError):
         return None
 
 
+def _ident(identifier) -> dict:
+    """Body fragment that identifies a user, resilient to BOTH panel conventions:
+    a numeric value -> ``{"id": <int>}`` (3.x), a uuid string -> ``{"uuid": ...}``
+    (2.7 / any panel that kept uuids). Empty for a missing identifier."""
+    uid = _as_id(identifier)
+    if uid is not None:
+        return {"id": uid}
+    return {"uuid": str(identifier)} if identifier else {}
+
+
 async def create_user(payload: dict) -> dict:
-    """POST /api/users -> 201. The response carries the numeric ``id``."""
+    """POST /api/users -> 201. The response carries the user id (numeric in 3.x)."""
     return await _req("POST", "/api/users", json=payload)
 
 
 async def update_user(identifier, **fields) -> dict | None:
-    """PATCH /api/users — 3.x identifies the user by numeric ``id`` in the body.
-    A non-numeric (legacy uuid) identifier returns ``None`` so the caller heals
-    the record via find-by-username; ``None`` also on 404."""
-    uid = _as_id(identifier)
-    if uid is None:
+    """PATCH /api/users — identify by numeric ``id`` (3.x) or ``uuid`` (older),
+    whichever the stored identifier is. ``None`` on a missing identifier or 404."""
+    ident = _ident(identifier)
+    if not ident:
         return None
-    return await _req("PATCH", "/api/users", json={"id": uid, **fields})
+    return await _req("PATCH", "/api/users", json={**ident, **fields})
 
 
 async def find_user_by_username(username: str) -> dict | None:
@@ -156,22 +164,23 @@ async def find_user_by_telegram_id(
 
 
 async def delete_user(identifier) -> None:
-    """DELETE /api/users/{id} (numeric id in 3.x). 204/404 both mean 'gone'."""
-    uid = _as_id(identifier)
-    if uid is None:
+    """DELETE /api/users/{identifier} — the path is the id (3.x) or uuid (older),
+    so the raw value works either way. 204/404 both mean 'gone'."""
+    if not identifier:
         return
-    await _req("DELETE", f"/api/users/{uid}")
+    await _req("DELETE", f"/api/users/{identifier}")
 
 
 async def add_users_to_squad(squad_uuid: str, user_ids: list) -> dict | None:
     """Attach users to an internal squad — safety net for a freshly created user
-    that came back with an empty ``activeInternalSquads``. 3.x uses ``userIds``
-    (numbers), not ``userUuids``."""
+    that came back with an empty ``activeInternalSquads``. Sends ``userIds``
+    (3.x, numbers) when the identifiers are numeric, else ``userUuids`` (older)."""
     ids = [i for i in (_as_id(u) for u in user_ids) if i is not None]
-    if not ids:
-        return None
-    return await _req(
-        "POST",
-        "/api/squads/add-users-to-squad",
-        json={"squadUuid": squad_uuid, "userIds": ids},
-    )
+    if ids:
+        body = {"squadUuid": squad_uuid, "userIds": ids}
+    else:
+        uuids = [str(u) for u in user_ids if u]
+        if not uuids:
+            return None
+        body = {"squadUuid": squad_uuid, "userUuids": uuids}
+    return await _req("POST", "/api/squads/add-users-to-squad", json=body)

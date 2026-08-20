@@ -264,6 +264,58 @@ async def _send_sub_links(message: Message, token: str) -> None:
     await message.answer(text, reply_markup=kb.as_markup(), disable_web_page_preview=True)
 
 
+@router.message(Command("paneltest"))
+async def cmd_panel_test(message: Message) -> None:
+    """Diagnostic: create a throwaway panel user, report the raw response / error
+    (reveals the exact 3.x contract — id vs uuid, response shape, 4xx body), then
+    delete it. Admin-only."""
+    from datetime import datetime, timedelta, timezone
+
+    import httpx
+
+    from app.services import remnawave
+
+    payload = {
+        "username": f"elma_diag_{message.from_user.id}",
+        "trafficLimitBytes": 0,
+        "trafficLimitStrategy": "NO_RESET",
+        "status": "ACTIVE",
+        "expireAt": (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "hwidDeviceLimit": config.DEVICE_LIMIT,
+        "telegramId": message.from_user.id,
+    }
+    if config.REMNAWAVE_MAIN_SQUAD_UUID:
+        payload["activeInternalSquads"] = [config.REMNAWAVE_MAIN_SQUAD_UUID]
+
+    try:
+        created = await remnawave.create_user(payload)
+    except httpx.HTTPStatusError as exc:
+        await message.answer(
+            f"❌ <b>create {exc.response.status_code}</b>\n"
+            f"<code>{html.escape(exc.response.text[:1400])}</code>"
+        )
+        return
+    except Exception as exc:  # noqa: BLE001
+        await message.answer(f"❌ <b>{type(exc).__name__}</b>: <code>{html.escape(str(exc)[:800])}</code>")
+        return
+
+    ident = created.get("id") or created.get("uuid")
+    keys = ", ".join(sorted(created)) if isinstance(created, dict) else str(type(created))
+    try:
+        await remnawave.delete_user(str(ident))
+    except Exception:  # noqa: BLE001
+        pass
+    await message.answer(
+        "✅ <b>create OK</b>\n\n"
+        f"id: <code>{html.escape(str(created.get('id')))}</code>\n"
+        f"uuid: <code>{html.escape(str(created.get('uuid')))}</code>\n"
+        f"shortUuid: <code>{html.escape(str(created.get('shortUuid')))}</code>\n"
+        f"telegramId: <code>{html.escape(str(created.get('telegramId')))}</code>\n"
+        f"subscriptionUrl: <code>{html.escape(str(created.get('subscriptionUrl'))[:120])}</code>\n\n"
+        f"поля ответа:\n<code>{html.escape(keys[:900])}</code>"
+    )
+
+
 @router.message(Command("dashboard"))
 async def cmd_dashboard(message: Message) -> None:
     """Issue a one-time magic-link to set the dashboard password / sign in."""
