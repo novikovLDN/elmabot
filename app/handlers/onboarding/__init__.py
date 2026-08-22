@@ -569,26 +569,23 @@ async def _connect_agg(call: CallbackQuery, key: str, agg_url: str) -> None:
     """Aggregator connect screen: two one-tap buttons (Happ / Incy) that add the
     single merged key — no VPN/Обход split."""
     kb = InlineKeyboardBuilder()
-    rows: list[int] = []
+    # Each add-key button on its own full-width row — side-by-side rows truncate
+    # the label to «Добавить…».
     _add_connect_button(
         kb, "📥 Добавить ключ в Happ", happ_crypto.format_for_user(agg_url),
         "aggadd:happ", style="primary",
     )
-    n = 1
     if key in _INCY_PLATFORMS:
         incy_dl = await incy_crypto.to_incy_link(agg_url)
         if incy_dl:
             _add_connect_button(
                 kb, "💚 Добавить ключ в Incy", incy_dl, "aggadd:incy", style="success"
             )
-            n = 2
-    rows.append(n)
     kb.button(text="✅ Готово", callback_data="onb:done", style="success")
     kb.button(text="⚙️ Настроить вручную", callback_data=f"manual:{key}")
     kb.button(text="💬 Нужна помощь", url=SUPPORT_URL)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"dl:{key}")
-    rows += [1, 1, 1, 1]
-    kb.adjust(*rows)
+    kb.adjust(1)
     await show_screen(call.message, "connect", CONNECT_AGG_TEXT, reply_markup=kb.as_markup())
     await call.answer()
 
