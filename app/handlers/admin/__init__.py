@@ -264,6 +264,82 @@ async def _send_sub_links(message: Message, token: str) -> None:
     await message.answer(text, reply_markup=kb.as_markup(), disable_web_page_preview=True)
 
 
+# Client User-Agents to replay against our public link: a JSON-template UA
+# (Happ) on both OSes plus a plain base64 UA (v2rayTun). All must come back
+# text/plain with N servers — proof the "unknown content type" bug is gone.
+_AGGCHECK_UAS = (
+    ("iOS Happ", "Happ/2.0 (iPhone; iOS 17)"),
+    ("Android Happ", "Happ/2.0 (Android 14)"),
+    ("v2rayTun", "v2rayTun/2.0"),
+)
+
+
+def _probe_line(tag: str, r: dict) -> str:
+    kind = "base64/uri-list" if r["is_uri_list"] else "⚠️ НЕ uri-list (JSON/мусор)"
+    return (
+        f"• <b>{html.escape(tag)}</b>: HTTP {r['status']}, "
+        f"<code>{html.escape(r['content_type'] or '—')}</code>, "
+        f"серверов: {r['servers']} — {kind}\n"
+        f"  <code>{html.escape(r['head'][:40])}</code>"
+    )
+
+
+@router.message(Command("aggcheck"))
+async def cmd_aggcheck(message: Message) -> None:
+    """Diagnose the aggregator format bug for a user (default: self).
+
+    Proves (1) each upstream panel link, fetched with our fixed UA, returns a
+    base64 vless list — not a client-specific JSON template — and (2) our public
+    link serves text/plain with all servers to every client UA. Usage:
+    <code>/aggcheck [tg_id]</code>."""
+    if not config.SUBSCRIPTION_BASE_URL:
+        await message.answer("⚠️ Агрегатор не настроен (нет SUBSCRIPTION_BASE_URL).")
+        return
+    parts = (message.text or "").split()
+    try:
+        target = int(parts[1]) if len(parts) > 1 else message.from_user.id
+    except ValueError:
+        await message.answer("Использование: <code>/aggcheck [tg_id]</code>")
+        return
+
+    from app.services import bypass_service
+
+    status = await message.answer(f"⏳ Проверяю агрегатор для <code>{target}</code>…")
+
+    # Resolve the two upstream links exactly like the /sub handler does.
+    sub = await get_subscription(target)
+    prem_url = sub["subscription_url"] if sub and sub["status"] == "active" else None
+    bp_row = await get_bypass(target) if config.BYPASS_ENABLED else None
+    usage = await bypass_service.get_usage(target) if config.BYPASS_ENABLED else None
+    bp_url = (bp_row["subscription_url"] if bp_row else None) or (
+        usage["subscription_url"] if usage else None
+    )
+
+    lines = [f"🔎 <b>Aggcheck для <code>{target}</code></b>\n"]
+    lines.append("<b>1) Upstream (наш фикс-UA → должен быть base64):</b>")
+    if not prem_url and not bp_url:
+        lines.append("• нет активных подписок (premium/bypass) — нечего склеивать")
+    for tag, url in (("premium", prem_url), ("bypass", bp_url)):
+        if not url:
+            continue
+        try:
+            lines.append(_probe_line(tag, await aggregator.probe(url)))
+        except Exception as exc:  # noqa: BLE001
+            lines.append(f"• <b>{tag}</b>: ❌ {html.escape(type(exc).__name__)}: {html.escape(str(exc)[:120])}")
+
+    # 2) Our own public link, replayed with several client UAs.
+    lines.append("\n<b>2) Публичная ссылка (все UA → text/plain, N серверов):</b>")
+    token = await ensure_sub_token(target)
+    public = aggregator.sub_link(token)
+    for tag, ua in _AGGCHECK_UAS:
+        try:
+            lines.append(_probe_line(tag, await aggregator.probe(public, ua)))
+        except Exception as exc:  # noqa: BLE001
+            lines.append(f"• <b>{tag}</b>: ❌ {html.escape(type(exc).__name__)}: {html.escape(str(exc)[:120])}")
+
+    await status.edit_text("\n".join(lines), disable_web_page_preview=True)
+
+
 @router.message(Command("paneltest"))
 async def cmd_panel_test(message: Message) -> None:
     """Diagnostic: create a throwaway panel user, report the raw response / error

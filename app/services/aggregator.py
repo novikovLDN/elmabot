@@ -26,8 +26,12 @@ logger = logging.getLogger(__name__)
 _TIMEOUT = httpx.Timeout(10.0)
 
 # Response headers worth passing through from the panel (traffic/expiry the
-# client shows, refresh hint, content type).
-_PASSTHROUGH = ("subscription-userinfo", "profile-update-interval", "content-type")
+# client shows, refresh hint). NB: the panel's own content-type is deliberately
+# NOT passed through — we always serve text/plain (a panel that returns
+# application/json for a client-specific UA otherwise breaks the client with
+# "unknown content type"). We also force a fixed upstream UA in fetch() so the
+# panel always yields a mergeable base64 vless list, never that JSON template.
+_PASSTHROUGH = ("subscription-userinfo", "profile-update-interval")
 
 # Shared keep-alive client — avoids a fresh TLS handshake on every fetch (the
 # aggregator does two upstream requests per subscription load).
@@ -160,6 +164,31 @@ async def fetch(subscription_url: str) -> tuple[bytes, dict]:
     resp.raise_for_status()
     passthrough = {h: resp.headers[h] for h in _PASSTHROUGH if h in resp.headers}
     return resp.content, passthrough
+
+
+async def probe(url: str, ua: str | None = None) -> dict:
+    """Diagnostic fetch of a subscription URL: reports the shape of the response
+    (HTTP status, content-type, first bytes, decoded server count, whether it's a
+    mergeable URI list). Used by the /aggcheck admin command to prove the panel
+    returns a base64 vless list (not a JSON template) under our fixed UA, and that
+    our public link serves text/plain to every client UA."""
+    resp = await _get_client().get(
+        url,
+        headers={
+            "User-Agent": ua or config.SUBSCRIPTION_UPSTREAM_UA,
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+        },
+    )
+    body = resp.content
+    uris = _extract_uris(body)
+    return {
+        "status": resp.status_code,
+        "content_type": resp.headers.get("content-type", ""),
+        "head": body[:48].decode("utf-8", "replace"),
+        "servers": len(uris) if uris else 0,
+        "is_uri_list": uris is not None,
+    }
 
 
 # --- production serving: cache + singleflight + stale fallback --------------
