@@ -106,12 +106,25 @@ def pay_url(txn: dict) -> str | None:
 
 
 async def get_status(transaction_id: str) -> str | None:
-    """Current status of a transaction, or None if not found."""
-    resp = await _get_client().get(f"/transaction/{transaction_id}")
-    if resp.status_code == 404:
-        return None
-    resp.raise_for_status()
-    return resp.json().get("status")
+    """Current status of a transaction, or None if not found.
+
+    The reconcile safety-net depends on this, so try the v2 status path first
+    (we create via /v2/transaction/process) and fall back to the legacy path —
+    a wrong endpoint here would silently break missed-webhook recovery. The
+    status may sit at the top level or under ``response``."""
+    client = _get_client()
+    for path in (f"/v2/transaction/{transaction_id}", f"/transaction/{transaction_id}"):
+        resp = await client.get(path)
+        if resp.status_code == 404:
+            continue
+        resp.raise_for_status()
+        data = resp.json()
+        if isinstance(data.get("response"), dict):
+            data = data["response"]
+        status = data.get("status")
+        if status is not None:
+            return status
+    return None
 
 
 def verify_callback(merchant_id: str | None, secret: str | None) -> bool:

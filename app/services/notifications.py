@@ -605,6 +605,8 @@ async def _reconcile_payments(bot: Bot) -> None:
     rows = await pending_payments_recent(
         config.PAYMENT_RECONCILE_MIN_AGE_MIN, config.PAYMENT_RECONCILE_MAX_AGE_MIN
     )
+    if rows:
+        logger.info("Payment reconcile: checking %d pending payment(s)", len(rows))
     fixed = 0
     for payment in rows:
         txn = payment["invoice_id"]
@@ -615,6 +617,7 @@ async def _reconcile_payments(bot: Bot) -> None:
         except Exception:  # noqa: BLE001 - provider hiccup, retry next tick
             logger.warning("Reconcile: status check failed for %s", txn)
             continue
+        logger.info("Reconcile %s: provider status=%s (code=%s)", txn, status, payment["tariff_code"])
         if status != platega.STATUS_CONFIRMED:
             continue
         try:
