@@ -114,28 +114,21 @@ def _as_id(identifier) -> int | None:
         return None
 
 
-def _ident(identifier) -> dict:
-    """Body fragment that identifies a user, resilient to BOTH panel conventions:
-    a numeric value -> ``{"id": <int>}`` (3.x), a uuid string -> ``{"uuid": ...}``
-    (2.7 / any panel that kept uuids). Empty for a missing identifier."""
-    uid = _as_id(identifier)
-    if uid is not None:
-        return {"id": uid}
-    return {"uuid": str(identifier)} if identifier else {}
-
-
 async def create_user(payload: dict) -> dict:
-    """POST /api/users -> 201. The response carries the user id (numeric in 3.x)."""
+    """POST /api/users -> 201. The response carries the numeric ``id``."""
     return await _req("POST", "/api/users", json=payload)
 
 
 async def update_user(identifier, **fields) -> dict | None:
-    """PATCH /api/users — identify by numeric ``id`` (3.x) or ``uuid`` (older),
-    whichever the stored identifier is. ``None`` on a missing identifier or 404."""
-    ident = _ident(identifier)
-    if not ident:
+    """PATCH /api/users — 3.x accepts only ``id`` (numeric) or ``username`` to
+    identify the user; a ``uuid`` is rejected ("At least one of username, id must
+    be provided"). So we PATCH by numeric ``id``; a legacy (non-numeric) stored
+    identifier returns ``None`` so the caller re-adopts by username and heals the
+    row to the numeric id. ``None`` also on 404."""
+    uid = _as_id(identifier)
+    if uid is None:
         return None
-    return await _req("PATCH", "/api/users", json={**ident, **fields})
+    return await _req("PATCH", "/api/users", json={"id": uid, **fields})
 
 
 async def find_user_by_username(username: str) -> dict | None:
