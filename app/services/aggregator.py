@@ -9,8 +9,12 @@ names to our brand, and returns it with the right subscription headers.
 The token is a stateless HMAC of the telegram id, so no storage is needed. While
 ``SUBSCRIPTION_ADMIN_ONLY`` is on (the MVP default), only admin ids are served.
 """
+import asyncio
 import base64
 import logging
+import re
+import time
+from collections import OrderedDict
 from urllib.parse import quote, unquote
 
 import httpx
@@ -156,3 +160,190 @@ async def fetch(subscription_url: str) -> tuple[bytes, dict]:
     resp.raise_for_status()
     passthrough = {h: resp.headers[h] for h in _PASSTHROUGH if h in resp.headers}
     return resp.content, passthrough
+
+
+# --- production serving: cache + singleflight + stale fallback --------------
+#
+# The panel is the slow, failure-prone dependency. Clients poll their /sub link
+# on a schedule (Profile-Update-Interval), so a short in-process cache absorbs
+# duplicate/near-simultaneous fetches, singleflight collapses a thundering herd
+# on one token into a single upstream round-trip, and a last-good copy keeps the
+# link working through a panel outage. All state is in-memory (one worker); TTLs
+# are short so nothing goes meaningfully stale. Adapted from the aggregator TZ
+# to our aiohttp + per-user users.sub_token model (no sub_pairs table).
+
+_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{4,128}$")
+
+FRESH_TTL = 15.0            # seconds a body is served without refetching
+STALE_TTL = 24 * 3600.0    # seconds a body may still be served on panel failure
+NEG_TTL = 60.0             # seconds an unknown token is remembered as missing
+MAX_CACHE_ENTRIES = 20_000  # LRU cap (body + negative caches)
+
+
+class SubscriptionNotFound(Exception):
+    """Unknown/revoked token or the user has no subscription (-> 404)."""
+
+
+class SubscriptionUnavailable(Exception):
+    """Panel failed and there is no stale copy to fall back to (-> 503)."""
+
+
+# token -> [fresh_until, stale_until, body, headers]
+_cache: "OrderedDict[str, list]" = OrderedDict()
+# token -> monotonic expiry (remembered-missing, guards against token flooding)
+_neg: "OrderedDict[str, float]" = OrderedDict()
+# token -> in-flight Future (concurrent callers for one token share one fetch)
+_inflight: dict[str, asyncio.Future] = {}
+
+_metrics = {
+    "hits": 0,          # fresh-cache hits
+    "misses": 0,        # upstream builds
+    "stale": 0,         # last-good served through a panel failure
+    "upstream_ok": 0,
+    "upstream_fail": 0,
+    "singleflight_wait": 0,
+    "not_found": 0,
+}
+
+
+def valid_token(token: str) -> bool:
+    return bool(token) and _TOKEN_RE.match(token) is not None
+
+
+def _cache_get(token: str):
+    """(is_fresh, body, headers) for a live entry, else None. Prunes a fully
+    expired entry (past its stale window) lazily."""
+    entry = _cache.get(token)
+    if entry is None:
+        return None
+    now = time.monotonic()
+    if now >= entry[1]:  # past stale_until
+        _cache.pop(token, None)
+        return None
+    _cache.move_to_end(token)
+    return now < entry[0], entry[2], entry[3]
+
+
+def _cache_put(token: str, body: bytes, headers: dict) -> None:
+    now = time.monotonic()
+    _cache[token] = [now + FRESH_TTL, now + STALE_TTL, body, dict(headers)]
+    _cache.move_to_end(token)
+    while len(_cache) > MAX_CACHE_ENTRIES:
+        _cache.popitem(last=False)
+
+
+def clear_cache(token: str) -> None:
+    """Forget everything cached for a token (both body and negative caches)."""
+    _cache.pop(token, None)
+    _neg.pop(token, None)
+
+
+def _neg_get(token: str) -> bool:
+    exp = _neg.get(token)
+    if exp is None:
+        return False
+    if time.monotonic() >= exp:
+        _neg.pop(token, None)
+        return False
+    return True
+
+
+def _neg_put(token: str) -> None:
+    _neg[token] = time.monotonic() + NEG_TTL
+    _neg.move_to_end(token)
+    while len(_neg) > MAX_CACHE_ENTRIES:
+        _neg.popitem(last=False)
+
+
+async def serve(token: str, builder):
+    """Return ``(body, headers, x_cache)`` for a subscription token.
+
+    ``builder`` is an async callable returning ``(body, headers)``; it does the
+    resolve + upstream fetch + merge + header build. It must raise
+    :class:`SubscriptionNotFound` for an unknown token / no subscription, and any
+    other exception for an upstream failure (which triggers the stale fallback).
+
+    Guarantees: a fresh cached body is returned instantly; concurrent callers for
+    one token share a single build (singleflight); a panel failure serves the
+    last-good copy when one exists, else raises :class:`SubscriptionUnavailable`.
+    """
+    if not valid_token(token):
+        _metrics["not_found"] += 1
+        raise SubscriptionNotFound
+
+    cached = _cache_get(token)
+    if cached is not None and cached[0]:
+        _metrics["hits"] += 1
+        return cached[1], cached[2], "hit"
+
+    if _neg_get(token):
+        _metrics["not_found"] += 1
+        raise SubscriptionNotFound
+
+    inflight = _inflight.get(token)
+    if inflight is not None:
+        _metrics["singleflight_wait"] += 1
+        body, headers = await inflight
+        return body, headers, "miss"
+
+    fut: asyncio.Future = asyncio.get_event_loop().create_future()
+    # When no follower is waiting on this future, retrieving its exception here
+    # avoids a spurious "Future exception was never retrieved" warning.
+    fut.add_done_callback(lambda f: f.cancelled() or f.exception())
+    _inflight[token] = fut
+    try:
+        try:
+            body, headers = await builder()
+        except SubscriptionNotFound:
+            _neg_put(token)
+            _metrics["not_found"] += 1
+            raise
+        except Exception as exc:  # noqa: BLE001 - upstream failure -> stale/503
+            _metrics["upstream_fail"] += 1
+            stale = _cache_get(token)
+            if stale is not None:
+                _metrics["stale"] += 1
+                result = (stale[1], stale[2])
+                fut.set_result(result)
+                logger.warning("aggregator: serving stale copy for token (upstream failed): %s", exc)
+                return result[0], result[1], "stale"
+            raise SubscriptionUnavailable from exc
+        else:
+            _metrics["misses"] += 1
+            _metrics["upstream_ok"] += 1
+            _cache_put(token, body, headers)
+            fut.set_result((body, headers))
+            return body, headers, "miss"
+    except BaseException as exc:  # noqa: BLE001 - propagate to followers too
+        if not fut.done():
+            fut.set_exception(exc)
+        raise
+    finally:
+        _inflight.pop(token, None)
+
+
+def metrics_snapshot() -> dict:
+    served = _metrics["hits"] + _metrics["misses"] + _metrics["stale"]
+    return {
+        **_metrics,
+        "cache_entries": len(_cache),
+        "neg_entries": len(_neg),
+        "inflight": len(_inflight),
+        "hit_ratio": round(_metrics["hits"] / served, 4) if served else 0.0,
+    }
+
+
+async def invalidate(telegram_id: int) -> None:
+    """Drop a user's cached subscription body after a mutation (purchase, renew,
+    GB top-up) so their next fetch rebuilds from fresh panel data. Read-only DB
+    lookup; best-effort (never fail the purchase over a cache clear)."""
+    try:
+        from database import get_user
+
+        row = await get_user(telegram_id)
+        token = row["sub_token"] if row else None
+    except Exception:  # noqa: BLE001
+        logger.exception("aggregator.invalidate lookup failed for %s", telegram_id)
+        return
+    if token:
+        clear_cache(token)

@@ -80,17 +80,13 @@ async def _happ_add(request: web.Request) -> web.Response:
     return web.HTTPFound(f"happ://add/{aggregator.sub_link(token)}")
 
 
-async def _subscription(request: web.Request) -> web.Response:
-    """Aggregated subscription: merge the user's premium + bypass panel configs
-    into one Elma-branded subscription served from our own domain. Admin-only
-    while SUBSCRIPTION_ADMIN_ONLY."""
-    if not config.SUBSCRIPTION_BASE_URL:
-        return web.Response(status=404, text="not found")
-    # The token is a per-user secret in the DB — an unknown/revoked token 404s.
-    tg_id = await user_by_sub_token(request.match_info.get("token", ""))
-    if tg_id is None or (config.SUBSCRIPTION_ADMIN_ONLY and tg_id not in config.ADMIN_IDS):
-        return web.Response(status=404, text="not found")
+async def _build_subscription(request: web.Request, tg_id: int) -> tuple[bytes, dict]:
+    """Resolve, fetch, merge and header-build a user's aggregated subscription.
 
+    Returns ``(body, headers)`` for :func:`aggregator.serve` to cache and serve.
+    Raises :class:`aggregator.SubscriptionNotFound` when the user has nothing to
+    serve, and lets an upstream failure propagate (so ``serve`` can fall back to
+    a stale copy)."""
     # Two subscription links to merge: premium (subscriptions table) and bypass
     # (bypass table). Take each link straight from where it's stored — that's the
     # actual link. get_usage is only for the remaining-traffic number.
@@ -115,7 +111,7 @@ async def _subscription(request: web.Request) -> web.Response:
     bp_limit = int(usage["limit"]) if bp_live else 0
     bp_remaining = int(usage["remaining"]) if bp_live else None
     if not prem_url and not bp_url:
-        return web.Response(status=404, text="no subscription")
+        raise aggregator.SubscriptionNotFound
 
     prem_note = config.SUBSCRIPTION_NOTE_PREMIUM
     bp_note = config.SUBSCRIPTION_NOTE_BYPASS
@@ -131,34 +127,31 @@ async def _subscription(request: web.Request) -> web.Response:
             body, _ = await task
             groups.append((note, body))
             logger.info("aggregator %s: %r -> %d bytes", tg_id, note, len(body))
-        except Exception:  # noqa: BLE001 - one source failing shouldn't 500 the other
+        except Exception:  # noqa: BLE001 - one source failing shouldn't sink the other
             logger.exception("aggregator fetch failed for %s (%s)", tg_id, note)
 
     combined = aggregator.combine(groups)
     if combined is None:
-        # No mergeable URI list (structured format / all sources failed) —
-        # fall back to serving the first source as-is.
+        # No mergeable URI list (structured format / all sources failed).
         if not groups:
-            return web.Response(status=502, text="upstream error")
-        combined = groups[0][1]
+            # Every upstream failed — signal an upstream error so serve() can
+            # fall back to the last-good copy instead of caching an empty body.
+            raise RuntimeError("all upstream sources failed")
+        combined = groups[0][1]  # serve the first source as-is
 
     title_b64 = base64.b64encode(config.SUBSCRIPTION_TITLE.encode()).decode()
-    resp = web.Response(body=combined)
-    resp.headers["Content-Type"] = "text/plain; charset=utf-8"
-    resp.headers["Profile-Title"] = f"base64:{title_b64}"
-    resp.headers["Profile-Update-Interval"] = str(config.SUBSCRIPTION_UPDATE_INTERVAL)
-    resp.headers["Content-Disposition"] = f'inline; filename="{config.SUBSCRIPTION_BRAND}"'
+    headers: dict[str, str] = {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Profile-Title": f"base64:{title_b64}",
+        "Profile-Update-Interval": str(config.SUBSCRIPTION_UPDATE_INTERVAL),
+        "Content-Disposition": f'inline; filename="{config.SUBSCRIPTION_BRAND}"',
+    }
     # Web-page / «Продлить» button + support link shown in the client's header
     # card. Points at the bot's renew screen.
     webpage = await _subscription_webpage(request)
     if webpage:
-        resp.headers["Profile-Web-Page-Url"] = webpage
-        resp.headers["Support-Url"] = webpage
-    # Never let the client / a CDN / a proxy serve a stale copy — every fetch is
-    # recomputed with fresh panel data.
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    resp.headers["Pragma"] = "no-cache"
-    resp.headers["Expires"] = "0"
+        headers["Profile-Web-Page-Url"] = webpage
+        headers["Support-Url"] = webpage
 
     # Description (legend + remaining bypass traffic, shown only when the figure
     # is live/known this request).
@@ -168,7 +161,7 @@ async def _subscription(request: web.Request) -> web.Response:
         remaining_bytes=bp_remaining if (bp_live and bp_limit > 0) else None,
     )
     if announce:
-        resp.headers["Announce"] = "base64:" + base64.b64encode(announce.encode()).decode()
+        headers["Announce"] = "base64:" + base64.b64encode(announce.encode()).decode()
 
     # Subscription-Userinfo drives the client's header card:
     #   • expire (premium end) -> the "истекает через N д" banner + «Продлить»
@@ -181,10 +174,53 @@ async def _subscription(request: web.Request) -> web.Response:
     download = bp_used if metered else 0
     total = bp_limit if metered else 0
     if expire_ts or metered:
-        resp.headers["Subscription-Userinfo"] = (
+        headers["Subscription-Userinfo"] = (
             f"upload=0; download={download}; total={total}; expire={expire_ts}"
         )
+    return combined, headers
+
+
+async def _subscription(request: web.Request) -> web.Response:
+    """Aggregated subscription: merge the user's premium + bypass panel configs
+    into one Elma-branded subscription served from our own domain. Admin-only
+    while SUBSCRIPTION_ADMIN_ONLY.
+
+    A short in-process cache + singleflight + stale fallback (aggregator.serve)
+    absorbs client polling and keeps the link alive through a panel outage."""
+    if not config.SUBSCRIPTION_BASE_URL:
+        return web.Response(status=404, text="not found")
+    token = request.match_info.get("token", "")
+    if not aggregator.valid_token(token):
+        return web.Response(status=404, text="not found")
+    # The token is a per-user secret in the DB — an unknown/revoked token 404s.
+    tg_id = await user_by_sub_token(token)
+    if tg_id is None or (config.SUBSCRIPTION_ADMIN_ONLY and tg_id not in config.ADMIN_IDS):
+        return web.Response(status=404, text="not found")
+
+    try:
+        body, headers, x_cache = await aggregator.serve(
+            token, lambda: _build_subscription(request, tg_id)
+        )
+    except aggregator.SubscriptionNotFound:
+        return web.Response(status=404, text="no subscription")
+    except aggregator.SubscriptionUnavailable:
+        return web.Response(status=503, text="upstream error", headers={"Retry-After": "30"})
+
+    resp = web.Response(body=body)
+    resp.headers.update(headers)
+    resp.headers["X-Cache"] = x_cache
+    # Never let the client / a CDN / a proxy serve a stale copy — our own cache
+    # (aggregator.serve) is the single source of freshness, keyed to the token.
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
     return resp
+
+
+async def _subscription_metrics(_: web.Request) -> web.Response:
+    """Aggregator health: hit_ratio, upstream ok/fail, cache sizes. Non-sensitive
+    counters for monitoring (healthy: hit_ratio > 0.9)."""
+    return web.json_response(aggregator.metrics_snapshot())
 
 
 async def _platega_webhook(request: web.Request) -> web.Response:
@@ -249,6 +285,7 @@ def build_app(bot: Bot, dp: Dispatcher | None = None) -> web.Application:
     app["bot"] = bot
     app.router.add_get("/", _health)
     app.router.add_get("/connect", _connect_page)
+    app.router.add_get("/sub/_metrics", _subscription_metrics)
     app.router.add_get("/sub/{token}", _subscription)
     app.router.add_get("/add/{token}", _happ_add)
     app.router.add_post("/platega/webhook", _platega_webhook)

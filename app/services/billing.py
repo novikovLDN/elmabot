@@ -28,7 +28,7 @@ from database import (
     redeem_gift_record,
 )
 
-from . import auto_msg, bypass_service, subscription_service
+from . import aggregator, auto_msg, bypass_service, subscription_service
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +55,8 @@ async def complete_purchase(
     )
     await mark_payment_paid(user_id, invoice_id, amount_paid)
     await clear_offer(user_id)
+    # Drop the cached aggregator body so the new expiry/configs show immediately.
+    await aggregator.invalidate(user_id)
 
     if first_purchase:
         await _reward_referrer(bot, user_id)
@@ -94,6 +96,8 @@ async def complete_traffic_purchase(
     new_limit = await bypass_service.provision_traffic(user_id, gb * _GB)
     await mark_payment_paid(user_id, invoice_id, amount_paid)
     await record_traffic_purchase(user_id, gb, amount_paid, provider, invoice_id)
+    # Drop the cached aggregator body so the new traffic limit shows immediately.
+    await aggregator.invalidate(user_id)
 
     kb = InlineKeyboardBuilder()
     kb.button(text="👤 Личный кабинет", callback_data="menu:cabinet")
