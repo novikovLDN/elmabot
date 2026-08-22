@@ -6,8 +6,8 @@ the panel's address), we serve the user's configs from our own domain, rebranded
 fetches that user's subscription content from the panel, rewrites the per-config
 names to our brand, and returns it with the right subscription headers.
 
-The token is a stateless HMAC of the telegram id, so no storage is needed. While
-``SUBSCRIPTION_ADMIN_ONLY`` is on (the MVP default), only admin ids are served.
+The token is a per-user secret in the DB (revocable by reissue). By default all
+users are served; set ``SUBSCRIPTION_ADMIN_ONLY`` to restrict to admin ids.
 """
 import asyncio
 import base64

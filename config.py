@@ -286,8 +286,10 @@ SUBSCRIPTION_NOTE_BYPASS = _get_str("SUBSCRIPTION_NOTE_BYPASS", "Для LTE (б�
 # Where the client's «Продлить» button / web-page icon leads. Empty -> the bot's
 # own t.me link (resolved at runtime) so it opens the renew screen.
 SUBSCRIPTION_WEBPAGE_URL = _get_str("SUBSCRIPTION_WEBPAGE_URL", "")
-# MVP gate: while True the aggregator serves ADMIN_IDS only.
-SUBSCRIPTION_ADMIN_ONLY = _get_bool("SUBSCRIPTION_ADMIN_ONLY", True)
+# Beta gate: while True the aggregator serves ADMIN_IDS only. Now GA — default
+# False so every user gets the single merged key. Set SUBSCRIPTION_ADMIN_ONLY=true
+# to re-restrict to admins.
+SUBSCRIPTION_ADMIN_ONLY = _get_bool("SUBSCRIPTION_ADMIN_ONLY", False)
 WEBAUTHN_RP_NAME = _get_str("WEBAUTHN_RP_NAME", f"{BRAND_NAME} Admin")
 
 # --- Admin web-push (VAPID) ---
