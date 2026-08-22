@@ -15,7 +15,7 @@ import config
 from app import emoji
 from app.format import fmt_date
 from app.keyboards import cabinet_keyboard, main_menu_keyboard
-from app.services import bypass_service, happ_crypto
+from app.services import bypass_service
 from app.utils import safe_edit, send_screen, show_screen
 from config import (
     DEVICE_LIMIT,
@@ -241,13 +241,7 @@ async def _cabinet_view(uid: int):
             f"Использовано: {_fmt_traffic(used)} из {_fmt_traffic(limit)} · "
             f"осталось <b>{_fmt_traffic(left)}</b>"
         )
-        # Bypass key strictly as a Happ crypt4 deep link in a collapsed quote.
-        crypt4 = happ_crypto.format_for_user(usage["subscription_url"])
-        if crypt4:
-            text += (
-                "\n🔑 Ключ обхода (импортируй в Happ):\n"
-                f"<blockquote expandable><code>{html.escape(crypt4)}</code></blockquote>"
-            )
+        # The key itself lives in the «Подключиться» flow — not shown here.
 
     return text, cabinet_keyboard(has_active_sub=active, has_bypass=has_bypass)
 
