@@ -34,9 +34,10 @@ from app.keyboards import (
     welcome_keyboard,
 )
 from app.handlers.menu import show_main
-from app.services import billing, happ_crypto, incy_crypto, subscription_service
+from app.services import aggregator, billing, happ_crypto, incy_crypto, subscription_service
 from app.utils import clean_username, convert_tg_emoji, safe_edit, send_screen, show_screen
 from config import (
+    ADMIN_IDS,
     APP_ANDROID_URL,
     APP_INCY_ANDROID_URL,
     APP_INCY_IOS_URL,
@@ -46,12 +47,15 @@ from config import (
     APP_WINDOWS_URL,
     BYPASS_ENABLED,
     CONNECT_PAGE_URL,
+    SUBSCRIPTION_ADMIN_ONLY,
+    SUBSCRIPTION_BASE_URL,
     SUPPORT_URL,
     TRIAL_DAYS,
 )
 from database import (
     attribute_user,
     bump_stat_link_click,
+    ensure_sub_token,
     get_bypass,
     get_subscription,
     set_referral,
@@ -216,12 +220,16 @@ def _connect_link(deeplink: str | None) -> str | None:
     return f"{CONNECT_PAGE_URL}#{quote(deeplink, safe='')}"
 
 
-def _add_connect_button(kb, label: str, deeplink: str, fallback_cb: str) -> None:
+def _add_connect_button(kb, label: str, deeplink: str, fallback_cb: str, *, style: str | None = None) -> None:
     """One-tap add button: connect-page redirect (URL) if available, else a
     callback that reveals the key as a copyable quote."""
     page = _connect_link(deeplink)
-    if page:
+    if page and style:
+        kb.button(text=label, url=page, style=style)
+    elif page:
         kb.button(text=label, url=page)
+    elif style:
+        kb.button(text=label, callback_data=fallback_cb, style=style)
     else:
         kb.button(text=label, callback_data=fallback_cb)
 
@@ -452,6 +460,45 @@ async def _incy_bypass_key(user_id: int) -> str | None:
     return await incy_crypto.to_incy_link(row["subscription_url"])
 
 
+# --- Aggregator (single-key) connection -----------------------------------
+#
+# With the aggregator, premium and bypass are merged into ONE link served from
+# our domain — the user gets a single key (no VPN/Обход split). Two clients,
+# Happ and Incy, each with an encrypted deep link of the *same* aggregated URL.
+# Gated by SUBSCRIPTION_ADMIN_ONLY on the beta; when the gate doesn't pass, the
+# legacy dual-key flow below is used unchanged.
+
+CONNECT_AGG_TEXT = (
+    "⚡️ <b>Подключитесь в одно нажатие</b>\n\n"
+    "Нажмите <b>«Добавить ключ»</b> в вашем приложении — "
+    "подписка импортируется автоматически.\n\n"
+    "Если по каким-то причинам не открылось — "
+    "нажмите <b>«Настроить вручную»</b> ниже."
+)
+
+
+def _aggregator_enabled(telegram_id: int) -> bool:
+    """The aggregator single-key flow is on for this user (base URL configured
+    and, on the beta, admin-only)."""
+    if not SUBSCRIPTION_BASE_URL:
+        return False
+    return not SUBSCRIPTION_ADMIN_ONLY or telegram_id in ADMIN_IDS
+
+
+async def _agg_url(telegram_id: int) -> str | None:
+    """The user's single aggregated subscription URL, or None when the
+    aggregator is off for them or they have nothing to serve (no active premium
+    and no bypass — the /sub link would 404)."""
+    if not _aggregator_enabled(telegram_id):
+        return None
+    has_premium = bool(await _active_sub_raw(telegram_id))
+    has_bypass = bool(await _bypass_raw(telegram_id))
+    if not has_premium and not has_bypass:
+        return None
+    token = await ensure_sub_token(telegram_id)
+    return aggregator.sub_link(token)
+
+
 def _access_gate_kb():
     """Buy options shown when a premium key is requested without an active sub —
     a subscription, and (if bypass is on) buying GB traffic instead."""
@@ -518,6 +565,34 @@ async def cb_download(call: CallbackQuery) -> None:
     await call.answer()
 
 
+async def _connect_agg(call: CallbackQuery, key: str, agg_url: str) -> None:
+    """Aggregator connect screen: two one-tap buttons (Happ / Incy) that add the
+    single merged key — no VPN/Обход split."""
+    kb = InlineKeyboardBuilder()
+    rows: list[int] = []
+    _add_connect_button(
+        kb, "📥 Добавить ключ в Happ", happ_crypto.format_for_user(agg_url),
+        "aggadd:happ", style="primary",
+    )
+    n = 1
+    if key in _INCY_PLATFORMS:
+        incy_dl = await incy_crypto.to_incy_link(agg_url)
+        if incy_dl:
+            _add_connect_button(
+                kb, "💚 Добавить ключ в Incy", incy_dl, "aggadd:incy", style="success"
+            )
+            n = 2
+    rows.append(n)
+    kb.button(text="✅ Готово", callback_data="onb:done", style="success")
+    kb.button(text="⚙️ Настроить вручную", callback_data=f"manual:{key}")
+    kb.button(text="💬 Нужна помощь", url=SUPPORT_URL)
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"dl:{key}")
+    rows += [1, 1, 1, 1]
+    kb.adjust(*rows)
+    await show_screen(call.message, "connect", CONNECT_AGG_TEXT, reply_markup=kb.as_markup())
+    await call.answer()
+
+
 @router.callback_query(F.data.startswith("cn:"))
 async def cb_connect(call: CallbackQuery) -> None:
     """Step 2: connect screen — one-tap key import (or copyable-key fallback)."""
@@ -526,12 +601,19 @@ async def cb_connect(call: CallbackQuery) -> None:
     if device is None:
         await call.answer()
         return
-    happ = await _happ_key(call.from_user.id)
+
+    uid = call.from_user.id
+    # Aggregator single-key flow (gated) takes precedence over legacy dual-key.
+    agg = await _agg_url(uid)
+    if agg:
+        await _connect_agg(call, key, agg)
+        return
+
+    happ = await _happ_key(uid)
     if not happ:
         await _no_access(call)
         return
 
-    uid = call.from_user.id
     kb = InlineKeyboardBuilder()
     rows: list[int] = []
 
@@ -567,10 +649,46 @@ async def cb_connect(call: CallbackQuery) -> None:
     await call.answer()
 
 
+async def _manual_agg(call: CallbackQuery, key: str, agg_url: str) -> None:
+    """Aggregator manual screen: two encrypted keys (Happ + Incy) of the single
+    merged link, each in a tap-to-copy quote."""
+    parts = [
+        "📋 <b>Ручная установка — 3 простых шага</b>\n",
+        "1. Нажмите на ключ ниже — он скопируется",
+        "2. Откройте Happ или Incy",
+        "3. Нажмите <b>➕</b> в правом верхнем углу или "
+        "<b>«Вставить»</b> (Incy) и вставьте из буфера 📋",
+        "<i>Повторите для второго ключа.</i>\n",
+        _labeled_key(
+            "🔑 <b>Ключ Happ</b> (скопируйте и вставьте в приложение):",
+            happ_crypto.format_for_user(agg_url),
+        ),
+    ]
+    if key in _INCY_PLATFORMS:
+        incy_key = await incy_crypto.to_incy_link(agg_url)
+        if incy_key:
+            parts.append(_labeled_key(
+                "💚 <b>Ключ Incy</b> (скопируйте и вставьте в приложение):", incy_key,
+            ))
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Готово", callback_data="onb:done", style="success")
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"cn:{key}")
+    kb.adjust(1)
+    await safe_edit(call.message, "\n".join(parts), reply_markup=kb.as_markup())
+    await call.answer()
+
+
 @router.callback_query(F.data.startswith("manual:"))
 async def cb_manual(call: CallbackQuery) -> None:
     key = call.data.split(":", 1)[1]
     uid = call.from_user.id
+
+    # Aggregator single-key flow (gated) takes precedence over legacy dual-key.
+    agg = await _agg_url(uid)
+    if agg:
+        await _manual_agg(call, key, agg)
+        return
+
     happ = await _happ_key(uid)
     if not happ:
         await _no_access(call)
@@ -604,6 +722,31 @@ async def cb_manual(call: CallbackQuery) -> None:
     kb.adjust(1)
     await safe_edit(call.message, "\n".join(parts), reply_markup=kb.as_markup())
     await call.answer()
+
+
+@router.callback_query(F.data.startswith("aggadd:"))
+async def cb_aggadd(call: CallbackQuery) -> None:
+    """No-connect-page fallback: reveal the aggregated key (Happ or Incy) as a
+    tap-to-copy quote."""
+    client = call.data.split(":", 1)[1]  # happ | incy
+    agg = await _agg_url(call.from_user.id)
+    if not agg:
+        await call.answer("Ключ недоступен", show_alert=True)
+        return
+    if client == "incy":
+        key = await incy_crypto.to_incy_link(agg)
+        app, tip = "Incy", "💚"
+    else:
+        key = happ_crypto.format_for_user(agg)
+        app, tip = "Happ", "🔑"
+    if not key:
+        await call.answer("Ключ недоступен", show_alert=True)
+        return
+    await call.message.answer(
+        f"{tip} Нажми на ключ — он скопируется, затем вставь его в {app}:\n\n"
+        f"<blockquote expandable><code>{html.escape(key)}</code></blockquote>"
+    )
+    await call.answer("Ключ отправлен ниже 👇")
 
 
 @router.callback_query(F.data.startswith("addkey:"))
