@@ -280,6 +280,12 @@ SUBSCRIPTION_TITLE = _get_str("SUBSCRIPTION_TITLE", "💙 Elma VPN")
 SUBSCRIPTION_UPSTREAM_UA = _get_str("SUBSCRIPTION_UPSTREAM_UA", "v2rayNG/1.9.5")
 # How often the client auto-refreshes the subscription, in hours.
 SUBSCRIPTION_UPDATE_INTERVAL = _get_int("SUBSCRIPTION_UPDATE_INTERVAL", 1)
+# How long an aggregated body is served without refetching the panel, in seconds.
+# Every client refresh beyond this window pulls the CURRENT server list live, so
+# keep it small (server-pool changes then propagate near-instantly). 0 = always
+# live (singleflight still collapses concurrent fetches; the 24h stale copy still
+# covers a panel outage). Only raise it if the panel struggles under refresh load.
+SUBSCRIPTION_CACHE_TTL = _get_int("SUBSCRIPTION_CACHE_TTL", 3)
 # Second line (subtitle) shown under each server: premium vs bypass.
 SUBSCRIPTION_NOTE_PREMIUM = _get_str("SUBSCRIPTION_NOTE_PREMIUM", "Для WiFi (не тратит ГБ)")
 SUBSCRIPTION_NOTE_BYPASS = _get_str("SUBSCRIPTION_NOTE_BYPASS", "Для LTE (белые списки)")

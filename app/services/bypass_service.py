@@ -17,7 +17,7 @@ from database import (
     utcnow,
 )
 
-from . import remnawave
+from . import aggregator, remnawave
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +113,14 @@ async def provision_trial_bonus(telegram_id: int) -> bool:
 
 
 async def provision_traffic(telegram_id: int, extra_bytes: int) -> int:
+    """Add bypass traffic (see :func:`_provision_traffic`) and drop the cached
+    aggregated body so the user's next client refresh shows the new limit live."""
+    new_limit = await _provision_traffic(telegram_id, extra_bytes)
+    await aggregator.invalidate(telegram_id)
+    return new_limit
+
+
+async def _provision_traffic(telegram_id: int, extra_bytes: int) -> int:
     """Add ``extra_bytes`` to the user's bypass entity (creating it if needed).
     Returns the new total limit in bytes. Panel call first, DB write second.
 

@@ -26,7 +26,7 @@ from database import (
 )
 from database import to_db_utc
 
-from . import remnawave
+from . import aggregator, remnawave
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ async def _persist(
         sub_url = sub_url or db_sub["subscription_url"]
     if not panel_uuid:
         raise RuntimeError(f"Remnawave response carried no uuid for {telegram_id}")
-    return await upsert_subscription(
+    sub = await upsert_subscription(
         telegram_id,
         panel_uuid=panel_uuid,
         vless_uuid=vless_uuid,
@@ -138,6 +138,10 @@ async def _persist(
         expires_at=expire_at,
         source=source,
     )
+    # Any premium change (buy, renew, gift, promo, trial, admin) drops the cached
+    # aggregated body so the user's very next client refresh rebuilds live.
+    await aggregator.invalidate(telegram_id)
+    return sub
 
 
 async def _adopt(

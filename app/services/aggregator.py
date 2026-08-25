@@ -203,7 +203,10 @@ async def probe(url: str, ua: str | None = None) -> dict:
 
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{4,128}$")
 
-FRESH_TTL = 15.0            # seconds a body is served without refetching
+# Seconds a body is served without refetching the panel. Small by design so a
+# client refresh reflects the current server list near-instantly; concurrent
+# fetches are still collapsed by singleflight regardless of this value.
+FRESH_TTL = float(config.SUBSCRIPTION_CACHE_TTL)
 STALE_TTL = 24 * 3600.0    # seconds a body may still be served on panel failure
 NEG_TTL = 60.0             # seconds an unknown token is remembered as missing
 MAX_CACHE_ENTRIES = 20_000  # LRU cap (body + negative caches)
