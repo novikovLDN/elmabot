@@ -276,10 +276,24 @@ SUBSCRIPTION_BRAND = _get_str("SUBSCRIPTION_BRAND", "Elma")
 SUBSCRIPTION_TITLE = _get_str("SUBSCRIPTION_TITLE", "💙 Elma VPN")
 # User-Agent sent to the panel when fetching a user's subscription. We force a
 # plain-client UA so the panel returns a base64 vless URI list (mergeable), not
-# a JSON/Clash template — the merged result imports into any client. NB: some
-# panel builds map v2rayNG to a JSON subscription template; v2rayTun reliably
-# yields base64. Use /aggcheck to see which UA gives a uri-list on your panel.
+# a JSON/Clash template. Panels map different UAs to different templates and can
+# change that mapping at any time, so fetch() actually tries an ordered LIST of
+# UAs and uses the first one whose response is a base64 uri-list — self-healing,
+# no manual tuning. This value is just the first UA tried.
 SUBSCRIPTION_UPSTREAM_UA = _get_str("SUBSCRIPTION_UPSTREAM_UA", "v2rayTun/2.0")
+# Ordered UA fallbacks tried until the panel returns a mergeable uri-list. The
+# configured UA goes first; the rest are common clients that hit Remnawave's
+# base64 default. Duplicates are removed while preserving order.
+SUBSCRIPTION_UPSTREAM_UAS = list(dict.fromkeys([
+    SUBSCRIPTION_UPSTREAM_UA,
+    "v2rayTun/2.0",
+    "Shadowrocket/2.2.0",
+    "v2rayN/6.45",
+    "Streisand/1.0",
+    "clash-verge/1.6",
+    "curl/8.4.0",
+    "v2rayNG/1.9.5",
+]))
 # How often the client auto-refreshes the subscription, in hours.
 SUBSCRIPTION_UPDATE_INTERVAL = _get_int("SUBSCRIPTION_UPDATE_INTERVAL", 1)
 # How long an aggregated body is served without refetching the panel, in seconds.

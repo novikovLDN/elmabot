@@ -25,13 +25,11 @@ logger = logging.getLogger(__name__)
 
 _TIMEOUT = httpx.Timeout(10.0)
 
-# Response headers worth passing through from the panel (traffic/expiry the
-# client shows, refresh hint). NB: the panel's own content-type is deliberately
-# NOT passed through — we always serve text/plain (a panel that returns
+# NB: we deliberately do NOT pass the panel's own headers (content-type etc.)
+# through to the client — we always serve text/plain (a panel that returns
 # application/json for a client-specific UA otherwise breaks the client with
-# "unknown content type"). We also force a fixed upstream UA in fetch() so the
-# panel always yields a mergeable base64 vless list, never that JSON template.
-_PASSTHROUGH = ("subscription-userinfo", "profile-update-interval")
+# "unknown content type"), and fetch() negotiates a UA that yields a mergeable
+# base64 vless list, never that JSON template.
 
 # Shared keep-alive client — avoids a fresh TLS handshake on every fetch (the
 # aggregator does two upstream requests per subscription load).
@@ -145,25 +143,51 @@ def combine(groups: list[tuple[str, bytes]]) -> bytes | None:
     return base64.b64encode("\n".join(lines).encode())
 
 
+# Remembered UA that last yielded a mergeable uri-list — tried first so the
+# steady state is a single upstream request (self-heals if the panel remaps UAs).
+_good_ua: str | None = None
+
+
 async def fetch(subscription_url: str) -> tuple[bytes, dict]:
     """GET the panel subscription content as a base64 vless URI list.
 
-    We send a fixed plain-client User-Agent (``SUBSCRIPTION_UPSTREAM_UA``) rather
-    than the caller's, so the panel returns a mergeable URI list instead of a
-    JSON/Clash template keyed to the real client. Returns
-    ``(body, passthrough_headers)``."""
-    resp = await _get_client().get(
-        subscription_url,
-        headers={
-            "User-Agent": config.SUBSCRIPTION_UPSTREAM_UA,
-            # Always pull the current configs/usage — never a cached copy.
-            "Cache-Control": "no-cache",
-            "Pragma": "no-cache",
-        },
+    Panels serve a *different* body per User-Agent (base64 vless list vs a
+    client-specific JSON/Clash template) and can change that mapping at any time.
+    So rather than trusting one fixed UA, we try an ordered list
+    (``SUBSCRIPTION_UPSTREAM_UAS``) and return the first response that decodes to
+    a mergeable uri-list — the last good UA is remembered and tried first next
+    time, so steady state is a single request. Returns ``(body, {})``."""
+    global _good_ua
+    client = _get_client()
+    uas = list(config.SUBSCRIPTION_UPSTREAM_UAS)
+    if _good_ua and _good_ua in uas:  # try the known-good UA first
+        uas = [_good_ua] + [u for u in uas if u != _good_ua]
+
+    last_body = b""
+    for ua in uas:
+        resp = await client.get(
+            subscription_url,
+            headers={
+                "User-Agent": ua,
+                # Always pull the current configs/usage — never a cached copy.
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+            },
+        )
+        resp.raise_for_status()
+        body = resp.content
+        if _extract_uris(body) is not None:  # mergeable — this UA works
+            if _good_ua != ua:
+                logger.info("aggregator: using upstream UA %r (yields uri-list)", ua)
+            _good_ua = ua
+            return body, {}
+        last_body = body
+    # No UA produced a uri-list — return the last body; combine() rejects it and
+    # the caller fails over to the stale copy (or 503) instead of serving JSON.
+    logger.warning(
+        "aggregator: no UA yielded a uri-list for %s (tried %d)", subscription_url, len(uas)
     )
-    resp.raise_for_status()
-    passthrough = {h: resp.headers[h] for h in _PASSTHROUGH if h in resp.headers}
-    return resp.content, passthrough
+    return last_body, {}
 
 
 async def probe(url: str, ua: str | None = None) -> dict:

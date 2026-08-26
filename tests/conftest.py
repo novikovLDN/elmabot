@@ -18,6 +18,7 @@ def reset_aggregator():
         agg._cache.clear()
         agg._neg.clear()
         agg._inflight.clear()
+        agg._good_ua = None
         for k in agg._metrics:
             agg._metrics[k] = 0
     _wipe()
