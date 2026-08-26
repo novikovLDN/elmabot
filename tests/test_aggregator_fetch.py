@@ -63,6 +63,48 @@ async def test_fetch_remembers_good_ua(monkeypatch):
     assert panel.calls == ["Shadowrocket/2.2.0"], "steady state is a single request"
 
 
+async def test_fetch_skips_erroring_ua_and_reaches_working_one(monkeypatch):
+    """A non-2xx / transport error on one UA must not abort the search — the
+    working UA later in the list must still be reached (regression guard)."""
+    import httpx
+
+    calls = []
+
+    class _Client:
+        is_closed = False
+
+        async def get(self, url, headers=None):
+            ua = headers["User-Agent"]
+            calls.append(ua)
+            if ua == "bad":
+                req = httpx.Request("GET", url)
+                resp = httpx.Response(403, request=req)
+                resp.raise_for_status()  # raises HTTPStatusError
+            return _FakeResp(b64_uris("S1"))
+
+    monkeypatch.setattr(agg, "_get_client", lambda: _Client())
+    monkeypatch.setattr(agg.config, "SUBSCRIPTION_UPSTREAM_UAS", ["bad", "good"])
+
+    body, _ = await agg.fetch("http://panel/sub/x")
+    assert agg._extract_uris(body) is not None, "must reach the working UA past the erroring one"
+    assert calls == ["bad", "good"] and agg._good_ua == "good"
+
+
+async def test_fetch_raises_when_all_uas_error(monkeypatch):
+    import httpx
+
+    class _Client:
+        is_closed = False
+
+        async def get(self, url, headers=None):
+            raise httpx.ConnectError("panel unreachable")
+
+    monkeypatch.setattr(agg, "_get_client", lambda: _Client())
+    monkeypatch.setattr(agg.config, "SUBSCRIPTION_UPSTREAM_UAS", ["a", "b"])
+    with pytest.raises(Exception):
+        await agg.fetch("http://panel/sub/x")
+
+
 async def test_fetch_returns_last_body_when_no_ua_works(monkeypatch):
     panel = _FakePanel(base64_uas=set())  # panel returns JSON to everything
     monkeypatch.setattr(agg, "_get_client", lambda: panel)

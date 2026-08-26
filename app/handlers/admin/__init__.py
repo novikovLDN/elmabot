@@ -294,7 +294,7 @@ def _probe_line(tag: str, r: dict) -> str:
         f"• <b>{html.escape(tag)}</b>: HTTP {r['status']}, "
         f"<code>{html.escape(r['content_type'] or '—')}</code>, "
         f"серверов: {r['servers']} — {kind}\n"
-        f"  <code>{html.escape(r['head'][:40])}</code>"
+        f"  <code>{html.escape(r['head'][:180])}</code>"
     )
 
 

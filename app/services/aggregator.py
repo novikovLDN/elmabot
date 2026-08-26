@@ -164,17 +164,25 @@ async def fetch(subscription_url: str) -> tuple[bytes, dict]:
         uas = [_good_ua] + [u for u in uas if u != _good_ua]
 
     last_body = b""
+    last_exc: Exception | None = None
     for ua in uas:
-        resp = await client.get(
-            subscription_url,
-            headers={
-                "User-Agent": ua,
-                # Always pull the current configs/usage — never a cached copy.
-                "Cache-Control": "no-cache",
-                "Pragma": "no-cache",
-            },
-        )
-        resp.raise_for_status()
+        # A single UA erroring (non-2xx / transport) must NOT abort the search —
+        # keep trying the rest, so one bad response never sinks the whole fetch.
+        try:
+            resp = await client.get(
+                subscription_url,
+                headers={
+                    "User-Agent": ua,
+                    # Always pull the current configs/usage — never a cached copy.
+                    "Cache-Control": "no-cache",
+                    "Pragma": "no-cache",
+                },
+            )
+            resp.raise_for_status()
+        except Exception as exc:  # noqa: BLE001 - try the next UA
+            last_exc = exc
+            logger.info("aggregator: upstream UA %r failed (%s), trying next", ua, exc)
+            continue
         body = resp.content
         if _extract_uris(body) is not None:  # mergeable — this UA works
             if _good_ua != ua:
@@ -182,12 +190,15 @@ async def fetch(subscription_url: str) -> tuple[bytes, dict]:
             _good_ua = ua
             return body, {}
         last_body = body
-    # No UA produced a uri-list — return the last body; combine() rejects it and
-    # the caller fails over to the stale copy (or 503) instead of serving JSON.
-    logger.warning(
-        "aggregator: no UA yielded a uri-list for %s (tried %d)", subscription_url, len(uas)
-    )
-    return last_body, {}
+    if last_body:
+        # Got 200s but none was a uri-list (panel returns JSON to every UA) —
+        # return it so combine() rejects it and the caller fails over.
+        logger.warning(
+            "aggregator: no UA yielded a uri-list for %s (tried %d)", subscription_url, len(uas)
+        )
+        return last_body, {}
+    # Every UA errored — surface the last error so serve() serves stale / 503.
+    raise last_exc or RuntimeError("aggregator: all upstream UAs failed")
 
 
 async def probe(url: str, ua: str | None = None) -> dict:
@@ -209,7 +220,7 @@ async def probe(url: str, ua: str | None = None) -> dict:
     return {
         "status": resp.status_code,
         "content_type": resp.headers.get("content-type", ""),
-        "head": body[:48].decode("utf-8", "replace"),
+        "head": body[:220].decode("utf-8", "replace"),
         "servers": len(uris) if uris else 0,
         "is_uri_list": uris is not None,
     }
