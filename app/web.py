@@ -132,12 +132,17 @@ async def _build_subscription(request: web.Request, tg_id: int) -> tuple[bytes, 
 
     combined = aggregator.combine(groups)
     if combined is None:
-        # No mergeable URI list (structured format / all sources failed).
-        if not groups:
-            # Every upstream failed — signal an upstream error so serve() can
-            # fall back to the last-good copy instead of caching an empty body.
-            raise RuntimeError("all upstream sources failed")
-        combined = groups[0][1]  # serve the first source as-is
+        # Nothing mergeable: either every upstream failed, or the panel answered
+        # with a non-URI-list (a JSON/Clash template, e.g. a UA it maps to JSON).
+        # Never serve that raw body as text/plain — it imports as garbage ("0
+        # servers"). Signal an upstream error so serve() falls back to the last
+        # good base64 copy (or 503), and log so the UA can be corrected.
+        logger.error(
+            "aggregator %s: no mergeable uri-list (%d source(s)); check "
+            "SUBSCRIPTION_UPSTREAM_UA=%s via /aggcheck",
+            tg_id, len(groups), config.SUBSCRIPTION_UPSTREAM_UA,
+        )
+        raise RuntimeError("no mergeable uri-list from panel")
 
     title_b64 = base64.b64encode(config.SUBSCRIPTION_TITLE.encode()).decode()
     headers: dict[str, str] = {

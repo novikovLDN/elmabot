@@ -276,8 +276,10 @@ SUBSCRIPTION_BRAND = _get_str("SUBSCRIPTION_BRAND", "Elma")
 SUBSCRIPTION_TITLE = _get_str("SUBSCRIPTION_TITLE", "💙 Elma VPN")
 # User-Agent sent to the panel when fetching a user's subscription. We force a
 # plain-client UA so the panel returns a base64 vless URI list (mergeable), not
-# a JSON/Clash template — the merged result imports into any client.
-SUBSCRIPTION_UPSTREAM_UA = _get_str("SUBSCRIPTION_UPSTREAM_UA", "v2rayNG/1.9.5")
+# a JSON/Clash template — the merged result imports into any client. NB: some
+# panel builds map v2rayNG to a JSON subscription template; v2rayTun reliably
+# yields base64. Use /aggcheck to see which UA gives a uri-list on your panel.
+SUBSCRIPTION_UPSTREAM_UA = _get_str("SUBSCRIPTION_UPSTREAM_UA", "v2rayTun/2.0")
 # How often the client auto-refreshes the subscription, in hours.
 SUBSCRIPTION_UPDATE_INTERVAL = _get_int("SUBSCRIPTION_UPDATE_INTERVAL", 1)
 # How long an aggregated body is served without refetching the panel, in seconds.

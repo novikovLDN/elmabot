@@ -273,6 +273,17 @@ _AGGCHECK_UAS = (
     ("v2rayTun", "v2rayTun/2.0"),
 )
 
+# Candidate upstream UAs to scan against the panel — reveals which one the panel
+# answers with a base64 uri-list (mergeable) vs a JSON/Clash template. Whichever
+# wins here is what SUBSCRIPTION_UPSTREAM_UA should be set to.
+_UPSTREAM_UA_SCAN = (
+    "v2rayTun/2.0",
+    "v2rayNG/1.9.5",
+    "Streisand/1.0",
+    "clash-verge/1.6",
+    "curl/8.4.0",
+)
+
 
 def _probe_line(tag: str, r: dict) -> str:
     kind = "base64/uri-list" if r["is_uri_list"] else "⚠️ НЕ uri-list (JSON/мусор)"
@@ -316,7 +327,9 @@ async def cmd_aggcheck(message: Message) -> None:
     )
 
     lines = [f"🔎 <b>Aggcheck для <code>{target}</code></b>\n"]
-    lines.append("<b>1) Upstream (наш фикс-UA → должен быть base64):</b>")
+    lines.append(
+        f"<b>1) Upstream</b> (текущий UA: <code>{html.escape(config.SUBSCRIPTION_UPSTREAM_UA)}</code>):"
+    )
     if not prem_url and not bp_url:
         lines.append("• нет активных подписок (premium/bypass) — нечего склеивать")
     for tag, url in (("premium", prem_url), ("bypass", bp_url)):
@@ -326,6 +339,21 @@ async def cmd_aggcheck(message: Message) -> None:
             lines.append(_probe_line(tag, await aggregator.probe(url)))
         except Exception as exc:  # noqa: BLE001
             lines.append(f"• <b>{tag}</b>: ❌ {html.escape(type(exc).__name__)}: {html.escape(str(exc)[:120])}")
+
+    # 1b) Scan candidate UAs against one upstream — reveals which UA the panel
+    # answers with base64 (what SUBSCRIPTION_UPSTREAM_UA should be).
+    scan_url = prem_url or bp_url
+    if scan_url:
+        lines.append("\n<b>1b) Какой UA даёт base64</b> (для upstream панели):")
+        for ua in _UPSTREAM_UA_SCAN:
+            try:
+                r = await aggregator.probe(scan_url, ua)
+                mark = "✅ base64" if r["is_uri_list"] else f"⚠️ {r['content_type'] or 'JSON'}"
+                lines.append(
+                    f"• <code>{html.escape(ua)}</code> → {mark}, серверов: {r['servers']}"
+                )
+            except Exception as exc:  # noqa: BLE001
+                lines.append(f"• <code>{html.escape(ua)}</code> → ❌ {html.escape(type(exc).__name__)}")
 
     # 2) Our own public link, replayed with several client UAs.
     lines.append("\n<b>2) Публичная ссылка (все UA → text/plain, N серверов):</b>")
