@@ -116,18 +116,15 @@ async def _build_subscription(request: web.Request, tg_id: int) -> tuple[bytes, 
     prem_note = config.SUBSCRIPTION_NOTE_PREMIUM
     bp_note = config.SUBSCRIPTION_NOTE_BYPASS
 
-    # When bypass GB is used up but the user still has premium, serve the premium
-    # (UNLIMITED, doesn't spend GB) servers ONLY — the metered bypass entity is
-    # LIMITED and its servers can't carry traffic, so merging them would just add
-    # dead entries. Buying more GB re-includes them (we invalidate on top-up).
-    # A bypass-only user (no premium) still gets their servers so they see the
-    # full traffic bar prompting a top-up instead of an empty list.
-    bp_exhausted = bp_live and bp_limit > 0 and bp_remaining is not None and bp_remaining <= 0
-    merge_bypass = bool(bp_url) and not (bp_exhausted and prem_url)
-
-    # Fetch both config lists concurrently.
+    # Fetch both config lists concurrently. Premium and bypass are independent
+    # panel entities, so an active premium subscription always contributes its
+    # UNLIMITED servers regardless of bypass state — the main servers stay
+    # available even when bypass GB is used up. The bypass servers are served
+    # exactly as the panel returns them (metered entity, LIMITED at 0 GB); the
+    # traffic bar below reflects the panel's live usage so the client shows the
+    # limit correctly and prompts a top-up.
     prem_task = asyncio.create_task(aggregator.fetch(prem_url)) if prem_url else None
-    bp_task = asyncio.create_task(aggregator.fetch(bp_url)) if merge_bypass else None
+    bp_task = asyncio.create_task(aggregator.fetch(bp_url)) if bp_url else None
     groups: list[tuple[str, bytes]] = []
     for note, task in ((prem_note, prem_task), (bp_note, bp_task)):
         if task is None:

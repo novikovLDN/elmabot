@@ -61,8 +61,9 @@ async def test_premium_and_bypass_both_served_when_traffic_left(patch_sources):
     assert "http://panel/bp" in patch_sources["fetched"]
 
 
-async def test_main_servers_survive_when_bypass_exhausted(patch_sources):
-    # GB used up: remaining 0, panel entity LIMITED.
+async def test_main_servers_available_and_bypass_shown_when_exhausted(patch_sources):
+    # GB used up: remaining 0, panel entity LIMITED. Main servers must stay, and
+    # bypass is served exactly as the panel returns it (not hidden).
     patch_sources["usage"] = {
         "used": 10 * 1024**3, "limit": 10 * 1024**3, "remaining": 0,
         "subscription_url": "http://panel/bp", "live": True,
@@ -70,11 +71,12 @@ async def test_main_servers_survive_when_bypass_exhausted(patch_sources):
     body, headers = await web._build_subscription(request=None, tg_id=1)
     merged = _decode(body)
     assert "PREM-1" in merged and "PREM-2" in merged, "UNLIMITED servers must remain"
-    assert "BYP-1" not in merged, "exhausted metered servers are dropped"
-    assert "http://panel/bp" not in patch_sources["fetched"], "bypass not even fetched when exhausted"
-    # The traffic bar still reports full usage so the client prompts a top-up.
-    assert "total=" in headers["Subscription-Userinfo"]
-    assert "download=" in headers["Subscription-Userinfo"]
+    assert "BYP-1" in merged, "bypass shown as the panel returns it, even at the limit"
+    assert "http://panel/bp" in patch_sources["fetched"]
+    # The traffic bar reflects the panel's live usage (used == total) so the
+    # client shows the limit correctly and prompts a top-up.
+    info = headers["Subscription-Userinfo"]
+    assert f"download={10 * 1024**3}" in info and f"total={10 * 1024**3}" in info
 
 
 async def test_premium_survives_when_bypass_fetch_fails(patch_sources, monkeypatch):
