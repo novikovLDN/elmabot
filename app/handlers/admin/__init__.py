@@ -278,10 +278,13 @@ _AGGCHECK_UAS = (
 # wins here is what SUBSCRIPTION_UPSTREAM_UA should be set to.
 _UPSTREAM_UA_SCAN = (
     "v2rayTun/2.0",
-    "v2rayNG/1.9.5",
+    "Shadowrocket/2.2.0",
+    "v2rayN/6.45",
     "Streisand/1.0",
+    "Happ/2.0",
     "clash-verge/1.6",
     "curl/8.4.0",
+    "sub-aggregator",
 )
 
 
