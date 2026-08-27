@@ -87,6 +87,15 @@ async def set_panel_uuid(telegram_id: int, panel_uuid: str) -> None:
     )
 
 
+async def set_subscription_url(telegram_id: int, subscription_url: str) -> None:
+    """Sync just the premium subscription_url (when the panel's link changed)."""
+    pool = get_pool()
+    await pool.execute(
+        "UPDATE subscriptions SET subscription_url = $2 WHERE telegram_id = $1",
+        telegram_id, subscription_url,
+    )
+
+
 async def all_provisioned() -> list[asyncpg.Record]:
     """Every subscription with a panel entity (for the panel backfill / re-sync)."""
     pool = get_pool()

@@ -9,6 +9,7 @@ from .core import (
 from .subscriptions import (
     clear_panel_uuid,
     set_panel_uuid,
+    set_subscription_url,
     all_provisioned,
     create_gift,
     create_pending_payment,
@@ -196,6 +197,7 @@ __all__ = [
     "upsert_subscription",
     "clear_panel_uuid",
     "set_panel_uuid",
+    "set_subscription_url",
     "all_provisioned",
     "create_pending_payment",
     "get_payment",

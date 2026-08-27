@@ -97,8 +97,14 @@ async def _build_subscription(request: web.Request, tg_id: int) -> tuple[bytes, 
     else:
         sub, bp_row, usage = await get_subscription(tg_id), None, None
 
-    prem_url = sub["subscription_url"] if sub and sub["status"] == "active" else None
-    prem_expire = sub["expires_at"] if sub and sub["status"] == "active" else None
+    prem_active = bool(sub and sub["status"] == "active")
+    prem_expire = sub["expires_at"] if prem_active else None
+    # Resolve the premium URL LIVE from the panel (self-syncs a changed panel
+    # link), reusing the row we already fetched. Bypass already self-syncs via
+    # get_usage, so now both pick up a panel-side URL change immediately.
+    from app.services import subscription_service
+
+    prem_url = await subscription_service.resolve_live_url(tg_id, sub=sub) if prem_active else None
     # Bypass link: the stored subscription_url (fall back to the live usage read).
     bp_url = (
         (bp_row["subscription_url"] if bp_row else None)

@@ -21,6 +21,7 @@ from database import (
     clear_panel_uuid,
     get_subscription,
     release_trial,
+    set_subscription_url,
     upsert_subscription,
     utcnow,
 )
@@ -248,6 +249,32 @@ async def activate_trial(
     except Exception:  # noqa: BLE001
         logger.warning("trial bypass bonus failed for %s", telegram_id, exc_info=True)
     return sub
+
+
+async def resolve_live_url(telegram_id: int, sub: asyncpg.Record | None = None) -> str | None:
+    """The premium subscription URL, read LIVE from the panel and synced to the DB
+    if it changed — so a panel-side link change is picked up on the next request
+    (mirrors how bypass self-syncs via get_usage). Falls back to the stored URL
+    when the panel read fails, and returns None if there's no active premium.
+
+    Pass ``sub`` to reuse an already-fetched subscription row (avoids a re-read)."""
+    if sub is None:
+        sub = await get_subscription(telegram_id)
+    if sub is None or sub["status"] != "active":
+        return None
+    stored = sub["subscription_url"]
+    try:
+        user = await remnawave.find_user_by_username(config.build_username(telegram_id))
+    except Exception:  # noqa: BLE001 - never let a URL refresh break the subscription
+        logger.warning("premium url live-read failed for %s; using stored", telegram_id)
+        return stored
+    if user is None:
+        return stored
+    url = _extract(user)["subscription_url"] or stored
+    if url and url != stored:
+        await set_subscription_url(telegram_id, url)
+        logger.info("premium sub url re-synced from panel for %s", telegram_id)
+    return url
 
 
 async def deprovision(panel_uuid: str | None) -> None:
