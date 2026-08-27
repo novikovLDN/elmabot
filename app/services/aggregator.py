@@ -414,3 +414,23 @@ async def invalidate(telegram_id: int) -> None:
         return
     if token:
         clear_cache(token)
+
+
+async def rotate_link(telegram_id: int) -> str:
+    """Reissue ONLY this user's aggregator link and return the new token.
+
+    Rotates the per-user ``sub_token`` (a fresh 192-bit unique value), so the old
+    ``/sub`` and ``/add`` links die at once — the old token no longer resolves to
+    a user and 404s. The old token's cached body is dropped too, so it can't be
+    served from cache during the fresh window. Strictly per-user: no other user's
+    link is affected. Panel keys are untouched (use subscription_service.reissue
+    for a full key rotation)."""
+    from database import get_user, reissue_sub_token
+
+    row = await get_user(telegram_id)
+    old = row["sub_token"] if row else None
+    new = await reissue_sub_token(telegram_id)
+    if old and old != new:
+        clear_cache(old)
+    clear_cache(new)  # a rotated link must rebuild live on first fetch
+    return new

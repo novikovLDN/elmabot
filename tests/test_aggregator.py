@@ -188,6 +188,37 @@ async def test_invalidate_drops_body(fast_ttl, monkeypatch):
     assert state == "miss" and body == b"b2"
 
 
+# --- per-user link reissue -------------------------------------------------
+
+async def test_rotate_link_isolates_user_and_clears_old_cache(monkeypatch):
+    import database
+
+    tokens = {6001: "old_token_A", 6002: "token_B_other"}
+
+    async def fake_get_user(tg):
+        return {"sub_token": tokens[tg]}
+
+    async def fake_reissue(tg):
+        tokens[tg] = f"new_token_{tg}"
+        return tokens[tg]
+
+    monkeypatch.setattr(database, "get_user", fake_get_user)
+    monkeypatch.setattr(database, "reissue_sub_token", fake_reissue)
+
+    async def builder():
+        return b"BODY", {}
+
+    await agg.serve("old_token_A", builder)      # user 6001 cached
+    await agg.serve("token_B_other", builder)    # user 6002 cached
+    assert "old_token_A" in agg._cache and "token_B_other" in agg._cache
+
+    new = await agg.rotate_link(6001)
+    assert new == "new_token_6001", "a fresh unique token is issued"
+    assert "old_token_A" not in agg._cache, "the old link's cache is dropped (dies at once)"
+    assert new not in agg._cache, "the new link rebuilds live on first fetch"
+    assert "token_B_other" in agg._cache, "no other user's link is affected"
+
+
 # --- metrics ---------------------------------------------------------------
 
 async def test_metrics_snapshot_hit_ratio():

@@ -226,17 +226,58 @@ async def cmd_panel_backfill(message: Message) -> None:
 
 @router.message(Command("subreissue"))
 async def cmd_subreissue(message: Message) -> None:
-    """Reissue the admin's aggregated link: the old link dies immediately and a
-    fresh one is issued (import the new one into the client)."""
+    """Reissue ONE user's aggregated link, per-user and isolated: the old /sub
+    link dies immediately, a fresh unique one is issued, no other user is
+    touched. Usage: <code>/subreissue [tg_id]</code> (default: self)."""
     if not config.SUBSCRIPTION_BASE_URL:
         await message.answer("⚠️ Агрегатор не настроен.")
         return
-    token = await reissue_sub_token(message.from_user.id)
+    parts = (message.text or "").split()
+    try:
+        target = int(parts[1]) if len(parts) > 1 else message.from_user.id
+    except ValueError:
+        await message.answer("Использование: <code>/subreissue [tg_id]</code>")
+        return
+
+    # Per-user rotation: new unique token + old token's cache dropped. Only this
+    # user's link changes.
+    token = await aggregator.rotate_link(target)
+
+    if target == message.from_user.id:
+        await message.answer(
+            "♻️ <b>Ссылка перевыпущена.</b> Старая больше не работает — "
+            "импортируй новую в клиент 👇"
+        )
+        await _send_sub_links(message, token)
+        return
+
+    # Reissuing for another user: notify them and confirm to the admin.
+    try:
+        await _notify_user_reissue(message.bot, target)
+    except Exception:  # noqa: BLE001 - user may be unreachable
+        logger.debug("reissue notify failed for %s", target, exc_info=True)
     await message.answer(
-        "♻️ <b>Ссылка перевыпущена.</b> Старая больше не работает — "
-        "импортируй новую в клиент 👇"
+        f"♻️ Ссылка пользователя <code>{target}</code> перевыпущена. "
+        "Старая больше не работает; пользователю отправлено уведомление."
     )
-    await _send_sub_links(message, token)
+
+
+async def _notify_user_reissue(bot, tg: int) -> None:
+    """Tell a user their aggregated link was reissued (the Подключиться flow
+    serves the fresh one)."""
+    from app.utils import safe_send
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text="📲 Подключиться", callback_data="dev:menu")
+    kb.button(text="🏠 Главное меню", callback_data="menu:main")
+    kb.adjust(1)
+    await safe_send(
+        bot, tg,
+        "🔑 <b>Ваша ссылка обновлена</b>\n\n"
+        "Ключ доступа перевыпущен — старый больше не действует.\n\n"
+        "Нажми «Подключиться», чтобы установить новый ключ на своих устройствах 👇",
+        reply_markup=kb.as_markup(),
+    )
 
 
 async def _send_sub_links(message: Message, token: str) -> None:

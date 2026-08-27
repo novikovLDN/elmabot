@@ -119,8 +119,11 @@ async def reissue(request: web.Request) -> web.Response:
     admin_id = int(request["admin"]["sub"])
 
     # 1. Rotate the aggregator link — DB-only, instant, can't break the VPN.
-    #    The old /sub link dies immediately.
-    await database.reissue_sub_token(tg)
+    #    Per-user: new unique token, old /sub link dies at once, old token's
+    #    cache dropped. No other user is touched.
+    from app.services import aggregator
+
+    await aggregator.rotate_link(tg)
 
     # 2. Rotate the panel VPN key (new vless url; old configs stop working).
     try:
