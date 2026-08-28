@@ -308,10 +308,14 @@ SUBSCRIPTION_NOTE_BYPASS = _get_str("SUBSCRIPTION_NOTE_BYPASS", "Для LTE (б�
 # Where the client's «Продлить» button / web-page icon leads. Empty -> the bot's
 # own t.me link (resolved at runtime) so it opens the renew screen.
 SUBSCRIPTION_WEBPAGE_URL = _get_str("SUBSCRIPTION_WEBPAGE_URL", "")
-# Beta gate: while True the aggregator serves ADMIN_IDS only. Now GA — default
-# False so every user gets the single merged key. Set SUBSCRIPTION_ADMIN_ONLY=true
-# to re-restrict to admins.
+# Gate for the aggregator ENDPOINT (/sub, /add): while True it serves ADMIN_IDS
+# only. False = serves any valid token, so existing aggregator links keep working.
 SUBSCRIPTION_ADMIN_ONLY = _get_bool("SUBSCRIPTION_ADMIN_ONLY", False)
+# Whether the CONNECTION FLOW offers the single aggregated key (one link) instead
+# of the legacy two links (VPN + Обход). Default False — users get two links; the
+# /sub endpoint above stays live either way, so already-imported aggregator links
+# keep working. Flip to True to show the single-key connect screens again.
+SUBSCRIPTION_SINGLE_KEY_FLOW = _get_bool("SUBSCRIPTION_SINGLE_KEY_FLOW", False)
 WEBAUTHN_RP_NAME = _get_str("WEBAUTHN_RP_NAME", f"{BRAND_NAME} Admin")
 
 # --- Admin web-push (VAPID) ---

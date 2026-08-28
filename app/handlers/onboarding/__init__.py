@@ -49,6 +49,7 @@ from config import (
     CONNECT_PAGE_URL,
     SUBSCRIPTION_ADMIN_ONLY,
     SUBSCRIPTION_BASE_URL,
+    SUBSCRIPTION_SINGLE_KEY_FLOW,
     SUPPORT_URL,
     TRIAL_DAYS,
 )
@@ -478,9 +479,14 @@ CONNECT_AGG_TEXT = (
 
 
 def _aggregator_enabled(telegram_id: int) -> bool:
-    """The aggregator single-key flow is on for this user (base URL configured
-    and, on the beta, admin-only)."""
-    if not SUBSCRIPTION_BASE_URL:
+    """Whether the connection flow OFFERS the single aggregated key.
+
+    Off by default (SUBSCRIPTION_SINGLE_KEY_FLOW=False) — users get the legacy
+    two links (VPN + Обход). This gates only what the connect screens SHOW; the
+    /sub aggregator endpoint stays live regardless, so anyone who already
+    imported an aggregator link keeps working. Flip the flag to re-enable the
+    single-key screens."""
+    if not SUBSCRIPTION_SINGLE_KEY_FLOW or not SUBSCRIPTION_BASE_URL:
         return False
     return not SUBSCRIPTION_ADMIN_ONLY or telegram_id in ADMIN_IDS
 
