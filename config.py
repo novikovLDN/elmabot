@@ -358,7 +358,7 @@ BROADCAST_RATE = _get_int("BROADCAST_RATE", 25)          # messages per second
 BROADCAST_CONCURRENCY = _get_int("BROADCAST_CONCURRENCY", 20)  # max in-flight
 
 # --- Support / contacts ---
-SUPPORT_USERNAME = _get_str("SUPPORT_USERNAME", "elma_supboperator").lstrip("@")
+SUPPORT_USERNAME = _get_str("SUPPORT_USERNAME", "elmavpnsupport").lstrip("@")
 SUPPORT_URL = f"https://t.me/{SUPPORT_USERNAME}"
 
 # --- Legal documents (shown on the Documents screen) ---
