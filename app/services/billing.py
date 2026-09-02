@@ -55,7 +55,7 @@ async def complete_purchase(
     )
     await mark_payment_paid(user_id, invoice_id, amount_paid)
     await clear_offer(user_id)
-    # (Aggregator cache is already dropped inside create_or_renew.)
+    # (Aggregator cache + starter bypass profile are handled inside create_or_renew.)
 
     if first_purchase:
         await _reward_referrer(bot, user_id)

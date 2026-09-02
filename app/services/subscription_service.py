@@ -139,8 +139,18 @@ async def _persist(
         expires_at=expire_at,
         source=source,
     )
-    # Any premium change (buy, renew, gift, promo, trial, admin) drops the cached
-    # aggregated body so the user's very next client refresh rebuilds live.
+    # Every subscription — trial, paid, gift, promo, admin — comes with a bypass
+    # profile (LTE / «Обход»). This is the single funnel all those paths pass
+    # through, so create it here if absent. Best-effort + idempotent (never
+    # re-grants on a renewal) and must never break the premium provision.
+    try:
+        from . import bypass_service
+
+        await bypass_service.ensure_starter_bypass(telegram_id)
+    except Exception:  # noqa: BLE001
+        logger.warning("starter bypass profile failed for %s", telegram_id, exc_info=True)
+    # Any premium change drops the cached aggregated body so the user's very next
+    # client refresh rebuilds live.
     await aggregator.invalidate(telegram_id)
     return sub
 
@@ -240,14 +250,8 @@ async def activate_trial(
     except Exception:
         await release_trial(telegram_id)
         raise
-    # Bonus bypass allowance for new trial users. Best-effort — a bypass failure
-    # must never break the premium trial that was just granted.
-    try:
-        from . import bypass_service
-
-        await bypass_service.provision_trial_bonus(telegram_id)
-    except Exception:  # noqa: BLE001
-        logger.warning("trial bypass bonus failed for %s", telegram_id, exc_info=True)
+    # (The starter bypass profile is created inside create_or_renew for every
+    # subscription path — trial, paid, gift, promo, admin.)
     return sub
 
 

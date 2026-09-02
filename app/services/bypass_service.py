@@ -96,10 +96,13 @@ async def _create_or_adopt(telegram_id: int, limit_bytes: int) -> tuple[str, str
     return created["uuid"], created["url"]
 
 
-async def provision_trial_bonus(telegram_id: int) -> bool:
-    """Create a bypass entity with the free trial bonus (BYPASS_TRIAL_BONUS_MB),
-    once. Returns True if the bonus was granted. No-op if bypass is off, the
-    bonus is 0, or the user already has a bypass entity (never stacks)."""
+async def ensure_starter_bypass(telegram_id: int) -> bool:
+    """Create the user's bypass profile with the starter allowance
+    (BYPASS_TRIAL_BONUS_MB), once. Granted to every new subscriber — trial AND
+    paid — so a subscription always comes with a bypass profile (the aggregator's
+    LTE servers / the «Обход» key). Returns True if it was created. No-op if
+    bypass is off, the allowance is 0, or the user already has a bypass entity
+    (never stacks, so renewals don't re-grant)."""
     if not config.BYPASS_ENABLED or config.BYPASS_TRIAL_BONUS_MB <= 0:
         return False
     row = await get_bypass(telegram_id)
@@ -107,9 +110,13 @@ async def provision_trial_bonus(telegram_id: int) -> bool:
         return False  # already has bypass — don't add the bonus again
     bonus_bytes = config.BYPASS_TRIAL_BONUS_MB * 1024 * 1024
     await provision_traffic(telegram_id, bonus_bytes)
-    logger.info("Granted %d MB trial bypass bonus to %s",
+    logger.info("Created starter bypass profile (%d MB) for %s",
                 config.BYPASS_TRIAL_BONUS_MB, telegram_id)
     return True
+
+
+# Backwards-compatible alias (older callers / naming).
+provision_trial_bonus = ensure_starter_bypass
 
 
 async def provision_traffic(telegram_id: int, extra_bytes: int) -> int:
