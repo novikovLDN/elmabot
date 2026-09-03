@@ -128,6 +128,14 @@ async def finalize_confirmed_payment(bot: Bot, payment) -> None:
         )
         # Remove the traffic pay screen now that the payment is confirmed.
         await _delete_confirm_screen(bot, payment)
+    elif code.startswith("gf_"):
+        # Gift: settle the payment, then issue the code and send the BUYER the
+        # forwardable activation link (the recipient redeems via ?start=gift_...).
+        tariff = get_tariff(code[3:]) or TARIFFS[0]
+        await complete_gift_purchase(
+            bot, tg, tariff, invoice_id=invoice_id, amount_paid=amount,
+        )
+        await _delete_confirm_screen(bot, payment)
     else:
         tariff = get_tariff(code) or TARIFFS[0]
         await complete_purchase(bot, tg, tariff, invoice_id=invoice_id, amount_paid=amount)
@@ -239,20 +247,39 @@ async def create_gift_code(buyer_id: int, tariff: Tariff) -> str:
     return code
 
 
-async def complete_gift_purchase(bot: Bot, buyer_id: int, tariff: Tariff) -> str:
-    """After a gift payment: create the code and send the buyer a ready-to-
-    forward message with the activation link. Returns the gift link."""
+async def complete_gift_purchase(
+    bot: Bot,
+    buyer_id: int,
+    tariff: Tariff,
+    *,
+    invoice_id: str | None = None,
+    amount_paid: int = 0,
+) -> str:
+    """After a gift payment: settle the payment (when called from a real
+    provider), create the one-time code, and send the buyer two messages — a
+    short confirmation plus a clean forwardable card with the activation link.
+    The recipient redeems via ``?start=gift_<code>``. Returns the gift link."""
     code = await create_gift_code(buyer_id, tariff)
+    if invoice_id:
+        await mark_payment_paid(buyer_id, invoice_id, amount_paid)
     me = await bot.me()
     link = f"https://t.me/{me.username}?start=gift_{code}"
+    # 1) Confirmation to the buyer (not for forwarding).
     await safe_send(
         bot,
         buyer_id,
-        "Привет! Дарю тебе подписку\n"
-        f"🌐 ELMA на {tariff.title}\n\n"
-        "Чтобы интернет работал спокойно — без лагов, обрывов "
-        "и бесконечной загрузки ⚡\n\n"
-        "Нажми на ссылку для активации:\n"
+        f"✅ <b>Подарок «{tariff.title}» оплачен</b>\n\n"
+        "Перешлите сообщение ниже тому, кому дарите — он активирует подписку "
+        "в один тап 👇",
+    )
+    # 2) The forwardable gift card with the activation link.
+    await safe_send(
+        bot,
+        buyer_id,
+        "🎁 <b>Тебе подарили ELMA</b>\n"
+        f"🌐 Подписка на <b>{tariff.title}</b>\n\n"
+        "Быстрый интернет без лагов, обрывов и блокировок ⚡\n\n"
+        "Нажми, чтобы активировать:\n"
         f"🔗 {link}",
         disable_web_page_preview=True,
     )
