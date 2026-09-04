@@ -107,70 +107,184 @@ POLICY = (
     f"Вопросы: @{SUPPORT_USERNAME} 🤍"
 )
 
+_HELP_EMO = "![💬](tg://emoji?id=5443038326535759644)"   # 💬
+_ROCKET = "![🚀](tg://emoji?id=5445284980978621387)"     # 🚀
+_BULB = "![💡](tg://emoji?id=5422439311196834318)"       # 💡
+
 HELP = (
-    "🛎️ <b>Помощь</b>\n\n"
-    "Выбери — найдём решение быстро 👇"
+    "❓ <b>Помощь</b>\n\n"
+    "Выберите подходящий вариант ниже:\n\n"
+    "<blockquote>![📖](tg://emoji?id=5411369574157286161) Ответы на частые вопросы\n"
+    "Короткие решения типичных проблем</blockquote>\n\n"
+    "<blockquote>![📱](tg://emoji?id=6019245310696495518) Инструкции по сервису\n"
+    "Как настроить VPN на вашем устройстве</blockquote>\n\n"
+    "<blockquote>📞 Контакты\n"
+    "Почта поддержки и отдела продаж</blockquote>\n\n"
+    f"<blockquote>{_HELP_EMO} Помощь\n"
+    "Написать живому оператору в Telegram</blockquote>"
 )
 
 FAQ = (
-    "📖 <b>Частые вопросы</b>\n\n"
-    "Выбери свой вопрос 👇"
+    "![📖](tg://emoji?id=5411369574157286161) <b>Ответы на частые вопросы</b>\n\n"
+    "Выберите свой вопрос — покажем короткое решение."
 )
+
+# (key, button label, button icon emoji-id) — order shown on the FAQ list.
+_FAQ_LIST = [
+    ("novpn", "Не работает VPN", emoji.FAQ_NOVPN),
+    ("howto", "Как подключиться / настроить", emoji.INSTR),
+    ("slow", "Низкая скорость", emoji.FAQ_SLOW),
+    ("pay", "Не проходит оплата", emoji.RECEIPT),
+    ("adddevice", "Как добавить ещё устройство", emoji.FAQ_DEVICE),
+    ("update", "Как обновить", emoji.FAQ_KEY),
+    ("bypass", "Как работают сервера обхода", emoji.GB),
+    ("gb", "Как работают гигабайты обхода", emoji.FAQ_CHART),
+    ("xray", "Happ — Ошибка Xray-ядра", emoji.FAQ_WARN),
+]
 
 FAQ_ANSWERS = {
     "novpn": (
-        "🚫 <b>Не работает подключение</b>\n\n"
-        "Пройдись по шагам — обычно помогает один.\n\n"
-        "1️⃣ <b>Проверь интернет без ELMA</b>\n"
-        "Отключи ELMA, открой любой сайт.\n"
-        "Не работает? Проблема у провайдера, не у нас.\n\n"
-        "2️⃣ <b>Перезапусти приложение</b>\n"
-        "Смахни Happ из меню → открой заново →\n"
-        "включи подключение.\n\n"
-        "3️⃣ <b>Импортируй ключ заново</b>\n"
-        "В боте: «📲 Подключиться» → твоё устройство →\n"
-        "«Импортировать ключ».\n\n"
-        "Не помогло? Оператор ответит за 5–10 минут 💬"
+        "🚫 <b>Не работает VPN</b>\n\n"
+        "Пройдитесь по шагам — обычно помогает один из них.\n\n"
+        "<blockquote>1️⃣ Проверьте интернет без VPN\n"
+        "Отключите VPN, откройте любой сайт. Если не работает — проблема у "
+        "провайдера, не у нас.</blockquote>\n\n"
+        "<blockquote>2️⃣ В регионе глушат связь?\n"
+        "В приложении выберите сервер с пометкой LTE — он специально для обхода "
+        "блокировок мобильных операторов (МТС, МегаФон, Билайн).</blockquote>\n\n"
+        "<blockquote>3️⃣ Перезапустите приложение\n"
+        "Полностью закройте Happ (смахните из меню) → откройте заново → включите "
+        "подключение.</blockquote>\n\n"
+        "<blockquote>4️⃣ Импортируйте ключ заново\n"
+        "В боте: «📲 Подключиться» → ваше устройство → «Импортировать ключ». "
+        "Возможно, ссылка обновилась.</blockquote>\n\n"
+        f"Не помогло? Напишите оператору — ответим за 5–10 минут. {_HELP_EMO}"
     ),
     "howto": (
         "📲 <b>Как подключиться</b>\n\n"
-        "Меньше минуты — серьёзно.\n\n"
-        "1️⃣ Нажми «📲 Подключиться» в боте\n"
-        "2️⃣ Выбери устройство\n"
-        "3️⃣ Скачай приложение\n"
-        "4️⃣ Нажми «🔗 Активировать ELMA»\n"
-        "5️⃣ Включи ELMA 🚀\n\n"
-        "Каждый шаг — с картинкой.\n"
-        "Заблудиться сложно 🤍"
+        "Это занимает меньше минуты.\n\n"
+        "<blockquote>1️⃣ В боте нажмите «📲 Подключиться»\n\n"
+        "2️⃣ Выберите устройство — iPhone · Android · Mac · Windows\n\n"
+        "3️⃣ Установите приложение по нашей ссылке\n\n"
+        "4️⃣ Нажмите «Импортировать ключ» — подписка добавится автоматически\n\n"
+        f"5️⃣ Включите VPN в приложении {_ROCKET}</blockquote>\n\n"
+        f"{_BULB} Все шаги показаны с картинками — заблудиться сложно. Если "
+        f"что-то не получается — напишите оператору {_HELP_EMO}"
     ),
     "slow": (
-        "🐌 <b>Низкая скорость</b>\n\n"
-        "Пройдись по шагам.\n\n"
-        "1️⃣ <b>Проверь скорость без ELMA</b>\n"
-        "yandex.ru/internet с выключенным ELMA.\n"
-        "Медленно без ELMA — проблема не в нас.\n\n"
-        "2️⃣ <b>Смени сервер</b>\n"
-        "Другая страна — иногда быстрее.\n"
-        "Попробуй Германию или Финляндию.\n\n"
-        "3️⃣ <b>На мобильном интернете?</b>\n"
-        "Вечером вышки загружены — это нормально.\n"
-        "Ночью быстрее.\n\n"
-        "4️⃣ <b>Перезагрузи роутер</b>\n"
-        "30 секунд без розетки — иногда решает всё.\n\n"
-        "Стабильно медленно везде? Напиши нам 💬"
+        "![🐌](tg://emoji?id=5431689627075362922) <b>Низкая скорость</b>\n\n"
+        "Пройдитесь по шагам.\n\n"
+        "<blockquote>1️⃣ Проверьте скорость без VPN\n"
+        "Измерьте на yandex.ru/internet с выключенным VPN. Если базовый интернет "
+        "медленный — ускорить через VPN физически невозможно.</blockquote>\n\n"
+        "<blockquote>2️⃣ Смените сервер\n"
+        "В приложении переключитесь на другой — иногда соседние страны быстрее "
+        "(например, Германия вместо Нидерландов).</blockquote>\n\n"
+        "<blockquote>3️⃣ Используете LTE / 5G?\n"
+        "Скорость мобильного интернета зависит от загрузки вышки и времени суток. "
+        "Вечером — медленнее, ночью — быстрее.</blockquote>\n\n"
+        "<blockquote>4️⃣ Перезагрузите Wi-Fi-роутер\n"
+        "Иногда зависает именно он, а не VPN. Отключите от розетки на 30 секунд → "
+        "включите.</blockquote>\n\n"
+        f"Стабильно медленно на всех серверах? Напишите оператору. {_HELP_EMO}"
     ),
     "pay": (
-        "💳 <b>Не проходит оплата</b>\n\n"
-        "Пройдись по шагам.\n\n"
-        "1️⃣ <b>Смени способ оплаты</b>\n"
-        "СБП → карта, или наоборот.\n\n"
-        "2️⃣ <b>Платёж завис?</b>\n"
-        "Подожди 10–15 минут. Деньги либо\n"
-        "спишутся и подписка активируется —\n"
-        "либо вернутся автоматически.\n\n"
-        "3️⃣ <b>Списали, а подписки нет?</b>\n"
-        "Напиши оператору — разберёмся сразу.\n\n"
-        "Ответим за 5–10 минут 💬"
+        "![🧾](tg://emoji?id=5204242830687494041) <b>Не проходит оплата</b>\n\n"
+        "Пройдитесь по шагам.\n\n"
+        "<blockquote>1️⃣ Смените способ оплаты\n"
+        "СБП → карта → Telegram Stars → баланс бота. Если один не работает — "
+        "попробуйте другой.</blockquote>\n\n"
+        "<blockquote>2️⃣ Платёж завис?\n"
+        "Подождите 10–15 минут. Деньги либо спишутся и подписка активируется, "
+        "либо вернутся на карту автоматически — мы ничего не «зажимаем».</blockquote>\n\n"
+        "<blockquote>3️⃣ Списали, а подписки нет?\n"
+        "Просто напишите оператору — обязательно поможем.</blockquote>\n\n"
+        f"{_HELP_EMO} Поддержка ответит за 5–10 минут."
+    ),
+    "adddevice": (
+        "📱 <b>Как добавить ещё устройство</b>\n\n"
+        "Одна подписка — несколько устройств одновременно:\n\n"
+        "<blockquote>• Premium — до 5 устройств</blockquote>\n\n"
+        "Как добавить новое устройство\n\n"
+        "<blockquote>1️⃣ В боте на основном устройстве нажмите кнопку «Меню» "
+        "(синяя иконка слева от поля ввода) → «📲 Добавить устройство»</blockquote>\n\n"
+        "2️⃣ Выберите тип устройства, которое хотите добавить\n\n"
+        "3️⃣ Бот пришлёт QR-код и короткую инструкцию\n\n"
+        "<blockquote>4️⃣ На новом устройстве установите приложение Happ и откройте его\n\n"
+        "5️⃣ Нажмите «+» в правом верхнем углу → «Отсканировать QR-код»\n\n"
+        "6️⃣ Наведите камеру на QR с основного устройства</blockquote>\n\n"
+        f"Готово {_ROCKET}\n\n"
+        f"{_BULB} Доплачивать не нужно — это та же подписка, просто на другом устройстве."
+    ),
+    "update": (
+        "![🔑](tg://emoji?id=5278573677900752088) <b>Как обновить</b>\n\n"
+        "Если в приложении Happ вы видите сообщение «Обновите ключ в боте» или "
+        "«Данная версия не поддерживается» — нужно переустановить ключ.\n\n"
+        "<blockquote>1️⃣ Нажмите кнопку «Меню» 🔵 (синяя иконка слева от поля ввода)\n\n"
+        "2️⃣ Выберите «📲 Подключиться»\n\n"
+        "3️⃣ Выберите своё устройство\n\n"
+        "4️⃣ Установите приложение Happ\n"
+        "Если приложение уже установлено — нажмите «Дальше» и пропустите этот шаг.\n\n"
+        "5️⃣ Импортируйте ключ — пройдите стандартную процедуру установки</blockquote>\n\n"
+        "Какой ключ выбрать?\n\n"
+        "<blockquote>![🌐](tg://emoji?id=5447410659077661506) Добавить VPN — основные "
+        "безлимитные сервера\n\n"
+        "🛡 Добавить обход — сервера с обходом белых списков</blockquote>\n\n"
+        f"Не получилось? Напишите оператору — поможем. {_HELP_EMO}"
+    ),
+    "bypass": (
+        "![🌐](tg://emoji?id=5447410659077661506) <b>Как работают сервера обхода</b>\n\n"
+        "Сервера обхода белых списков бывают двух типов:\n\n"
+        "🇷🇺 С российским флагом\n"
+        "🇪🇺 С европейским флагом\n\n"
+        "Какой выбрать?\n\n"
+        "Рекомендуем сервера с европейским флагом — они стабильнее и лучше "
+        "работают с Telegram, Instagram и другими сервисами, заблокированными в РФ.\n\n"
+        "Подключились, но сервер не работает?\n\n"
+        "<blockquote>1️⃣ Выберите другой сервер и попробуйте снова\n\n"
+        "2️⃣ Включите и выключите авиарежим ✈️\n\n"
+        "3️⃣ Закройте приложение и откройте заново\n\n"
+        "4️⃣ Проверьте подключение к мобильной сети и корректность соединения</blockquote>\n\n"
+        f"Не помогло? Напишите оператору. {_HELP_EMO}"
+    ),
+    "gb": (
+        "![📊](tg://emoji?id=5203993413346680064) <b>Как работают гигабайты обхода</b>\n\n"
+        "Гигабайты для серверов обхода — это отдельный пакет трафика. Покупаете "
+        "один раз и тратите в своём темпе.\n\n"
+        "<blockquote>♾ Без срока годности\n"
+        "Не сгорают. Не привязаны к месяцу, дню или подписке. Сколько "
+        "использовали — столько и списалось, остаток остаётся вам.</blockquote>\n\n"
+        "<blockquote>🔓 Независимо от подписки\n"
+        "Это не часть основной подписки на VPN. Подписка закончилась — гигабайты "
+        "обхода остаются на счёте и ждут вас.</blockquote>\n\n"
+        "Пример\n\n"
+        "<blockquote>💰 Купили 30 ГБ\n"
+        "📉 За неделю израсходовали 5 ГБ\n"
+        "✅ Остаток — 25 ГБ\n\n"
+        "Эти 25 ГБ никуда не денутся: используйте завтра, через месяц или через "
+        "полгода.</blockquote>\n\n"
+        "Где посмотреть остаток\n\n"
+        "<blockquote>📱 В приложении Happ — рядом с подключением к серверу обхода\n\n"
+        "👤 В боте — раздел «👤 Профиль»</blockquote>\n\n"
+        f"Закончились? Докупите в любой момент — новые ГБ просто прибавятся к остатку. {_HELP_EMO}"
+    ),
+    "xray": (
+        "![⚠️](tg://emoji?id=5447644880824181073) <b>Happ — Ошибка Xray-ядра</b>\n\n"
+        "Встречается часто, лечится за минуту.\n\n"
+        "Почему возникает\n\n"
+        "<blockquote>Многие VPN-сервисы автоматически подсовывают на устройство "
+        "файлы маршрутизации — без вашего ведома. Мы так не делаем: все настройки "
+        "живут на наших серверах, а не на телефоне.\n\n"
+        "Но иногда файлы, оставшиеся от других VPN, конфликтуют с нашим ядром — и "
+        "Happ показывает ошибку Xray.</blockquote>\n\n"
+        "Как исправить\n\n"
+        "<blockquote>1️⃣ Откройте Happ\n\n"
+        "2️⃣ Нажмите на шестерёнку ⚙️ в левом верхнем углу\n\n"
+        "3️⃣ Выберите «Маршрутизация»\n\n"
+        "4️⃣ Удалите каждый файл маршрутизации из списка\n\n"
+        "5️⃣ Перезапустите приложение</blockquote>\n\n"
+        f"Подключение заработает штатно {_ROCKET}\n\n"
+        f"Не помогло? Напишите оператору — разберёмся вместе за 5–10 минут. {_HELP_EMO}"
     ),
 }
 
@@ -352,19 +466,30 @@ async def cb_docs(call: CallbackQuery) -> None:
 # --- Help / FAQ / Contacts -------------------------------------------------
 
 def _help_kb():
+    """SOS Помощь: FAQ, service instructions, live operator, back to main."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="📖 Частые вопросы", callback_data="help:faq")
-    kb.button(text="📲 Инструкции", callback_data="dev:menu")
-    kb.button(text="💬 Написать оператору", url=SUPPORT_URL)
-    kb.button(text="ℹ️ О сервисе", callback_data="about:open")
-    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
+    kb.button(text="Ответы на частые вопросы", callback_data="help:faq",
+              style="primary", icon_custom_emoji_id=emoji.FAQ_BOOK)
+    kb.button(text="Инструкция по сервису", callback_data="dev:menu",
+              style="primary", icon_custom_emoji_id=emoji.INSTR)
+    kb.button(text="Помощь", url=SUPPORT_URL, style="danger", icon_custom_emoji_id=emoji.HELP_CHAT)
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main", style="primary")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def _faq_answer_kb():
+    """Under every FAQ answer: write to the operator, back to the question list."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Помощь", url=SUPPORT_URL, icon_custom_emoji_id=emoji.HELP_CHAT)
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="help:faq", style="primary")
     kb.adjust(1)
     return kb.as_markup()
 
 
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
-    await message.answer(HELP, reply_markup=_help_kb())
+    await send_screen(message.bot, message.chat.id, "help", HELP, reply_markup=_help_kb())
 
 
 @router.callback_query(F.data == "help:open")
@@ -376,11 +501,9 @@ async def cb_help(call: CallbackQuery) -> None:
 @router.callback_query(F.data == "help:faq")
 async def cb_faq(call: CallbackQuery) -> None:
     kb = InlineKeyboardBuilder()
-    kb.button(text="🚫 Не работает подключение", callback_data="faq:novpn")
-    kb.button(text="📲 Как подключиться", callback_data="faq:howto")
-    kb.button(text="🐌 Низкая скорость", callback_data="faq:slow")
-    kb.button(text="💳 Не проходит оплата", callback_data="faq:pay")
-    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="help:open")
+    for key, label, ic in _FAQ_LIST:
+        kb.button(text=label, callback_data=f"faq:{key}", style="primary", icon_custom_emoji_id=ic)
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="help:open", style="primary")
     kb.adjust(1)
     await safe_edit(call.message, FAQ, reply_markup=kb.as_markup())
     await call.answer()
@@ -388,18 +511,11 @@ async def cb_faq(call: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("faq:"))
 async def cb_faq_answer(call: CallbackQuery) -> None:
-    parts = call.data.split(":")  # faq:<key>[:origin]
-    key = parts[1]
+    key = call.data.split(":")[1]
     text = FAQ_ANSWERS.get(key)
     if text is None:
         await call.answer()
         return
-    # Opened straight from the main menu («Не работает VPN?») -> Назад returns to
-    # the main menu; opened from the FAQ list -> back to the list.
-    back = "menu:main" if len(parts) > 2 and parts[2] == "main" else "help:faq"
-    kb = InlineKeyboardBuilder()
-    kb.button(text="💬 Написать оператору", url=SUPPORT_URL)
-    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=back)
-    kb.adjust(1)
-    await safe_edit(call.message, text, reply_markup=kb.as_markup())
+    # Back always returns to the FAQ question list (previous screen).
+    await safe_edit(call.message, text, reply_markup=_faq_answer_kb())
     await call.answer()

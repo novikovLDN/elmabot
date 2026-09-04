@@ -70,8 +70,8 @@ async def _tariffs_view(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
         discounted = discounts.applies_to(offer, t.code)
         final = discounts.apply(t.price_rub, offer) if discounted else t.price_rub
         label = f"{t.title} — {final} ₽"
-        # Alternating colours per the design: 1м/6м blue, 3м/12м green.
-        style = "success" if t.code in ("3m", "12m") else "primary"
+        # Colours per the design: 3м green, the rest blue.
+        style = "success" if t.code == "3m" else "primary"
         if discounted and final != t.price_rub:
             label += f" · −{offer.pct}% ⚡"
             style = "success"  # a discounted plan is always green

@@ -50,19 +50,27 @@ async def safe_send(
     ``raise_bad_request=True`` re-raises a non-"chat not found"
     ``TelegramBadRequest`` (e.g. a rejected parse-entity / premium-emoji markup)
     so the caller can retry with a plainer rendering."""
-    try:
-        return await bot.send_message(
-            user_id, text, parse_mode="HTML", reply_markup=reply_markup, **kw
-        )
-    except TelegramForbiddenError:
-        await mark_unreachable(user_id)
-    except TelegramBadRequest as exc:
-        if "chat not found" in str(exc).lower():
+    # Render premium-emoji markdown; retry with the plain fallback if Telegram
+    # rejects a custom-emoji id.
+    for i, body in enumerate((convert_tg_emoji(text), strip_tg_emoji(text))):
+        try:
+            return await bot.send_message(
+                user_id, body, parse_mode="HTML", reply_markup=reply_markup, **kw
+            )
+        except TelegramForbiddenError:
             await mark_unreachable(user_id)
-        elif raise_bad_request:
-            raise
-        else:
+            return None
+        except TelegramBadRequest as exc:
+            low = str(exc).lower()
+            if "chat not found" in low:
+                await mark_unreachable(user_id)
+                return None
+            if i == 0 and body != strip_tg_emoji(text):
+                continue  # premium emoji rejected -> retry plain
+            if raise_bad_request:
+                raise
             logger.exception("safe_send failed for %s", user_id)
+            return None
     return None
 
 
@@ -84,17 +92,24 @@ async def safe_edit(
         return await safe_send(
             message.bot, message.chat.id, text, reply_markup=reply_markup
         )
-    try:
-        return await message.edit_text(
-            text, parse_mode="HTML", reply_markup=reply_markup, **kw
-        )
-    except TelegramBadRequest as exc:
-        msg = str(exc).lower()
-        if "message is not modified" in msg:
-            return message
-        logger.debug("safe_edit no-op for %s: %s", message.chat.id, exc)
-    except TelegramForbiddenError:
-        await mark_unreachable(message.chat.id)
+    # Render premium-emoji markdown; retry with the plain fallback if Telegram
+    # rejects a custom-emoji id.
+    for i, body in enumerate((convert_tg_emoji(text), strip_tg_emoji(text))):
+        try:
+            return await message.edit_text(
+                body, parse_mode="HTML", reply_markup=reply_markup, **kw
+            )
+        except TelegramBadRequest as exc:
+            msg = str(exc).lower()
+            if "message is not modified" in msg:
+                return message
+            if i == 0 and body != strip_tg_emoji(text):
+                continue  # premium emoji rejected -> retry plain
+            logger.debug("safe_edit no-op for %s: %s", message.chat.id, exc)
+            return None
+        except TelegramForbiddenError:
+            await mark_unreachable(message.chat.id)
+            return None
     return None
 
 
