@@ -84,25 +84,56 @@ WELCOME = (
 )
 
 SCREEN_1 = (
-    "🌐 <b>Добро пожаловать в ELMA</b>\n\n"
-    "VPN, который не подводит.\n"
-    "Без блокировок. Без обрывов. Без нервов.\n\n"
-    f"🎁 Первые {TRIAL_DAYS} дня — бесплатно"
+    "💎 <b>ELMA — это свободный, быстрый и безопасный интернет</b>\n\n"
+    "🌐 Обход белых списков\n"
+    "🚀 Скорость 75 Гбит/с\n"
+    "⚡️ Подключение за минуту — без настроек и нервов\n"
+    "📱 Одна подписка — вся семья подключена\n\n"
+    "<b>100 000+</b> пользователей нам доверяют."
 )
 
-SCREEN_2_TRIAL = (
-    "✅ <b>ELMA активирована</b>\n\n"
+# Two-step trial activation.
+TRIAL_ACTIVATING = (
+    "⏳ <b>Активирую пробный период...</b>\n\n"
+    "Создаём тебе доступ. Обычно занимает 2-3 секунды."
+)
+TRIAL_ACTIVATED = (
+    "🎉 <b>Доступ активирован!</b>\n\n"
     f"У вас {TRIAL_DAYS} дня бесплатно. Без ограничений, без карты.\n\n"
-    "Выберите устройство — и мы проведём вас через установку "
-    "шаг за шагом 🚀"
+    "Нажмите кнопку ниже — мы проведём вас через установку шаг за шагом."
 )
 
-SCREEN_2_PAID = (
-    "✅ <b>ELMA активирована</b>\n\n"
-    "Premium-доступ открыт 🤍\n\n"
-    "Выберите устройство — и мы проведём вас через установку "
-    "шаг за шагом 🚀"
+# Device-selection screen (shared by trial + paid).
+DEVICE_SELECT = (
+    "📱 <b>Выберите устройство для подключения</b>\n\n"
+    "Мы подберём приложение и проведём через установку — займёт 1 минуту."
 )
+# Kept for older references (paid device select reuses DEVICE_SELECT now).
+SCREEN_2_TRIAL = DEVICE_SELECT
+SCREEN_2_PAID = DEVICE_SELECT
+
+
+def _start_keyboard():
+    """First screen for a new user: try free, buy, or bypass-only."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text=f"Попробовать бесплатно — {TRIAL_DAYS} дня", callback_data="onb:claim",
+              style="success", icon_custom_emoji_id=emoji.TRY_FREE)
+    kb.button(text="Купить VPN", callback_data="menu:buy",
+              style="primary", icon_custom_emoji_id=emoji.BUY_VPN)
+    if BYPASS_ENABLED:
+        kb.button(text="Только обход блокировок", callback_data="tr:open",
+                  style="primary", icon_custom_emoji_id=emoji.GB)
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def _trial_activated_keyboard():
+    """After the trial is granted: proceed to device setup or ask for help."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Подключиться — это быстро", callback_data="dev:menu", style="primary")
+    kb.button(text="Нужна помощь", url=SUPPORT_URL, icon_custom_emoji_id=emoji.HELP_CHAT)
+    kb.adjust(1)
+    return kb.as_markup()
 
 TRIAL_USED = (
     "🎁 Бесплатный доступ уже был использован.\n\n"
@@ -140,14 +171,19 @@ QR_CAPTION = "Ваш QR-код ELMA 🤍"
 PREMIUM_BOLT = "![⚡️](tg://emoji?id=5456140674028019486)"
 
 DOWNLOAD_TEXT = (
-    "📲 <b>Скачайте Happ</b> — это бесплатно и займёт минуту\n\n"
-    "Уже есть? Жми «Дальше» 👇"
+    "📲 <b>Осталось скачать приложение</b>\n\n"
+    "Incy — бесплатное приложение для VPN.\n"
+    "Альтернатива — Happ.\n"
+    "Нажмите кнопку — откроется магазин приложений.\n\n"
+    "<blockquote>Уже установлен Happ или Incy? Нажмите «Дальше».</blockquote>"
 )
 
 CONNECT_TEXT = (
-    "🌐 <b>Подключитесь в одно нажатие</b>\n\n"
-    "Нажмите кнопку ниже с названием вашего приложения — "
-    "ключ добавится автоматически."
+    "⚡️ <b>Подключитесь в одно нажатие</b>\n\n"
+    "Нажмите кнопки ниже — ключи добавятся автоматически.\n"
+    "Добавьте оба для полноценной работы.\n\n"
+    "<blockquote>🔑 VPN — основные сервера, весь интернет без блокировок\n"
+    "🌐 Обход — белые списки РФ, интернет работает в любой точке мира</blockquote>"
 )
 
 # Platforms where Incy is available (App Store / Play Market). Incy has no
@@ -175,9 +211,11 @@ PHONE_DEVICES: dict[str, dict] = {
         "dl_photo": "dl_android",
     },
     "macos": {
+        # Apple Silicon Macs install the iOS apps — same 3 store links as iOS.
         "downloads": [
             ("📲 Скачать Incy", APP_INCY_IOS_URL),
-            ("📲 Скачать Happ", APP_MACOS_URL),
+            ("📲 Скачать Happ (Россия)", APP_IOS_RU_URL),
+            ("📲 Скачать Happ (другой регион)", APP_IOS_INTL_URL),
         ],
         "dl_photo": None,
     },
@@ -265,12 +303,8 @@ async def _active_sub_url(telegram_id: int) -> str | None:
 
 
 async def _device_select_text(telegram_id: int) -> str:
-    """Screen-2 copy by access type: Premium for any paid/admin/gift/referral
-    access, guest copy for the free trial (or no active subscription yet)."""
-    sub = await get_subscription(telegram_id)
-    if sub is not None and sub["status"] == "active" and sub["source"] != "trial":
-        return SCREEN_2_PAID
-    return SCREEN_2_TRIAL
+    """Device-selection copy — the same for trial and paid access now."""
+    return DEVICE_SELECT
 
 
 def _make_qr_png(data: str) -> bytes | None:
@@ -358,7 +392,7 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
     sub = await get_subscription(user.id)
     has_active = sub is not None and sub["status"] == "active"
     if await trial_available(user.id) and not has_active:
-        await message.answer(SCREEN_1, reply_markup=claim_keyboard())
+        await message.answer(SCREEN_1, reply_markup=_start_keyboard())
     else:
         await show_main(message, user.id)
 
@@ -371,7 +405,7 @@ async def cb_home(call: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "onb:start")
 async def cb_screen1(call: CallbackQuery) -> None:
-    await safe_edit(call.message, SCREEN_1, reply_markup=claim_keyboard())
+    await safe_edit(call.message, SCREEN_1, reply_markup=_start_keyboard())
     await call.answer()
 
 
@@ -381,6 +415,8 @@ async def cb_screen1(call: CallbackQuery) -> None:
 async def cb_claim(call: CallbackQuery) -> None:
     await call.answer()
     user_id = call.from_user.id
+    # Step 1: show the "activating…" screen, then provision.
+    await safe_edit(call.message, TRIAL_ACTIVATING, reply_markup=None)
     try:
         sub = await subscription_service.activate_trial(user_id, TRIAL_DAYS)
     except Exception:  # noqa: BLE001 - VPN/DB failure -> safe retry
@@ -388,28 +424,26 @@ async def cb_claim(call: CallbackQuery) -> None:
         await safe_edit(
             call.message,
             "⚠️ Не удалось активировать доступ — попробуй ещё раз через минуту.",
-            reply_markup=claim_keyboard(),
+            reply_markup=_start_keyboard(),
         )
         return
 
     if sub is None:
-        # Trial already used: show device selection if a paid subscription is
+        # Trial already used: go to device selection if a paid subscription is
         # still active, otherwise nudge to buy.
         current = await get_subscription(user_id)
         if current is None or current["status"] != "active":
             await safe_edit(call.message, TRIAL_USED, reply_markup=buy_keyboard())
             return
-        text = SCREEN_2_PAID if current["source"] != "trial" else SCREEN_2_TRIAL
-        await show_screen(call.message, "devices", text, reply_markup=devices_keyboard())
+        await show_screen(call.message, "devices", DEVICE_SELECT, reply_markup=devices_keyboard())
         return
 
-    # Trial newly activated -> straight to device selection.
+    # Trial newly activated. Tell the inviter their friend joined (bonus comes on
+    # first purchase), hold ~2s on the "activating" screen, then confirm.
     logger.info("Trial activated for %s", user_id)
-    # Tell the inviter their friend joined (bonus comes on first purchase).
     await billing.notify_referrer_on_trial(call.bot, user_id)
-    await show_screen(
-        call.message, "devices", SCREEN_2_TRIAL, reply_markup=devices_keyboard()
-    )
+    await asyncio.sleep(2)
+    await safe_edit(call.message, TRIAL_ACTIVATED, reply_markup=_trial_activated_keyboard())
 
 
 @router.message(Command("connect"))
@@ -560,8 +594,9 @@ async def cb_download(call: CallbackQuery) -> None:
     kb = InlineKeyboardBuilder()
     for label, url in device["downloads"]:
         if url:
-            kb.button(text=label, url=url)
-    kb.button(text="➡️ Дальше", callback_data=f"cn:{key}")
+            kb.button(text=label, url=url, style="primary")
+    kb.button(text="Дальше", callback_data=f"cn:{key}",
+              style="success", icon_custom_emoji_id=emoji.NEXT)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="dev:menu")
     kb.adjust(1)
     if device["dl_photo"]:
@@ -620,32 +655,32 @@ async def cb_connect(call: CallbackQuery) -> None:
     kb = InlineKeyboardBuilder()
     rows: list[int] = []
 
-    # VPN row: Happ (left) + Incy (right, iOS/Android/macOS).
-    _add_connect_button(kb, "🔑 Happ VPN", happ, f"addkey:{key}")
+    # VPN row: Happ (blue, left) + Incy (green, right, iOS/Android/macOS).
+    _add_connect_button(kb, "Happ VPN", happ, f"addkey:{key}", style="primary")
     vpn_n = 1
     if key in _INCY_PLATFORMS:
         incy_vpn = await _incy_vpn_key(uid)
         if incy_vpn:
-            _add_connect_button(kb, "💚 Incy VPN", incy_vpn, f"addvincy:{key}")
+            _add_connect_button(kb, "Incy VPN", incy_vpn, f"addvincy:{key}", style="success")
             vpn_n = 2
     rows.append(vpn_n)
 
-    # Обход row (only if the user has bypass): Happ (left) + Incy (right).
+    # Обход row (only if the user has bypass): Happ (blue) + Incy (green).
     bp = await _bypass_key(uid)
     if bp:
-        _add_connect_button(kb, "🌐 Happ Обход", bp, f"addbp:{key}")
+        _add_connect_button(kb, "Happ Обход", bp, f"addbp:{key}", style="primary")
         bp_n = 1
         if key in _INCY_PLATFORMS:
             incy_bp = await _incy_bypass_key(uid)
             if incy_bp:
-                _add_connect_button(kb, "💚 Incy Обход", incy_bp, f"addbpincy:{key}")
+                _add_connect_button(kb, "Incy Обход", incy_bp, f"addbpincy:{key}", style="success")
                 bp_n = 2
         rows.append(bp_n)
 
-    kb.button(text="✅ Готово", callback_data="onb:done")
-    kb.button(text="📋 Установить вручную", callback_data=f"manual:{key}")
-    kb.button(text="💬 Нужна помощь", url=SUPPORT_URL)
-    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"dl:{key}")
+    kb.button(text="Готово", callback_data="onb:done", style="danger", icon_custom_emoji_id=emoji.DONE)
+    kb.button(text="📋 Установить вручную", callback_data=f"manual:{key}", style="primary")
+    kb.button(text="Нужна помощь", url=SUPPORT_URL, icon_custom_emoji_id=emoji.HELP_CHAT)
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"dl:{key}", style="primary")
     rows += [1, 1, 1, 1]
     kb.adjust(*rows)
     await show_screen(call.message, "connect", CONNECT_TEXT, reply_markup=kb.as_markup())
@@ -700,15 +735,15 @@ async def cb_manual(call: CallbackQuery) -> None:
     parts = [
         "📋 <b>Ручная установка — 3 простых шага</b>\n",
         "1. Нажмите на ключ ниже — он скопируется",
-        "2. Откройте Happ/Incy",
-        "3. Нажмите ➕ в правом верхнем углу (или «Вставить» в Incy) "
-        "и вставьте из буфера 📋",
-        "<i>Повторите для второго ключа.</i>\n",
+        "2. Откройте Happ или Incy",
+        "3. Нажмите ➕ в правом верхнем углу или «Вставить» (Incy) "
+        "и вставьте из буфера (📋)",
+        "\nПовторите для второго ключа.\n",
         _labeled_key("🔑 <b>VPN ключ Happ</b> (обычные безлимитные сервера):", happ),
     ]
     bp = await _bypass_key(uid)
     if bp:
-        parts.append(_labeled_key("🌐 <b>Обход ключ Happ</b> (белые списки РФ):", bp))
+        parts.append(_labeled_key("🔑 <b>Обход ключ Happ</b> (белые списки РФ):", bp))
     # Incy keys — only on platforms with an Incy client (iOS / Android / macOS).
     if key in _INCY_PLATFORMS:
         iv = await _incy_vpn_key(uid)
@@ -719,9 +754,24 @@ async def cb_manual(call: CallbackQuery) -> None:
             if ib:
                 parts.append(_labeled_key("💚 <b>Обход ключ Incy</b> (белые списки РФ):", ib))
 
+    # Universal fallback: the aggregated subscription link (all servers, any
+    # client — V2Box, Incy, Happ, …). Works when a specific key doesn't import.
+    if SUBSCRIPTION_BASE_URL:
+        try:
+            token = await ensure_sub_token(uid)
+            alt = aggregator.sub_link(token)
+            parts.append(
+                "\n❓ <b>Не получается?</b>\n"
+                "Попробуй альтернативный ключ ниже — подходит для любого клиента "
+                "(V2Box, Incy, Happ и другие). Просто скопируй и вставь в приложение:\n"
+                f"<blockquote expandable><code>{html.escape(alt)}</code></blockquote>"
+            )
+        except Exception:  # noqa: BLE001 - never break the manual screen over the alt key
+            logger.debug("alt aggregated key failed for %s", uid, exc_info=True)
+
     kb = InlineKeyboardBuilder()
-    kb.button(text="✅ Готово", callback_data="onb:done")
-    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"cn:{key}")
+    kb.button(text="Готово", callback_data="onb:done", style="success", icon_custom_emoji_id=emoji.DONE)
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=f"cn:{key}", style="primary")
     kb.adjust(1)
     await safe_edit(call.message, "\n".join(parts), reply_markup=kb.as_markup())
     await call.answer()
@@ -810,7 +860,7 @@ async def cb_addbpincy(call: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "onb:done")
 async def cb_done(call: CallbackQuery) -> None:
-    """Flash a premium ⚡️ for 2s, then open the main menu."""
+    """Flash a premium ⚡️ for 3s, then open the main menu."""
     await call.answer()
     try:
         await call.message.delete()
@@ -823,7 +873,7 @@ async def cb_done(call: CallbackQuery) -> None:
         )
     except Exception:  # noqa: BLE001 - custom emoji may be unavailable to the bot
         logger.debug("premium bolt send failed", exc_info=True)
-    await asyncio.sleep(2)
+    await asyncio.sleep(3)
     if bolt is not None:
         try:
             await bolt.delete()

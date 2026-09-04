@@ -118,19 +118,19 @@ def claim_keyboard() -> InlineKeyboardMarkup:
 
 
 def devices_keyboard() -> InlineKeyboardMarkup:
-    """Screen 2 — choose a device to connect. Each device opens its download
-    step (``dl:<key>``); TV devices keep their QR-import instructions."""
+    """Device selection — iPhone/iPad · Android, Mac · Windows. Each opens its
+    download step (``dl:<key>``)."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="iOS", callback_data="dl:ios", style="primary", icon_custom_emoji_id=emoji.DEV_IOS)
-    kb.button(text="Android", callback_data="dl:android", style="primary", icon_custom_emoji_id=emoji.DEV_ANDROID)
-    kb.button(text="MacOS", callback_data="dl:macos", style="primary", icon_custom_emoji_id=emoji.DEV_MAC)
-    kb.button(text="Windows", callback_data="dl:windows", style="primary", icon_custom_emoji_id=emoji.DEV_WINDOWS)
-    kb.button(text="Android TV", callback_data="dl:androidtv", style="primary", icon_custom_emoji_id=emoji.DEV_ANDROIDTV)
-    kb.button(text="Apple TV", callback_data="dl:appletv", style="primary", icon_custom_emoji_id=emoji.DEV_APPLETV)
-    kb.button(text="➕ Добавить устройство", callback_data="hw:add", style="primary")
-    kb.button(text="Поделиться", callback_data="share:open", style="primary", icon_custom_emoji_id=emoji.SHARE)
+    kb.button(text="iPhone / iPad", callback_data="dl:ios",
+              style="primary", icon_custom_emoji_id=emoji.DEV_IPHONE)
+    kb.button(text="Android", callback_data="dl:android",
+              style="primary", icon_custom_emoji_id=emoji.DEV_ANDROID2)
+    kb.button(text="Mac", callback_data="dl:macos",
+              style="primary", icon_custom_emoji_id=emoji.DEV_MAC2)
+    kb.button(text="Windows", callback_data="dl:windows",
+              style="primary", icon_custom_emoji_id=emoji.DEV_WINDOWS2)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
-    kb.adjust(2, 2, 2, 1, 1, 1)
+    kb.adjust(2, 2, 1)
     return kb.as_markup()
 
 

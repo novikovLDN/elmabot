@@ -172,7 +172,7 @@ APP_IOS_URL = _get_str(
 )
 APP_ANDROID_URL = _get_str(
     "APP_ANDROID_URL",
-    "https://play.google.com/store/apps/details?id=com.happproxy",
+    "https://play.google.com/store/apps/details?id=com.happproxy&hl=ru",
 )
 APP_MACOS_URL = _get_str(
     "APP_MACOS_URL", "https://apps.apple.com/app/happ-proxy-utility/id6504287215"
@@ -192,7 +192,9 @@ APP_IOS_RU_URL = _get_str(
     "APP_IOS_RU_URL",
     "https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6788279553?l=en-GB",
 )
-APP_IOS_INTL_URL = _get_str("APP_IOS_INTL_URL", APP_IOS_URL)
+APP_IOS_INTL_URL = _get_str(
+    "APP_IOS_INTL_URL", "https://apps.apple.com/us/app/happ-proxy-utility/id6504287215"
+)
 # Incy download links. iOS and macOS share the App Store URL (Apple Silicon Macs
 # install the iOS app); Android has its own Play Market entry. Incy has no
 # Windows client, so Windows keeps Happ only.
