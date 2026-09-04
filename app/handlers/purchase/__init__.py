@@ -34,11 +34,8 @@ logger = logging.getLogger(__name__)
 router = Router(name="purchase")
 
 PLUS_HEADER = (
-    "👑 <b>ELMA Plus</b>\n\n"
-    "Один тариф — всё включено.\n\n"
-    "⚡️ Скорость без лагов и буферов\n"
-    "👨‍👩‍👧‍👦 До 5 устройств одновременно\n"
-    "🔒 Zero-logs — твои данные только твои"
+    "💎 <b>Тариф: Premium</b>\n\n"
+    "Выберите срок подписки 👇🏻"
 )
 
 # Shown when the active offer is the year promo: all periods listed, the 1-year
@@ -73,10 +70,11 @@ async def _tariffs_view(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
         discounted = discounts.applies_to(offer, t.code)
         final = discounts.apply(t.price_rub, offer) if discounted else t.price_rub
         label = f"{t.title} — {final} ₽"
-        style = None
+        # Alternating colours per the design: 1м/6м blue, 3м/12м green.
+        style = "success" if t.code in ("3m", "12m") else "primary"
         if discounted and final != t.price_rub:
             label += f" · −{offer.pct}% ⚡"
-            style = "success"  # green "success"-style button on the discounted plan
+            style = "success"  # a discounted plan is always green
         elif t.save_label:
             label += f"  {t.save_label}"
         icon = {
@@ -102,21 +100,26 @@ async def cb_buy(call: CallbackQuery) -> None:
 
 
 SUB_MANAGE = (
-    "📦 <b>Управление подпиской</b>\n\n"
-    "Ваш текущий тариф:\n\n"
-    "⚡️ <b>Тариф: Plus</b>\n\n"
-    "🚀 Канал до 25 Гбит/с — YouTube 4K без тормозов\n"
-    "👨‍👩‍👧‍👦 Одна подписка на всю семью — до 5 устройств\n"
-    "➕ Подключение в одно нажатие\n\n"
+    "💳 <b>Управление подпиской</b>\n\n"
+    "Ваш текущий тариф:\n"
+    "⚡️ <b>Тариф: Premium</b>\n\n"
+    "<blockquote>🚀 Канал до 25 Гбит/с — YouTube 4K без тормозов\n"
+    "🌐 1 ГБ обхода белых списков — в подарок к подписке\n"
+    "🧑‍🧑‍🧒‍🧒 Одна подписка на всю семью — до 5 устройств\n"
+    "➕ Подключение в одно нажатие</blockquote>\n\n"
     "Выберите действие:"
 )
 
 
 @router.callback_query(F.data == "sub:manage")
 async def cb_sub_manage(call: CallbackQuery) -> None:
-    """Subscription-management screen — reached from the renewal reminder."""
+    """Subscription-management screen — reached from the cabinet / reminders."""
     kb = InlineKeyboardBuilder()
-    kb.button(text="🔄 Продлить Plus", callback_data="menu:buy", style="success")
+    kb.button(text="Продлить Premium", callback_data="menu:buy",
+              style="success", icon_custom_emoji_id=emoji.RENEW)
+    if config.BYPASS_ENABLED:
+        kb.button(text="Купить ГБ обхода", callback_data="tr:open:m",
+                  style="success", icon_custom_emoji_id=emoji.GB_TOPUP)
     kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
     kb.adjust(1)
     await safe_edit(call.message, SUB_MANAGE, reply_markup=kb.as_markup())
@@ -246,11 +249,10 @@ async def cb_tariff(call: CallbackQuery) -> None:
     final = discounts.apply(tariff.price_rub, offer) if discounted else tariff.price_rub
 
     order = (
-        "❗️ <b>Проверьте заказ</b>\n\n"
-        f"• Период: {tariff.title}\n"
-        f"• Итого: {final} ₽\n\n"
+        f"🧾 <b>К оплате: {final} ₽</b>\n\n"
+        f"Тариф: {tariff.title}\n\n"
         "Как только банк подтвердит операцию, подписка активируется "
-        "автоматически (обычно это занимает до 3 минут)."
+        "автоматически (обычно до 3 минут)."
     )
 
     if not config.PAYMENTS_ENABLED:

@@ -18,34 +18,29 @@ def back_to_menu() -> InlineKeyboardMarkup:
 def main_menu_keyboard(*, has_active_sub: bool) -> InlineKeyboardMarkup:
     from config import BYPASS_ENABLED
 
-    sub_text = "Продлить подписку" if has_active_sub else "Купить подписку"
-
     kb = InlineKeyboardBuilder()
-    # Simplified main menu (reference-style, ~6 items). Colour scheme: green =
-    # money path (buy / top-up), blue = navigation, grey = troubleshooting.
-    # Secondary features (Добавить устройство, Подарить, Промокод, О сервисе)
-    # live in the cabinet to keep this screen clean.
-    kb.button(text=sub_text, callback_data="menu:buy",
-              style="success", icon_custom_emoji_id=emoji.SUB)
-    if BYPASS_ENABLED:
-        # ":m" — opened from the main menu, so its Назад returns to the main menu.
-        kb.button(text="Пополнить ГБ", callback_data="tr:open:m",
-                  style="success", icon_custom_emoji_id=emoji.GB)
-    kb.button(text="Личный кабинет", callback_data="menu:cabinet",
-              style="primary", icon_custom_emoji_id=emoji.CABINET)
-    kb.button(text="Пригласить друзей", callback_data="menu:referral",
-              style="primary", icon_custom_emoji_id=emoji.REFERRAL)
-    kb.button(text="Подключиться", callback_data="dev:menu",
-              style="primary", icon_custom_emoji_id=emoji.CONNECT)
-    kb.button(text="Инструкции", callback_data="help:open",
-              style="primary", icon_custom_emoji_id=emoji.HELP)
-    kb.button(text="🆘 Не работает VPN?", callback_data="faq:novpn:main")
-    # green buy (+ГБ) on top, blue nav, «Подключиться | Инструкции» paired,
-    # grey troubleshooting last.
-    if BYPASS_ENABLED:
-        kb.adjust(1, 1, 1, 1, 2, 1)
+    # Cabinet home (redesigned): green = money path, blue = navigation.
+    if has_active_sub:
+        kb.button(text="Продлить VPN", callback_data="sub:manage",
+                  style="success", icon_custom_emoji_id=emoji.RENEW)
     else:
-        kb.adjust(1, 1, 1, 2, 1)
+        kb.button(text="Купить VPN", callback_data="menu:buy",
+                  style="success", icon_custom_emoji_id=emoji.BUY_VPN)
+    if BYPASS_ENABLED:
+        kb.button(text="Докупить ГБ обхода", callback_data="tr:open:m",
+                  style="success", icon_custom_emoji_id=emoji.GB_TOPUP)
+    kb.button(text="Моя подписка", callback_data="menu:mysub",
+              style="primary", icon_custom_emoji_id=emoji.MY_SUB)
+    kb.button(text="Пригласить друзей", callback_data="menu:referral",
+              style="primary", icon_custom_emoji_id=emoji.INVITE_FRIENDS)
+    kb.button(text="Мой профиль", callback_data="menu:cabinet",
+              style="primary", icon_custom_emoji_id=emoji.MY_PROFILE)
+    kb.button(text="🆘 SOS Помощь", callback_data="help:open", style="primary")
+    # money path on top, then nav; «Мой профиль | SOS» paired on the last row.
+    if BYPASS_ENABLED:
+        kb.adjust(1, 1, 1, 1, 2)
+    else:
+        kb.adjust(1, 1, 1, 2)
     return kb.as_markup()
 
 

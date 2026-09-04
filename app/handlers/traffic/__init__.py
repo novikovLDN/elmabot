@@ -24,10 +24,26 @@ router = Router(name="traffic")
 _GB = 1024 ** 3
 
 INTRO = (
-    "🌐 <b>Обход белых списков</b>\n\n"
-    "Отдельный доступ для обхода блокировок — оплата по трафику, "
-    "без срока: пока есть ГБ, всё работает.\n\n"
-    "Выбери пакет 👇"
+    "🌐 <b>Купить трафик</b> 🇷🇺\n\n"
+    "Добавляется к текущему остатку.\n\n"
+    "💰 Пакет — это ваш личный запас ГБ\n"
+    "Не сгорает по времени и не привязан к подписке — "
+    "тратится только когда вы реально пользуетесь.\n\n"
+    "✨ Возьмите столько, сколько нужно — и пользуйтесь спокойно.\n"
+    "Закончится — пополните, когда удобно ⭐️\n\n"
+    "💎 Чем больше пакет — тем выгоднее за ГБ"
+)
+
+EXTENDED_INTRO = (
+    "🌐 <b>Больше объёма</b> 🇷🇺\n\n"
+    "Добавляется к текущему остатку.\n\n"
+    "<blockquote>📊 Примерный расход:\n"
+    "├ 300 ГБ — ~5 месяцев\n"
+    "├ 600 ГБ — ~10 месяцев\n"
+    "├ 1 200 ГБ — ~1.5 года\n"
+    "├ 2 200 ГБ — ~3 чел. на год\n"
+    "├ 5 000 ГБ — ~7 чел. на год\n"
+    "└ 8 000 ГБ — ~11 чел. на год</blockquote>"
 )
 
 
@@ -93,7 +109,7 @@ async def cb_extended(call: CallbackQuery) -> None:
     origin = _origin(call.data)
     await safe_edit(
         call.message,
-        "📦 <b>Большие пакеты обхода</b>\n\nЧем больше объём — тем выгоднее 👇",
+        EXTENDED_INTRO,
         reply_markup=_packs_keyboard(config.TRAFFIC_PACKS_EXTENDED, extended=True, origin=origin).as_markup(),
     )
     await call.answer()
@@ -101,12 +117,12 @@ async def cb_extended(call: CallbackQuery) -> None:
 
 def _order_kb(price: int, back: str, *, pay_url: str | None) -> InlineKeyboardMarkup:
     """Order-confirmation buttons for a GB pack: «Оплатить» opens Platega's
-    hosted page (all methods), «Поддержка» → support, «Назад» → the packs list."""
+    hosted page (all methods), «Назад» → the packs list."""
     kb = InlineKeyboardBuilder()
     if pay_url:
-        kb.button(text=f"Оплатить {price} ₽", url=pay_url, style="success")
-    kb.button(text="Поддержка", url=config.SUPPORT_URL, style="primary")
-    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=back)
+        kb.button(text=f"Оплатить {price} ₽", url=pay_url,
+                  style="success", icon_custom_emoji_id=emoji.RECEIPT)
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data=back, style="primary")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -132,10 +148,8 @@ async def cb_pack(call: CallbackQuery) -> None:
     # «Назад» still returns to where the whole flow started.
     back = f"tr:ext:{origin}" if gb in config.TRAFFIC_PACKS_EXTENDED else f"tr:open:{origin}"
     order = (
-        f"📦 <b>{gb} ГБ обхода</b>\n\n"
-        f"💰 Стоимость: <b>{price} ₽</b>\n"
-        "♾️ Без срока — пока есть трафик\n\n"
-        "Для оплаты 👇"
+        f"🧾 <b>Оплата: {gb} ГБ — {price} ₽</b>\n\n"
+        "♾️ Без срока — пока есть трафик."
     )
 
     if not config.PAYMENTS_ENABLED:

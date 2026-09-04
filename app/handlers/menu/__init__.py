@@ -49,12 +49,12 @@ router = Router(name="menu")
 
 
 MAIN = (
-    "💎 <b>ELMA — быстрый и безопасный интернет</b>\n\n"
-    "🚀 Скорость до 75 Гбит/с\n"
-    "⚡️ Подключение за минуту\n"
-    "📱 До 5 устройств — вся семья\n"
-    "🔒 Zero-logs — твои данные только твои\n\n"
-    "30 000 человек уже внутри."
+    "💎 <b>ELMA</b>\n\n"
+    "Интернет без блокировок, нервов и ограничений.\n\n"
+    "⚡️ Молниеносное соединение\n"
+    "⭐️ Трафик под защитой 24/7\n"
+    "🏆 Премия «Надежный VPN 2026»\n"
+    "🛰️ Обход глушилок"
 )
 
 ABOUT = (
@@ -256,6 +256,46 @@ async def cmd_account(message: Message) -> None:
 async def cb_cabinet(call: CallbackQuery) -> None:
     text, markup = await _cabinet_view(call.from_user.id)
     await show_screen(call.message, "cabinet", text, reply_markup=markup)
+    await call.answer()
+
+
+# --- Моя подписка ---------------------------------------------------------
+
+async def _mysub_view(uid: int):
+    sub = await get_subscription(uid)
+    active = sub is not None and sub["status"] == "active"
+    lines = ["📊 <b>Информация о подписке</b>\n"]
+    if active:
+        lines.append("⭐️ Тариф: <b>Premium</b>")
+        lines.append(f"📅 Активна до: <b>{fmt_date(sub['expires_at'])}</b>")
+    else:
+        lines.append("⭐️ Тариф: —")
+        lines.append("📅 Подписка не активна")
+
+    usage = await bypass_service.get_usage(uid) if config.BYPASS_ENABLED else None
+    if usage and usage["limit"]:
+        lines.append(
+            f"💎 Осталось обход трафика: <b>{_fmt_traffic(usage['remaining'])}</b> "
+            f"из {_fmt_traffic(usage['limit'])}"
+        )
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Подключить VPN", callback_data="dev:menu",
+              style="danger", icon_custom_emoji_id=emoji.GB)
+    kb.button(text="Продлить подписку", callback_data="sub:manage",
+              style="success", icon_custom_emoji_id=emoji.RENEW)
+    if config.BYPASS_ENABLED:
+        kb.button(text="Пополнить ГБ Обхода", callback_data="tr:open:m",
+                  style="success", icon_custom_emoji_id=emoji.GB_TOPUP)
+    kb.button(text="Назад", icon_custom_emoji_id=emoji.BACK, callback_data="menu:main")
+    kb.adjust(1)
+    return "\n".join(lines), kb.as_markup()
+
+
+@router.callback_query(F.data == "menu:mysub")
+async def cb_mysub(call: CallbackQuery) -> None:
+    text, markup = await _mysub_view(call.from_user.id)
+    await safe_edit(call.message, text, reply_markup=markup)
     await call.answer()
 
 
