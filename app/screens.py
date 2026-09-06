@@ -18,7 +18,7 @@ SCREEN_IMAGES: dict[str, str] = {
     # 💎 Стартовый экран нового пользователя (SCREEN_1, 3 кнопки)
     "start": "AgACAgIAAxkBAAEPaD1qnbm6pdrtS7mYfAUtge49zl2D_gACVSRrGyaR6Uj962L_u_WNggEAAwIAA3kAAz0E",
     # 💎 Главное меню
-    "main": "AgACAgIAAxkBAAENFMtqdjiwYvZVfbuZiCfTV8AF_MfklwACmR5rG_jwsEs2JiRNmgxI-wEAAwIAA3kAAz0E",
+    "main": "AgACAgIAAxkBAAEPaD1qnbm6pdrtS7mYfAUtge49zl2D_gACVSRrGyaR6Uj962L_u_WNggEAAwIAA3kAAz0E",
     # 👤 Личный кабинет
     "cabinet": "AgACAgQAAxkBAAKdp2orzSZpDobx7J4m5sbMf--KVnyeAAIxDWsbbFlgUUyw3wuaKd_oAQADAgADeQADPAQ",
     # 🫧 ELMA активирован — экран выбора устройства
