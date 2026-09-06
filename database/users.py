@@ -87,6 +87,14 @@ async def find_user_by_username(username: str) -> asyncpg.Record | None:
     )
 
 
+async def set_user_language(telegram_id: int, language: str) -> None:
+    """Persist the user's chosen chat language (e.g. after the language screen)."""
+    pool = get_pool()
+    await pool.execute(
+        "UPDATE users SET language = $2 WHERE telegram_id = $1", telegram_id, language
+    )
+
+
 async def mark_unreachable(telegram_id: int) -> None:
     pool = get_pool()
     await pool.execute(

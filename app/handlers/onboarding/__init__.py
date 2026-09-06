@@ -60,6 +60,7 @@ from database import (
     get_bypass,
     get_subscription,
     set_referral,
+    set_user_language,
     trial_available,
     upsert_user,
 )
@@ -71,16 +72,16 @@ router = Router(name="onboarding")
 # --- Screen copy ----------------------------------------------------------
 
 WELCOME = (
-    "<b>ELMA — интернет, который не играет на нервах.</b>\n\n"
-    "⚡️ Высокая скорость\n"
-    "♾️ Безлимитный трафик\n"
-    "💎 От 199 ₽\n"
-    "📱 5 устройств\n"
-    "👥 Реферальная система\n"
-    "🔒 Zero-logs\n"
-    "🛡️ iOS · Android · MacOS · Windows · AndroidTV · Apple TV\n\n"
-    f"🎁 Первые {TRIAL_DAYS} дня бесплатно\n\n"
-    "Твой доступ готов. Нажми Start 👇"
+    "<b>Что умеет этот бот?</b>\n"
+    "❤️ Лучший сервис по лучшей цене\n"
+    "![📱](tg://emoji?id=6019245310696495518) IOS • Android • Windows • macOS • TV\n"
+    "Доступ и стабильные сервера по всему миру\n"
+    "![🧾](tg://emoji?id=5204242830687494041) ![🌎](tg://emoji?id=5224450179368767019) "
+    "Оплата картами МИР и международные платежи\n\n"
+    "![🏆](tg://emoji?id=5409008750893734809) Премия «Надёжный VPN сервис 2026»\n"
+    "![🏆](tg://emoji?id=5409008750893734809) Премия «Самый быстрый сервис VPN 2025»\n"
+    "![✅](tg://emoji?id=5848368189989195495) Работаем с 2023 года. Нам доверяют "
+    "более 200 000 пользователей по всей России"
 )
 
 SCREEN_1 = (
@@ -387,25 +388,56 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
             if await set_referral(user.id, referrer_id):
                 logger.info("User %s referred by %s", user.id, referrer_id)
 
-    # First visit (trial never used and no active subscription) -> onboarding;
-    # returning users (trial used, or any active sub) -> main menu.
+    # First visit (trial never used and no active subscription) -> onboarding
+    # (Что умеет бот -> Start -> выбор языка -> главный экран); returning users
+    # (trial used, or any active sub) -> main menu.
     sub = await get_subscription(user.id)
     has_active = sub is not None and sub["status"] == "active"
     if await trial_available(user.id) and not has_active:
-        await message.answer(SCREEN_1, reply_markup=_start_keyboard())
+        await send_screen(
+            message.bot, message.chat.id, "welcome", WELCOME,
+            reply_markup=welcome_keyboard(),
+        )
     else:
         await show_main(message, user.id)
 
 
+LANG_SELECT = "![🌎](tg://emoji?id=5224450179368767019) <b>Выберите язык / Select language</b>"
+
+
+def _language_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🇷🇺 Русский", callback_data="lang:ru")
+    kb.button(text="🇺🇸 English", callback_data="lang:en")
+    kb.adjust(2)
+    return kb.as_markup()
+
+
 @router.callback_query(F.data == "menu:home")
 async def cb_home(call: CallbackQuery) -> None:
-    await safe_edit(call.message, WELCOME, reply_markup=welcome_keyboard())
+    await show_screen(call.message, "welcome", WELCOME, reply_markup=welcome_keyboard())
     await call.answer()
 
 
 @router.callback_query(F.data == "onb:start")
 async def cb_screen1(call: CallbackQuery) -> None:
-    await safe_edit(call.message, SCREEN_1, reply_markup=_start_keyboard())
+    # Start -> language selection.
+    await show_screen(call.message, "language", LANG_SELECT, reply_markup=_language_keyboard())
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("lang:"))
+async def cb_language(call: CallbackQuery) -> None:
+    """Store the chosen chat language, then open the new-user main screen."""
+    lang = call.data.split(":", 1)[1]
+    if lang not in ("ru", "en"):
+        await call.answer()
+        return
+    try:
+        await set_user_language(call.from_user.id, lang)
+    except Exception:  # noqa: BLE001 - never block onboarding on a preference write
+        logger.debug("set language failed for %s", call.from_user.id, exc_info=True)
+    await show_screen(call.message, "start", SCREEN_1, reply_markup=_start_keyboard())
     await call.answer()
 
 

@@ -11,6 +11,12 @@ Use :func:`app.utils.show_screen` (callbacks) and :func:`app.utils.send_screen`
 
 # screen key -> photo file_id (populated as the admin provides them)
 SCREEN_IMAGES: dict[str, str] = {
+    # 🤖 «Что умеет этот бот?» — экран до кнопки Start
+    "welcome": "AgACAgIAAxkBAAEPaBVqnbJIxokcQ-fSw6XJSF6_LkzwQgACOCRrGyaR6Uhi13oEJQ32MgEAAwIAA3kAAz0E",
+    # 🌎 Выбор языка
+    "language": "AgACAgIAAxkBAAEPaB5qnbQ7Z391KmQE_jSzHoNs3YGavwACPyRrGyaR6UhrH1GX-Rx60wEAAwIAA3kAAz0E",
+    # 💎 Стартовый экран нового пользователя (SCREEN_1, 3 кнопки)
+    "start": "AgACAgIAAxkBAAEPaD1qnbm6pdrtS7mYfAUtge49zl2D_gACVSRrGyaR6Uj962L_u_WNggEAAwIAA3kAAz0E",
     # 💎 Главное меню
     "main": "AgACAgIAAxkBAAENFMtqdjiwYvZVfbuZiCfTV8AF_MfklwACmR5rG_jwsEs2JiRNmgxI-wEAAwIAA3kAAz0E",
     # 👤 Личный кабинет

@@ -155,6 +155,7 @@ from .users import (
     release_trial,
     set_offer,
     set_referral,
+    set_user_language,
     set_trial_funnel_stage,
     due_trial_funnel,
     trial_available,
@@ -182,6 +183,7 @@ __all__ = [
     "release_trial",
     # referrals
     "set_referral",
+    "set_user_language",
     "credit_referral",
     "referral_stats",
     "referral_leaderboard",
