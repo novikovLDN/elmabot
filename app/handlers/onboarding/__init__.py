@@ -394,9 +394,10 @@ async def cmd_start(message: Message, command: CommandObject) -> None:
     sub = await get_subscription(user.id)
     has_active = sub is not None and sub["status"] == "active"
     if await trial_available(user.id) and not has_active:
+        # New user -> straight to language selection -> main screen.
         await send_screen(
-            message.bot, message.chat.id, "welcome", WELCOME,
-            reply_markup=welcome_keyboard(),
+            message.bot, message.chat.id, "language", LANG_SELECT,
+            reply_markup=_language_keyboard(),
         )
     else:
         await show_main(message, user.id)
