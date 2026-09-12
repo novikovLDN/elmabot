@@ -190,7 +190,7 @@ APP_ANDROIDTV_URL = _get_str(
 # until APP_INCY_IOS_URL is set.
 APP_IOS_RU_URL = _get_str(
     "APP_IOS_RU_URL",
-    "https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6788279553?l=en-GB",
+    "https://apps.apple.com/ru/app/happ-lite/id6799917773",
 )
 APP_IOS_INTL_URL = _get_str(
     "APP_IOS_INTL_URL", "https://apps.apple.com/us/app/happ-proxy-utility/id6504287215"
